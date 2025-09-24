@@ -11,18 +11,19 @@ from src.data.models import (
     FinancialMetrics,
     Price,
     LineItem,
-    LineItemResponse,
     InsiderTrade,
     InsiderTradeResponse,
     CompanyFactsResponse,
 )
 from src.data.borsdata_client import BorsdataAPIError, BorsdataClient
 from src.data.borsdata_kpis import FinancialMetricsAssembler
+from src.data.borsdata_reports import LineItemAssembler
 
 # Global cache instance
 _cache = get_cache()
 _borsdata_client = BorsdataClient()
 _financial_metrics_assembler = FinancialMetricsAssembler(_borsdata_client)
+_line_item_assembler = LineItemAssembler(_borsdata_client)
 
 
 def _get_borsdata_client(api_key: str | None) -> BorsdataClient:
@@ -168,33 +169,30 @@ def search_line_items(
     limit: int = 10,
     api_key: str = None,
 ) -> list[LineItem]:
-    """Fetch line items from API."""
-    # If not in cache or insufficient data, fetch from API
-    headers = {}
-    financial_api_key = api_key or os.environ.get("FINANCIAL_DATASETS_API_KEY")
-    if financial_api_key:
-        headers["X-API-KEY"] = financial_api_key
+    """Fetch line items via Börsdata reports and KPI summaries."""
 
-    url = "https://api.financialdatasets.ai/financials/search/line-items"
-
-    body = {
-        "tickers": [ticker],
-        "line_items": line_items,
-        "end_date": end_date,
-        "period": period,
-        "limit": limit,
-    }
-    response = _make_api_request(url, headers, method="POST", json_data=body)
-    if response.status_code != 200:
-        raise Exception(f"Error fetching data: {ticker} - {response.status_code} - {response.text}")
-    data = response.json()
-    response_model = LineItemResponse(**data)
-    search_results = response_model.search_results
-    if not search_results:
+    if not line_items:
         return []
 
-    # Cache the results
-    return search_results[:limit]
+    client = _get_borsdata_client(api_key)
+    assembler = _line_item_assembler if client is _borsdata_client else LineItemAssembler(client)
+
+    try:
+        records = assembler.assemble(
+            ticker,
+            line_items,
+            end_date=end_date,
+            period=period,
+            limit=limit,
+            api_key=api_key,
+        )
+    except BorsdataAPIError as exc:
+        raise Exception(f"Error fetching Börsdata line items for {ticker}: {exc}") from exc
+
+    if not records:
+        return []
+
+    return [LineItem(**record) for record in records]
 
 
 def get_insider_trades(

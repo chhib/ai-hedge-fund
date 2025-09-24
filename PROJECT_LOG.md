@@ -41,13 +41,14 @@ Rebuild the data ingestion and processing pipeline so the application relies on 
 - Selected Börsdata report/dividend calendars as the replacement strategy for the news feed; pending UI wiring.
 - Implemented `src/data/borsdata_client.py` with shared auth, rate limiting, and instrument caching; `get_prices` now pulls directly from Börsdata stock price endpoints.
 - Added `FinancialMetricsAssembler` backed by KPI summaries + reports, extended the Börsdata client to expose metadata/screener/report helpers, and switched `get_financial_metrics` to the Börsdata pipeline with unit coverage in `tests/data/test_borsdata_kpis.py`.
+- Replaced the legacy line item search with `LineItemAssembler` leveraging Börsdata reports + KPI metadata, introduced shared helpers in `src/data/borsdata_common.py`, and added regression coverage in `tests/data/test_borsdata_reports.py`.
 
 ## Next Actions
-1. Swap line item searches to the Börsdata reports endpoint with local filtering.
-2. Implement the calendar-based replacement for company news and update downstream consumers/UX text.
-3. Update configuration to require `BORSDATA_API_KEY` and remove `FINANCIAL_DATASETS_API_KEY` usage.
-4. Add Börsdata fixtures and tests covering rate limiting, KPI mapping (including screener history), price ingestion, and derived metrics.
-5. Validate screener-driven FinancialMetrics fields against real Börsdata payloads and extend assembler fallbacks for alternative report types as needed.
+1. Implement the calendar-based replacement for company news and update downstream consumers/UX text.
+2. Update configuration to require `BORSDATA_API_KEY` and remove `FINANCIAL_DATASETS_API_KEY` usage.
+3. Add Börsdata fixtures and tests covering rate limiting, KPI mapping (including screener history), price ingestion, and derived metrics.
+4. Validate screener-driven FinancialMetrics fields against real Börsdata payloads and extend assembler fallbacks for alternative report types as needed.
+5. Port insider trade ingestion to Börsdata holdings endpoints and align related analytics/tests.
 
 ## Open Questions
 - What is the best way to persist resolved `kpiId` lookups (e.g., cached JSON vs in-memory) to limit metadata parsing?

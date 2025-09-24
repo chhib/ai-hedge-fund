@@ -39,6 +39,7 @@ Implementation considerations:
 Supports `search_line_items` and additional fundamentals.
 - `GET /v1/instruments/{insId}/reports/{reportType}` → structured income/balance/cash-flow line items (`ReportV1`). Accepts `maxCount` (20 for year, 40 for r12/quarter) and `original=1` to keep native currency. This endpoint can replace bespoke line-item searches by filtering the response locally.
 - `GET /v1/instruments/reports/metadata` → provides report column definitions for dynamic mapping if we need localization.
+Implementation status: `src/data/borsdata_reports.py` now assembles requested line items from report payloads, enriching with KPI metadata where ratios or supplemental figures are required.
 Follow-up:
 - Determine if caching aggregated `ReportV1` payloads per instrument-date satisfies existing query patterns or if we require a thinner subset for performance.
 
