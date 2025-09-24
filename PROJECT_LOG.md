@@ -1,6 +1,6 @@
 # Börsdata Integration Project Log
 
-_Last updated: 2025-09-24 11:04 CEST_
+_Last updated: 2025-09-24 15:20 CEST_
 
 ## End Goal
 Rebuild the data ingestion and processing pipeline so the application relies on Börsdata's REST API (per `README_Borsdata_API.md` and https://apidoc.borsdata.se/swagger/index.html). The system should let a user set a `BORSDATA_API_KEY` in `.env`, accept Börsdata-native tickers, and otherwise preserve the current user-facing workflows and capabilities.
@@ -13,7 +13,7 @@ Rebuild the data ingestion and processing pipeline so the application relies on 
 ## Status Snapshot
 - **Branch**: `borsdata` (active)
 - **Working directory**: `/Users/ksu541/Code/ai-hedge-fund`
-- **Latest actions**: Repository scanned; Börsdata documentation confirmed; tracking log updated with clarified scope; Swagger spec stored locally for offline reference; endpoint mapping drafted; Börsdata news coverage gap flagged for follow-up.
+- **Latest actions**: Börsdata calendars now backfill the company “news” flow, insider trades and config rely solely on Börsdata endpoints, and fixtures/docs/UI were refreshed to require `BORSDATA_API_KEY`; sandboxed pytest execution failed due to seatbelt kill.
 
 ## Decision Log
 | Date | Decision | Rationale | Implication |
@@ -43,12 +43,17 @@ Rebuild the data ingestion and processing pipeline so the application relies on 
 - Added `FinancialMetricsAssembler` backed by KPI summaries + reports, extended the Börsdata client to expose metadata/screener/report helpers, and switched `get_financial_metrics` to the Börsdata pipeline with unit coverage in `tests/data/test_borsdata_kpis.py`.
 - Replaced the legacy line item search with `LineItemAssembler` leveraging Börsdata reports + KPI metadata, introduced shared helpers in `src/data/borsdata_common.py`, and added regression coverage in `tests/data/test_borsdata_reports.py`.
 
+### 2025-09-24 (afternoon)
+- Refactored company news models/cache into `CompanyEvent` calendar entries and updated agents, backtesting flows, and sentiment logic to reason over report/dividend catalysts.
+- Extended `BorsdataClient` with calendar and insider holdings helpers; `get_company_news`, `get_insider_trades`, and `get_market_cap` now source exclusively from Börsdata endpoints.
+- Purged `FINANCIAL_DATASETS_API_KEY` across runtime, docs, and frontend settings so only `BORSDATA_API_KEY` is accepted; updated fixtures to reflect Börsdata payload shapes.
+- Attempted `pytest tests/backtesting/integration -q`; run was killed by macOS seatbelt, so new calendar/insider changes remain unverified by automated tests.
+
 ## Next Actions
-1. Implement the calendar-based replacement for company news and update downstream consumers/UX text.
-2. Update configuration to require `BORSDATA_API_KEY` and remove `FINANCIAL_DATASETS_API_KEY` usage.
-3. Add Börsdata fixtures and tests covering rate limiting, KPI mapping (including screener history), price ingestion, and derived metrics.
-4. Validate screener-driven FinancialMetrics fields against real Börsdata payloads and extend assembler fallbacks for alternative report types as needed.
-5. Port insider trade ingestion to Börsdata holdings endpoints and align related analytics/tests.
+1. Restore automated coverage for the new calendar + insider flows (update integration/unit tests and rerun pytest outside restrictive sandbox).
+2. Expand Börsdata fixtures to exercise rate limiting, screener history, and insider edge cases (transaction types, missing dates, currency variants).
+3. Validate screener-driven FinancialMetrics fields against live Börsdata payloads and add fallbacks for non-standard report types.
+4. Review UI/UX messaging to ensure “news” references are updated to calendar terminology across CLI, backend responses, and frontend components.
 
 ## Open Questions
 - What is the best way to persist resolved `kpiId` lookups (e.g., cached JSON vs in-memory) to limit metadata parsing?

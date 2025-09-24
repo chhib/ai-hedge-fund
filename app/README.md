@@ -105,7 +105,7 @@ OPENAI_API_KEY=your-openai-api-key
 GROQ_API_KEY=your-groq-api-key
 
 # For getting financial data to power the hedge fund
-FINANCIAL_DATASETS_API_KEY=your-financial-datasets-api-key
+BORSDATA_API_KEY=your-borsdata-api-key
 ```
 
 4. Install Poetry (if not already installed):

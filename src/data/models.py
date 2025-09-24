@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel
 
 
@@ -99,18 +101,21 @@ class InsiderTradeResponse(BaseModel):
     insider_trades: list[InsiderTrade]
 
 
-class CompanyNews(BaseModel):
+class CompanyEvent(BaseModel):
     ticker: str
-    title: str
-    author: str
-    source: str
     date: str
-    url: str
-    sentiment: str | None = None
+    category: Literal["report", "dividend"]
+    title: str
+    description: str | None = None
+    source: str = "Börsdata Calendar"
+    report_type: str | None = None
+    amount: float | None = None
+    currency: str | None = None
+    distribution_frequency: int | None = None
+    dividend_type: int | None = None
+    event_id: str
 
-
-class CompanyNewsResponse(BaseModel):
-    news: list[CompanyNews]
+    model_config = {"extra": "allow"}
 
 
 class CompanyFacts(BaseModel):

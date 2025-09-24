@@ -31,12 +31,12 @@ class MichaelBurrySignal(BaseModel):
 
 def michael_burry_agent(state: AgentState, agent_id: str = "michael_burry_agent"):
     """Analyse stocks using Michael Burry's deep‑value, contrarian framework."""
-    api_key = get_api_key_from_state(state, "FINANCIAL_DATASETS_API_KEY")
+    api_key = get_api_key_from_state(state, "BORSDATA_API_KEY")
     data = state["data"]
     end_date: str = data["end_date"]  # YYYY‑MM‑DD
     tickers: list[str] = data["tickers"]
 
-    # We look one year back for insider trades / news flow
+    # We look one year back for insider trades / calendar catalysts
     start_date = (datetime.fromisoformat(end_date) - timedelta(days=365)).date().isoformat()
 
     analysis_data: dict[str, dict] = {}
@@ -69,8 +69,8 @@ def michael_burry_agent(state: AgentState, agent_id: str = "michael_burry_agent"
         progress.update_status(agent_id, ticker, "Fetching insider trades")
         insider_trades = get_insider_trades(ticker, end_date=end_date, start_date=start_date)
 
-        progress.update_status(agent_id, ticker, "Fetching company news")
-        news = get_company_news(ticker, end_date=end_date, start_date=start_date, limit=250)
+        progress.update_status(agent_id, ticker, "Fetching company calendar")
+        calendar_events = get_company_news(ticker, end_date=end_date, start_date=start_date, limit=250)
 
         progress.update_status(agent_id, ticker, "Fetching market cap")
         market_cap = get_market_cap(ticker, end_date, api_key=api_key)
@@ -87,8 +87,8 @@ def michael_burry_agent(state: AgentState, agent_id: str = "michael_burry_agent"
         progress.update_status(agent_id, ticker, "Analyzing insider activity")
         insider_analysis = _analyze_insider_activity(insider_trades)
 
-        progress.update_status(agent_id, ticker, "Analyzing contrarian sentiment")
-        contrarian_analysis = _analyze_contrarian_sentiment(news)
+        progress.update_status(agent_id, ticker, "Evaluating calendar catalysts")
+        contrarian_analysis = _analyze_calendar_catalysts(calendar_events)
 
         # ------------------------------------------------------------------
         # Aggregate score & derive preliminary signal
@@ -284,27 +284,31 @@ def _analyze_insider_activity(insider_trades):
 
 # ----- Contrarian sentiment -------------------------------------------------
 
-def _analyze_contrarian_sentiment(news):
-    """Very rough gauge: a wall of recent negative headlines can be a *positive* for a contrarian."""
+def _analyze_calendar_catalysts(events):
+    """Score the presence of upcoming calendar catalysts such as reports or dividends."""
 
     max_score = 1
     score = 0
     details: list[str] = []
 
-    if not news:
-        details.append("No recent news")
+    if not events:
+        details.append("No calendar catalysts identified")
         return {"score": score, "max_score": max_score, "details": "; ".join(details)}
 
-    # Count negative sentiment articles
-    sentiment_negative_count = sum(
-        1 for n in news if n.sentiment and n.sentiment.lower() in ["negative", "bearish"]
-    )
-    
-    if sentiment_negative_count >= 5:
-        score += 1  # The more hated, the better (assuming fundamentals hold up)
-        details.append(f"{sentiment_negative_count} negative headlines (contrarian opportunity)")
+    report_count = sum(1 for event in events if getattr(event, "category", "") == "report")
+    dividend_count = sum(1 for event in events if getattr(event, "category", "") == "dividend")
+    catalyst_total = report_count + dividend_count
+
+    if catalyst_total >= 2:
+        score = 1
+        details.append(f"{catalyst_total} upcoming calendar catalysts")
     else:
-        details.append("Limited negative press")
+        details.append("Limited calendar catalysts")
+
+    if report_count:
+        details.append(f"Reports: {report_count}")
+    if dividend_count:
+        details.append(f"Dividends: {dividend_count}")
 
     return {"score": score, "max_score": max_score, "details": "; ".join(details)}
 

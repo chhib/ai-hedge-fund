@@ -23,7 +23,7 @@ def charlie_munger_agent(state: AgentState, agent_id: str = "charlie_munger_agen
     data = state["data"]
     end_date = data["end_date"]
     tickers = data["tickers"]
-    api_key = get_api_key_from_state(state, "FINANCIAL_DATASETS_API_KEY")
+    api_key = get_api_key_from_state(state, "BORSDATA_API_KEY")
     analysis_data = {}
     munger_analysis = {}
     
@@ -68,9 +68,9 @@ def charlie_munger_agent(state: AgentState, agent_id: str = "charlie_munger_agen
             api_key=api_key,
         )
         
-        progress.update_status(agent_id, ticker, "Fetching company news")
-        # Munger avoids businesses with frequent negative press
-        company_news = get_company_news(
+        progress.update_status(agent_id, ticker, "Fetching company calendar")
+        # Calendar events provide upcoming reports/dividends as qualitative context
+        company_events = get_company_news(
             ticker,
             end_date,
             limit=10,
@@ -116,8 +116,8 @@ def charlie_munger_agent(state: AgentState, agent_id: str = "charlie_munger_agen
             "management_analysis": management_analysis,
             "predictability_analysis": predictability_analysis,
             "valuation_analysis": valuation_analysis,
-            # Include some qualitative assessment from news
-            "news_sentiment": analyze_news_sentiment(company_news) if company_news else "No news data available"
+            # Include a quick overview of Börsdata calendar events
+            "calendar_summary": summarize_calendar_events(company_events),
         }
         
         progress.update_status(agent_id, ticker, "Generating Charlie Munger analysis")
@@ -707,16 +707,30 @@ def calculate_munger_valuation(financial_line_items: list, market_cap: float) ->
     }
 
 
-def analyze_news_sentiment(news_items: list) -> str:
-    """
-    Simple qualitative analysis of recent news.
-    Munger pays attention to significant news but doesn't overreact to short-term stories.
-    """
-    if not news_items or len(news_items) == 0:
-        return "No news data available"
-    
-    # Just return a simple count for now - in a real implementation, this would use NLP
-    return f"Qualitative review of {len(news_items)} recent news items would be needed"
+def summarize_calendar_events(events: list) -> str:
+    """Provide a concise summary of Börsdata calendar events for the ticker."""
+
+    if not events:
+        return "No calendar events available"
+
+    report_count = sum(1 for event in events if getattr(event, "category", "") == "report")
+    dividend_count = sum(1 for event in events if getattr(event, "category", "") == "dividend")
+
+    latest_event = max(events, key=lambda event: getattr(event, "date", ""))
+    latest_title = getattr(latest_event, "title", "Event")
+    latest_date = getattr(latest_event, "date", "unknown date")
+
+    details: list[str] = []
+    if report_count:
+        details.append(f"{report_count} report event{'s' if report_count != 1 else ''}")
+    if dividend_count:
+        details.append(f"{dividend_count} dividend event{'s' if dividend_count != 1 else ''}")
+
+    if not details:
+        details.append("Calendar events recorded")
+
+    details.append(f"Latest: {latest_title} on {latest_date}")
+    return "; ".join(details)
 
 def _r(x, n=3):
     try:

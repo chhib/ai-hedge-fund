@@ -36,7 +36,7 @@ def phil_fisher_agent(state: AgentState, agent_id: str = "phil_fisher_agent"):
     data = state["data"]
     end_date = data["end_date"]
     tickers = data["tickers"]
-    api_key = get_api_key_from_state(state, "FINANCIAL_DATASETS_API_KEY")
+    api_key = get_api_key_from_state(state, "BORSDATA_API_KEY")
     analysis_data = {}
     fisher_analysis = {}
 
@@ -76,8 +76,8 @@ def phil_fisher_agent(state: AgentState, agent_id: str = "phil_fisher_agent"):
         progress.update_status(agent_id, ticker, "Fetching insider trades")
         insider_trades = get_insider_trades(ticker, end_date, limit=50, api_key=api_key)
 
-        progress.update_status(agent_id, ticker, "Fetching company news")
-        company_news = get_company_news(ticker, end_date, limit=50, api_key=api_key)
+        progress.update_status(agent_id, ticker, "Fetching company calendar")
+        calendar_events = get_company_news(ticker, end_date, limit=50, api_key=api_key)
 
         progress.update_status(agent_id, ticker, "Analyzing growth & quality")
         growth_quality = analyze_fisher_growth_quality(financial_line_items)
@@ -94,8 +94,8 @@ def phil_fisher_agent(state: AgentState, agent_id: str = "phil_fisher_agent"):
         progress.update_status(agent_id, ticker, "Analyzing insider activity")
         insider_activity = analyze_insider_activity(insider_trades)
 
-        progress.update_status(agent_id, ticker, "Analyzing sentiment")
-        sentiment_analysis = analyze_sentiment(company_news)
+        progress.update_status(agent_id, ticker, "Assessing calendar context")
+        calendar_analysis = analyze_calendar_events(calendar_events)
 
         # Combine partial scores with weights typical for Fisher:
         #   30% Growth & Quality
@@ -110,7 +110,7 @@ def phil_fisher_agent(state: AgentState, agent_id: str = "phil_fisher_agent"):
             + mgmt_efficiency["score"] * 0.20
             + fisher_valuation["score"] * 0.15
             + insider_activity["score"] * 0.05
-            + sentiment_analysis["score"] * 0.05
+            + calendar_analysis["score"] * 0.05
         )
 
         max_possible_score = 10
@@ -132,7 +132,7 @@ def phil_fisher_agent(state: AgentState, agent_id: str = "phil_fisher_agent"):
             "management_efficiency": mgmt_efficiency,
             "valuation_analysis": fisher_valuation,
             "insider_activity": insider_activity,
-            "sentiment_analysis": sentiment_analysis,
+            "calendar_analysis": calendar_analysis,
         }
 
         progress.update_status(agent_id, ticker, "Generating Phil Fisher-style analysis")
@@ -500,32 +500,30 @@ def analyze_insider_activity(insider_trades: list) -> dict:
     return {"score": score, "details": "; ".join(details)}
 
 
-def analyze_sentiment(news_items: list) -> dict:
-    """
-    Basic news sentiment: negative keyword check vs. overall volume.
-    """
-    if not news_items:
-        return {"score": 5, "details": "No news data; defaulting to neutral sentiment"}
+def analyze_calendar_events(events: list) -> dict:
+    """Translate Börsdata calendar events into a lightweight qualitative score."""
 
-    negative_keywords = ["lawsuit", "fraud", "negative", "downturn", "decline", "investigation", "recall"]
-    negative_count = 0
-    for news in news_items:
-        title_lower = (news.title or "").lower()
-        if any(word in title_lower for word in negative_keywords):
-            negative_count += 1
+    if not events:
+        return {"score": 5, "details": "No calendar events; neutral baseline"}
 
-    details = []
-    if negative_count > len(news_items) * 0.3:
-        score = 3
-        details.append(f"High proportion of negative headlines: {negative_count}/{len(news_items)}")
-    elif negative_count > 0:
-        score = 6
-        details.append(f"Some negative headlines: {negative_count}/{len(news_items)}")
-    else:
-        score = 8
-        details.append("Mostly positive/neutral headlines")
+    dividend_count = sum(1 for event in events if getattr(event, "category", "") == "dividend")
+    report_count = sum(1 for event in events if getattr(event, "category", "") == "report")
 
-    return {"score": score, "details": "; ".join(details)}
+    score = 5.0
+    score += min(dividend_count * 1.5, 3.0)
+    score += min(report_count * 0.5, 2.0)
+    score = max(0.0, min(score, 10.0))
+
+    details: list[str] = []
+    if dividend_count:
+        details.append(f"Upcoming dividends: {dividend_count}")
+    if report_count:
+        details.append(f"Upcoming reports: {report_count}")
+
+    if not details:
+        details.append("Calendar events recorded")
+
+    return {"score": round(score, 2), "details": "; ".join(details)}
 
 
 def generate_fisher_output(

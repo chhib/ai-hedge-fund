@@ -198,7 +198,7 @@ class TestRateLimiting:
         mock_get.side_effect = [mock_429_response, mock_200_response]
         
         # Set environment variable for API key
-        with patch.dict(os.environ, {"FINANCIAL_DATASETS_API_KEY": "test-key"}):
+        with patch.dict(os.environ, {"BORSDATA_API_KEY": "test-key"}):
             # Call get_prices
             result = get_prices("AAPL", "2024-01-01", "2024-01-02")
         

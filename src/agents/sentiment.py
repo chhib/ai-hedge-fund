@@ -14,7 +14,7 @@ def sentiment_analyst_agent(state: AgentState, agent_id: str = "sentiment_analys
     data = state.get("data", {})
     end_date = data.get("end_date")
     tickers = data.get("tickers")
-    api_key = get_api_key_from_state(state, "FINANCIAL_DATASETS_API_KEY")
+    api_key = get_api_key_from_state(state, "BORSDATA_API_KEY")
     # Initialize sentiment analysis for each ticker
     sentiment_analysis = {}
 
@@ -35,29 +35,30 @@ def sentiment_analyst_agent(state: AgentState, agent_id: str = "sentiment_analys
         transaction_shares = pd.Series([t.transaction_shares for t in insider_trades]).dropna()
         insider_signals = np.where(transaction_shares < 0, "bearish", "bullish").tolist()
 
-        progress.update_status(agent_id, ticker, "Fetching company news")
+        progress.update_status(agent_id, ticker, "Fetching company calendar")
 
-        # Get the company news
-        company_news = get_company_news(ticker, end_date, limit=100, api_key=api_key)
+        calendar_events = get_company_news(ticker, end_date, limit=100, api_key=api_key)
+        calendar_signals: list[str] = []
+        for event in calendar_events:
+            category = getattr(event, "category", "")
+            if category == "dividend":
+                calendar_signals.append("bullish")
+            elif category == "report":
+                calendar_signals.append("neutral")
+            else:
+                calendar_signals.append("neutral")
 
-        # Get the sentiment from the company news
-        sentiment = pd.Series([n.sentiment for n in company_news]).dropna()
-        news_signals = np.where(sentiment == "negative", "bearish", 
-                              np.where(sentiment == "positive", "bullish", "neutral")).tolist()
-        
         progress.update_status(agent_id, ticker, "Combining signals")
-        # Combine signals from both sources with weights
-        insider_weight = 0.3
-        news_weight = 0.7
-        
-        # Calculate weighted signal counts
+        insider_weight = 0.6
+        calendar_weight = 0.4
+
         bullish_signals = (
-            insider_signals.count("bullish") * insider_weight +
-            news_signals.count("bullish") * news_weight
+            insider_signals.count("bullish") * insider_weight
+            + calendar_signals.count("bullish") * calendar_weight
         )
         bearish_signals = (
-            insider_signals.count("bearish") * insider_weight +
-            news_signals.count("bearish") * news_weight
+            insider_signals.count("bearish") * insider_weight
+            + calendar_signals.count("bearish") * calendar_weight
         )
 
         if bullish_signals > bearish_signals:
@@ -67,17 +68,41 @@ def sentiment_analyst_agent(state: AgentState, agent_id: str = "sentiment_analys
         else:
             overall_signal = "neutral"
 
-        # Calculate confidence level based on the weighted proportion
-        total_weighted_signals = len(insider_signals) * insider_weight + len(news_signals) * news_weight
-        confidence = 0  # Default confidence when there are no signals
+        total_weighted_signals = len(insider_signals) * insider_weight + len(calendar_signals) * calendar_weight
+        confidence = 0
         if total_weighted_signals > 0:
             confidence = round((max(bullish_signals, bearish_signals) / total_weighted_signals) * 100, 2)
-        
-        # Create structured reasoning similar to technical analysis
+
+        calendar_bullish = calendar_signals.count("bullish")
+        calendar_bearish = calendar_signals.count("bearish")
+        calendar_neutral = calendar_signals.count("neutral")
+
+        calendar_signal_value = "bullish" if calendar_bullish > calendar_bearish else (
+            "bearish" if calendar_bearish > calendar_bullish else "neutral"
+        )
+
+        calendar_confidence = 0
+        if len(calendar_signals) > 0:
+            calendar_confidence = round(
+                (max(calendar_bullish, calendar_bearish) / len(calendar_signals)) * 100,
+                2,
+            )
+
+        latest_event = max(
+            calendar_events,
+            key=lambda event: getattr(event, "date", ""),
+            default=None,
+        )
+
         reasoning = {
             "insider_trading": {
-                "signal": "bullish" if insider_signals.count("bullish") > insider_signals.count("bearish") else 
-                         "bearish" if insider_signals.count("bearish") > insider_signals.count("bullish") else "neutral",
+                "signal": (
+                    "bullish"
+                    if insider_signals.count("bullish") > insider_signals.count("bearish")
+                    else "bearish"
+                    if insider_signals.count("bearish") > insider_signals.count("bullish")
+                    else "neutral"
+                ),
                 "confidence": round((max(insider_signals.count("bullish"), insider_signals.count("bearish")) / max(len(insider_signals), 1)) * 100),
                 "metrics": {
                     "total_trades": len(insider_signals),
@@ -88,18 +113,22 @@ def sentiment_analyst_agent(state: AgentState, agent_id: str = "sentiment_analys
                     "weighted_bearish": round(insider_signals.count("bearish") * insider_weight, 1),
                 }
             },
-            "news_sentiment": {
-                "signal": "bullish" if news_signals.count("bullish") > news_signals.count("bearish") else 
-                         "bearish" if news_signals.count("bearish") > news_signals.count("bullish") else "neutral",
-                "confidence": round((max(news_signals.count("bullish"), news_signals.count("bearish")) / max(len(news_signals), 1)) * 100),
+            "calendar_events": {
+                "signal": calendar_signal_value,
+                "confidence": calendar_confidence,
                 "metrics": {
-                    "total_articles": len(news_signals),
-                    "bullish_articles": news_signals.count("bullish"),
-                    "bearish_articles": news_signals.count("bearish"),
-                    "neutral_articles": news_signals.count("neutral"),
-                    "weight": news_weight,
-                    "weighted_bullish": round(news_signals.count("bullish") * news_weight, 1),
-                    "weighted_bearish": round(news_signals.count("bearish") * news_weight, 1),
+                    "total_events": len(calendar_signals),
+                    "bullish_events": calendar_bullish,
+                    "bearish_events": calendar_bearish,
+                    "neutral_events": calendar_neutral,
+                    "weight": calendar_weight,
+                    "weighted_bullish": round(calendar_bullish * calendar_weight, 1),
+                    "weighted_bearish": round(calendar_bearish * calendar_weight, 1),
+                    "latest_event": (
+                        f"{latest_event.title} on {latest_event.date}"
+                        if latest_event is not None
+                        else None
+                    ),
                 }
             },
             "combined_analysis": {

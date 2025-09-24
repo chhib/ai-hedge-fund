@@ -32,7 +32,7 @@ def peter_lynch_agent(state: AgentState, agent_id: str = "peter_lynch_agent"):
       - Look for consistent revenue & EPS increases and manageable debt.
       - Be alert for potential "ten-baggers" (high-growth opportunities).
       - Avoid overly complex or highly leveraged businesses.
-      - Use news sentiment and insider trades for secondary inputs.
+      - Use calendar context and insider trades for secondary inputs.
       - If fundamentals strongly align with GARP, be more aggressive.
 
     The result is a bullish/bearish/neutral signal, along with a
@@ -42,7 +42,7 @@ def peter_lynch_agent(state: AgentState, agent_id: str = "peter_lynch_agent"):
     data = state["data"]
     end_date = data["end_date"]
     tickers = data["tickers"]
-    api_key = get_api_key_from_state(state, "FINANCIAL_DATASETS_API_KEY")
+    api_key = get_api_key_from_state(state, "BORSDATA_API_KEY")
     analysis_data = {}
     lynch_analysis = {}
 
@@ -77,8 +77,8 @@ def peter_lynch_agent(state: AgentState, agent_id: str = "peter_lynch_agent"):
         progress.update_status(agent_id, ticker, "Fetching insider trades")
         insider_trades = get_insider_trades(ticker, end_date, limit=50, api_key=api_key)
 
-        progress.update_status(agent_id, ticker, "Fetching company news")
-        company_news = get_company_news(ticker, end_date, limit=50, api_key=api_key)
+        progress.update_status(agent_id, ticker, "Fetching company calendar")
+        calendar_events = get_company_news(ticker, end_date, limit=50, api_key=api_key)
 
         # Perform sub-analyses:
         progress.update_status(agent_id, ticker, "Analyzing growth")
@@ -90,8 +90,8 @@ def peter_lynch_agent(state: AgentState, agent_id: str = "peter_lynch_agent"):
         progress.update_status(agent_id, ticker, "Analyzing valuation (focus on PEG)")
         valuation_analysis = analyze_lynch_valuation(financial_line_items, market_cap)
 
-        progress.update_status(agent_id, ticker, "Analyzing sentiment")
-        sentiment_analysis = analyze_sentiment(company_news)
+        progress.update_status(agent_id, ticker, "Assessing calendar context")
+        calendar_context = analyze_calendar_events(calendar_events)
 
         progress.update_status(agent_id, ticker, "Analyzing insider activity")
         insider_activity = analyze_insider_activity(insider_trades)
@@ -103,7 +103,7 @@ def peter_lynch_agent(state: AgentState, agent_id: str = "peter_lynch_agent"):
             growth_analysis["score"] * 0.30
             + valuation_analysis["score"] * 0.25
             + fundamentals_analysis["score"] * 0.20
-            + sentiment_analysis["score"] * 0.15
+            + calendar_context["score"] * 0.15
             + insider_activity["score"] * 0.10
         )
 
@@ -124,7 +124,7 @@ def peter_lynch_agent(state: AgentState, agent_id: str = "peter_lynch_agent"):
             "growth_analysis": growth_analysis,
             "valuation_analysis": valuation_analysis,
             "fundamentals_analysis": fundamentals_analysis,
-            "sentiment_analysis": sentiment_analysis,
+            "calendar_context": calendar_context,
             "insider_activity": insider_activity,
         }
 
@@ -362,35 +362,30 @@ def analyze_lynch_valuation(financial_line_items: list, market_cap: float | None
     return {"score": final_score, "details": "; ".join(details)}
 
 
-def analyze_sentiment(news_items: list) -> dict:
-    """
-    Basic news sentiment check. Negative headlines weigh on the final score.
-    """
-    if not news_items:
-        return {"score": 5, "details": "No news data; default to neutral sentiment"}
+def analyze_calendar_events(events: list) -> dict:
+    """Assess calendar events as a qualitative factor for Peter Lynch's framework."""
 
-    negative_keywords = ["lawsuit", "fraud", "negative", "downturn", "decline", "investigation", "recall"]
-    negative_count = 0
-    for news in news_items:
-        title_lower = (news.title or "").lower()
-        if any(word in title_lower for word in negative_keywords):
-            negative_count += 1
+    if not events:
+        return {"score": 5, "details": "No calendar events; neutral baseline"}
 
-    details = []
-    if negative_count > len(news_items) * 0.3:
-        # More than 30% negative => somewhat bearish => 3/10
-        score = 3
-        details.append(f"High proportion of negative headlines: {negative_count}/{len(news_items)}")
-    elif negative_count > 0:
-        # Some negativity => 6/10
-        score = 6
-        details.append(f"Some negative headlines: {negative_count}/{len(news_items)}")
-    else:
-        # Mostly positive => 8/10
-        score = 8
-        details.append("Mostly positive or neutral headlines")
+    dividend_count = sum(1 for event in events if getattr(event, "category", "") == "dividend")
+    report_count = sum(1 for event in events if getattr(event, "category", "") == "report")
 
-    return {"score": score, "details": "; ".join(details)}
+    score = 5.0
+    score += min(dividend_count * 1.2, 3.0)
+    score += min(report_count * 0.6, 2.0)
+    score = max(0.0, min(score, 10.0))
+
+    details: list[str] = []
+    if dividend_count:
+        details.append(f"Dividend events: {dividend_count}")
+    if report_count:
+        details.append(f"Report events: {report_count}")
+
+    if not details:
+        details.append("Calendar events recorded")
+
+    return {"score": round(score, 2), "details": "; ".join(details)}
 
 
 def analyze_insider_activity(insider_trades: list) -> dict:

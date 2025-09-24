@@ -174,6 +174,16 @@ class BorsdataClient:
         if force_refresh or not self._kpi_metadata or cache_stale:
             self._refresh_kpi_metadata(api_key=api_key)
 
+    def _iter_chunks(self, values: Iterable[int], chunk_size: int = 50) -> Iterable[list[int]]:
+        chunk: list[int] = []
+        for value in values:
+            chunk.append(int(value))
+            if len(chunk) >= chunk_size:
+                yield chunk
+                chunk = []
+        if chunk:
+            yield chunk
+
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
@@ -321,6 +331,75 @@ class BorsdataClient:
             max_count=max_count,
             api_key=api_key,
         )
+
+    def get_report_calendar(
+        self,
+        instrument_ids: Iterable[int],
+        *,
+        api_key: Optional[str] = None,
+    ) -> list[Dict[str, Any]]:
+        results: list[Dict[str, Any]] = []
+        for batch in self._iter_chunks(instrument_ids, 50):
+            params = {"instList": ",".join(str(int(ins_id)) for ins_id in batch)}
+            payload = self._request(
+                "GET",
+                "/v1/instruments/report/calendar",
+                params=params,
+                api_key=api_key,
+            )
+            for company in payload.get("list") or []:
+                company_values = company.get("values") or []
+                for value in company_values:
+                    enriched = dict(value)
+                    enriched.setdefault("insId", company.get("insId"))
+                    results.append(enriched)
+        return results
+
+    def get_dividend_calendar(
+        self,
+        instrument_ids: Iterable[int],
+        *,
+        api_key: Optional[str] = None,
+    ) -> list[Dict[str, Any]]:
+        results: list[Dict[str, Any]] = []
+        for batch in self._iter_chunks(instrument_ids, 50):
+            params = {"instList": ",".join(str(int(ins_id)) for ins_id in batch)}
+            payload = self._request(
+                "GET",
+                "/v1/instruments/dividend/calendar",
+                params=params,
+                api_key=api_key,
+            )
+            for company in payload.get("list") or []:
+                company_values = company.get("values") or []
+                for value in company_values:
+                    enriched = dict(value)
+                    enriched.setdefault("insId", company.get("insId"))
+                    results.append(enriched)
+        return results
+
+    def get_insider_holdings(
+        self,
+        instrument_ids: Iterable[int],
+        *,
+        api_key: Optional[str] = None,
+    ) -> list[Dict[str, Any]]:
+        results: list[Dict[str, Any]] = []
+        for batch in self._iter_chunks(instrument_ids, 50):
+            params = {"instList": ",".join(str(int(ins_id)) for ins_id in batch)}
+            payload = self._request(
+                "GET",
+                "/v1/holdings/insider",
+                params=params,
+                api_key=api_key,
+            )
+            for company in payload.get("list") or []:
+                company_values = company.get("values") or []
+                for value in company_values:
+                    enriched = dict(value)
+                    enriched.setdefault("insId", company.get("insId"))
+                    results.append(enriched)
+        return results
 
     @property
     def api_key(self) -> Optional[str]:

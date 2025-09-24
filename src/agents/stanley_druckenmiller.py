@@ -37,7 +37,7 @@ def stanley_druckenmiller_agent(state: AgentState, agent_id: str = "stanley_druc
     start_date = data["start_date"]
     end_date = data["end_date"]
     tickers = data["tickers"]
-    api_key = get_api_key_from_state(state, "FINANCIAL_DATASETS_API_KEY")
+    api_key = get_api_key_from_state(state, "BORSDATA_API_KEY")
     analysis_data = {}
     druck_analysis = {}
 
@@ -81,8 +81,8 @@ def stanley_druckenmiller_agent(state: AgentState, agent_id: str = "stanley_druc
         progress.update_status(agent_id, ticker, "Fetching insider trades")
         insider_trades = get_insider_trades(ticker, end_date, limit=50, api_key=api_key)
 
-        progress.update_status(agent_id, ticker, "Fetching company news")
-        company_news = get_company_news(ticker, end_date, limit=50, api_key=api_key)
+        progress.update_status(agent_id, ticker, "Fetching company calendar")
+        calendar_events = get_company_news(ticker, end_date, limit=50, api_key=api_key)
 
         progress.update_status(agent_id, ticker, "Fetching recent price data for momentum")
         prices = get_prices(ticker, start_date=start_date, end_date=end_date, api_key=api_key)
@@ -90,8 +90,8 @@ def stanley_druckenmiller_agent(state: AgentState, agent_id: str = "stanley_druc
         progress.update_status(agent_id, ticker, "Analyzing growth & momentum")
         growth_momentum_analysis = analyze_growth_and_momentum(financial_line_items, prices)
 
-        progress.update_status(agent_id, ticker, "Analyzing sentiment")
-        sentiment_analysis = analyze_sentiment(company_news)
+        progress.update_status(agent_id, ticker, "Assessing calendar context")
+        calendar_context = analyze_calendar_context(calendar_events)
 
         progress.update_status(agent_id, ticker, "Analyzing insider activity")
         insider_activity = analyze_insider_activity(insider_trades)
@@ -109,7 +109,7 @@ def stanley_druckenmiller_agent(state: AgentState, agent_id: str = "stanley_druc
             growth_momentum_analysis["score"] * 0.35
             + risk_reward_analysis["score"] * 0.20
             + valuation_analysis["score"] * 0.20
-            + sentiment_analysis["score"] * 0.15
+            + calendar_context["score"] * 0.15
             + insider_activity["score"] * 0.10
         )
 
@@ -128,7 +128,7 @@ def stanley_druckenmiller_agent(state: AgentState, agent_id: str = "stanley_druc
             "score": total_score,
             "max_score": max_possible_score,
             "growth_momentum_analysis": growth_momentum_analysis,
-            "sentiment_analysis": sentiment_analysis,
+            "calendar_context": calendar_context,
             "insider_activity": insider_activity,
             "risk_reward_analysis": risk_reward_analysis,
             "valuation_analysis": valuation_analysis,
@@ -317,35 +317,30 @@ def analyze_insider_activity(insider_trades: list) -> dict:
     return {"score": score, "details": "; ".join(details)}
 
 
-def analyze_sentiment(news_items: list) -> dict:
-    """
-    Basic news sentiment: negative keyword check vs. overall volume.
-    """
-    if not news_items:
-        return {"score": 5, "details": "No news data; defaulting to neutral sentiment"}
+def analyze_calendar_context(events: list) -> dict:
+    """Convert Börsdata calendar events into a Druckenmiller-style sentiment proxy."""
 
-    negative_keywords = ["lawsuit", "fraud", "negative", "downturn", "decline", "investigation", "recall"]
-    negative_count = 0
-    for news in news_items:
-        title_lower = (news.title or "").lower()
-        if any(word in title_lower for word in negative_keywords):
-            negative_count += 1
+    if not events:
+        return {"score": 5, "details": "No calendar events; sentiment neutral"}
 
-    details = []
-    if negative_count > len(news_items) * 0.3:
-        # More than 30% negative => somewhat bearish => 3/10
-        score = 3
-        details.append(f"High proportion of negative headlines: {negative_count}/{len(news_items)}")
-    elif negative_count > 0:
-        # Some negativity => 6/10
-        score = 6
-        details.append(f"Some negative headlines: {negative_count}/{len(news_items)}")
-    else:
-        # Mostly positive => 8/10
-        score = 8
-        details.append("Mostly positive/neutral headlines")
+    dividend_count = sum(1 for event in events if getattr(event, "category", "") == "dividend")
+    report_count = sum(1 for event in events if getattr(event, "category", "") == "report")
 
-    return {"score": score, "details": "; ".join(details)}
+    score = 5.0
+    score += min(dividend_count * 1.0, 3.0)
+    score += min(report_count * 0.5, 2.0)
+    score = max(0.0, min(score, 10.0))
+
+    details: list[str] = []
+    if dividend_count:
+        details.append(f"Dividend catalysts: {dividend_count}")
+    if report_count:
+        details.append(f"Report catalysts: {report_count}")
+
+    if not details:
+        details.append("Calendar events recorded")
+
+    return {"score": round(score, 2), "details": "; ".join(details)}
 
 
 def analyze_risk_reward(financial_line_items: list, prices: list) -> dict:

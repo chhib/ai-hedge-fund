@@ -15,11 +15,11 @@ interface ApiKey {
 
 const FINANCIAL_API_KEYS: ApiKey[] = [
   {
-    key: 'FINANCIAL_DATASETS_API_KEY',
-    label: 'Financial Datasets API',
-    description: 'For getting financial data to power the hedge fund',
-    url: 'https://financialdatasets.ai/',
-    placeholder: 'your-financial-datasets-api-key'
+    key: 'BORSDATA_API_KEY',
+    label: 'Börsdata API',
+    description: 'Official Börsdata key for market, calendar, and holdings data',
+    url: 'https://borsdata.se/',
+    placeholder: 'your-borsdata-api-key'
   }
 ];
 
