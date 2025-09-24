@@ -69,6 +69,7 @@ class BorsdataClient:
         session: Optional[requests.Session] = None,
         rate_limiter: Optional[RateLimiter] = None,
         instrument_cache_ttl: float = 6 * 60 * 60,
+        metadata_cache_ttl: float = 6 * 60 * 60,
         sleep_func: Callable[[float], None] = time.sleep,
         max_retries: int = 3,
     ) -> None:
@@ -80,6 +81,9 @@ class BorsdataClient:
         self._instrument_cache_timestamp = 0.0
         self._instrument_by_id: Dict[int, Dict[str, Any]] = {}
         self._instrument_by_ticker: Dict[str, Dict[str, Any]] = {}
+        self._metadata_cache_ttl = metadata_cache_ttl
+        self._kpi_metadata_timestamp = 0.0
+        self._kpi_metadata: list[Dict[str, Any]] = []
         self._sleep = sleep_func
         self._max_retries = max_retries
 
@@ -89,9 +93,7 @@ class BorsdataClient:
     def _resolve_api_key(self, override: Optional[str]) -> str:
         api_key = override or self._explicit_api_key or os.environ.get("BORSDATA_API_KEY")
         if not api_key:
-            raise BorsdataAPIError(
-                "Missing Börsdata API key. Set BORSDATA_API_KEY or pass api_key explicitly."
-            )
+            raise BorsdataAPIError("Missing Börsdata API key. Set BORSDATA_API_KEY or pass api_key explicitly.")
         return api_key
 
     def _request(
@@ -125,9 +127,7 @@ class BorsdataClient:
                 continue
 
             if response.status_code >= 400:
-                raise BorsdataAPIError(
-                    f"Börsdata API error {response.status_code} for {path}: {response.text}"
-                )
+                raise BorsdataAPIError(f"Börsdata API error {response.status_code} for {path}: {response.text}")
 
             try:
                 return response.json()
@@ -163,6 +163,17 @@ class BorsdataClient:
         if force_refresh or not self._instrument_by_id or cache_stale:
             self._refresh_instrument_cache(api_key=api_key)
 
+    def _refresh_kpi_metadata(self, *, api_key: Optional[str]) -> None:
+        payload = self._request("GET", "/v1/instruments/kpis/metadata", api_key=api_key)
+        metadata: Iterable[Dict[str, Any]] = payload.get("kpiHistoryMetadatas") or []
+        self._kpi_metadata = list(metadata)
+        self._kpi_metadata_timestamp = time.time()
+
+    def _ensure_kpi_metadata(self, *, api_key: Optional[str], force_refresh: bool) -> None:
+        cache_stale = (time.time() - self._kpi_metadata_timestamp) >= self._metadata_cache_ttl
+        if force_refresh or not self._kpi_metadata or cache_stale:
+            self._refresh_kpi_metadata(api_key=api_key)
+
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
@@ -188,6 +199,85 @@ class BorsdataClient:
         if instrument is None:
             raise BorsdataAPIError(f"Ticker '{ticker}' not found in Börsdata instruments")
         return instrument
+
+    def get_kpi_metadata(self, *, api_key: Optional[str] = None, force_refresh: bool = False) -> list[Dict[str, Any]]:
+        """Return cached KPI metadata."""
+        self._ensure_kpi_metadata(api_key=api_key, force_refresh=force_refresh)
+        return list(self._kpi_metadata)
+
+    def get_kpi_summary(
+        self,
+        instrument_id: int,
+        report_type: str,
+        *,
+        max_count: Optional[int] = None,
+        api_key: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        params: Dict[str, Any] = {}
+        if max_count is not None:
+            params["maxCount"] = max_count
+        return self._request(
+            "GET",
+            f"/v1/instruments/{int(instrument_id)}/kpis/{report_type}/summary",
+            params=params,
+            api_key=api_key,
+        )
+
+    def get_kpi_history(
+        self,
+        instrument_id: int,
+        kpi_id: int,
+        report_type: str,
+        price_type: str = "mean",
+        *,
+        max_count: Optional[int] = None,
+        api_key: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        params: Dict[str, Any] = {}
+        if max_count is not None:
+            params["maxCount"] = max_count
+        return self._request(
+            "GET",
+            f"/v1/instruments/{int(instrument_id)}/kpis/{int(kpi_id)}/{report_type}/{price_type}/history",
+            params=params,
+            api_key=api_key,
+        )
+
+    def get_kpi_screener_value(
+        self,
+        instrument_id: int,
+        kpi_id: int,
+        calc_group: str,
+        calc: str,
+        *,
+        api_key: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        return self._request(
+            "GET",
+            f"/v1/instruments/{int(instrument_id)}/kpis/{int(kpi_id)}/{calc_group}/{calc}",
+            api_key=api_key,
+        )
+
+    def get_reports(
+        self,
+        instrument_id: int,
+        report_type: str,
+        *,
+        max_count: Optional[int] = None,
+        original_currency: Optional[bool] = None,
+        api_key: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        params: Dict[str, Any] = {}
+        if max_count is not None:
+            params["maxCount"] = max_count
+        if original_currency is not None:
+            params["original"] = 1 if original_currency else 0
+        return self._request(
+            "GET",
+            f"/v1/instruments/{int(instrument_id)}/reports/{report_type}",
+            params=params,
+            api_key=api_key,
+        )
 
     def get_stock_prices(
         self,

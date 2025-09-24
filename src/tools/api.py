@@ -9,7 +9,6 @@ from src.data.models import (
     CompanyNews,
     CompanyNewsResponse,
     FinancialMetrics,
-    FinancialMetricsResponse,
     Price,
     LineItem,
     LineItemResponse,
@@ -18,10 +17,12 @@ from src.data.models import (
     CompanyFactsResponse,
 )
 from src.data.borsdata_client import BorsdataAPIError, BorsdataClient
+from src.data.borsdata_kpis import FinancialMetricsAssembler
 
 # Global cache instance
 _cache = get_cache()
 _borsdata_client = BorsdataClient()
+_financial_metrics_assembler = FinancialMetricsAssembler(_borsdata_client)
 
 
 def _get_borsdata_client(api_key: str | None) -> BorsdataClient:
@@ -34,17 +35,17 @@ def _get_borsdata_client(api_key: str | None) -> BorsdataClient:
 def _make_api_request(url: str, headers: dict, method: str = "GET", json_data: dict = None, max_retries: int = 3) -> requests.Response:
     """
     Make an API request with rate limiting handling and moderate backoff.
-    
+
     Args:
         url: The URL to request
         headers: Headers to include in the request
         method: HTTP method (GET or POST)
         json_data: JSON data for POST requests
         max_retries: Maximum number of retries (default: 3)
-    
+
     Returns:
         requests.Response: The response object
-    
+
     Raises:
         Exception: If the request fails with a non-429 error
     """
@@ -53,14 +54,14 @@ def _make_api_request(url: str, headers: dict, method: str = "GET", json_data: d
             response = requests.post(url, headers=headers, json=json_data)
         else:
             response = requests.get(url, headers=headers)
-        
+
         if response.status_code == 429 and attempt < max_retries:
             # Linear backoff: 60s, 90s, 120s, 150s...
             delay = 60 + (30 * attempt)
             print(f"Rate limited (429). Attempt {attempt + 1}/{max_retries + 1}. Waiting {delay}s before retrying...")
             time.sleep(delay)
             continue
-        
+
         # Return the response (whether success, other errors, or final 429)
         return response
 
@@ -132,25 +133,24 @@ def get_financial_metrics(
     """Fetch financial metrics from cache or API."""
     # Create a cache key that includes all parameters to ensure exact matches
     cache_key = f"{ticker}_{period}_{end_date}_{limit}"
-    
+
     # Check cache first - simple exact match
     if cached_data := _cache.get_financial_metrics(cache_key):
         return [FinancialMetrics(**metric) for metric in cached_data]
 
-    # If not in cache, fetch from API
-    headers = {}
-    financial_api_key = api_key or os.environ.get("FINANCIAL_DATASETS_API_KEY")
-    if financial_api_key:
-        headers["X-API-KEY"] = financial_api_key
+    client = _get_borsdata_client(api_key)
+    assembler = _financial_metrics_assembler if client is _borsdata_client else FinancialMetricsAssembler(client)
 
-    url = f"https://api.financialdatasets.ai/financial-metrics/?ticker={ticker}&report_period_lte={end_date}&limit={limit}&period={period}"
-    response = _make_api_request(url, headers)
-    if response.status_code != 200:
-        raise Exception(f"Error fetching data: {ticker} - {response.status_code} - {response.text}")
-
-    # Parse response with Pydantic model
-    metrics_response = FinancialMetricsResponse(**response.json())
-    financial_metrics = metrics_response.financial_metrics
+    try:
+        financial_metrics = assembler.assemble(
+            ticker,
+            end_date=end_date,
+            period=period,
+            limit=limit,
+            api_key=api_key,
+        )
+    except BorsdataAPIError as exc:
+        raise Exception(f"Error fetching Börsdata financial metrics for {ticker}: {exc}") from exc
 
     if not financial_metrics:
         return []
@@ -207,7 +207,7 @@ def get_insider_trades(
     """Fetch insider trades from cache or API."""
     # Create a cache key that includes all parameters to ensure exact matches
     cache_key = f"{ticker}_{start_date or 'none'}_{end_date}_{limit}"
-    
+
     # Check cache first - simple exact match
     if cached_data := _cache.get_insider_trades(cache_key):
         return [InsiderTrade(**trade) for trade in cached_data]
@@ -269,7 +269,7 @@ def get_company_news(
     """Fetch company news from cache or API."""
     # Create a cache key that includes all parameters to ensure exact matches
     cache_key = f"{ticker}_{start_date or 'none'}_{end_date}_{limit}"
-    
+
     # Check cache first - simple exact match
     if cached_data := _cache.get_company_news(cache_key):
         return [CompanyNews(**news) for news in cached_data]

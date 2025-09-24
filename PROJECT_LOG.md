@@ -40,13 +40,14 @@ Rebuild the data ingestion and processing pipeline so the application relies on 
 - Authored `docs/borsdata_integration_plan.md` detailing client structure, rate limiting, and testing scope for the migration.
 - Selected Börsdata report/dividend calendars as the replacement strategy for the news feed; pending UI wiring.
 - Implemented `src/data/borsdata_client.py` with shared auth, rate limiting, and instrument caching; `get_prices` now pulls directly from Börsdata stock price endpoints.
+- Added `FinancialMetricsAssembler` backed by KPI summaries + reports, extended the Börsdata client to expose metadata/screener/report helpers, and switched `get_financial_metrics` to the Börsdata pipeline with unit coverage in `tests/data/test_borsdata_kpis.py`.
 
 ## Next Actions
-1. Build the FinancialMetrics assembler applying the KPI mapping and derived report logic.
-2. Swap line item searches to the Börsdata reports endpoint with local filtering.
-3. Implement the calendar-based replacement for company news and update downstream consumers/UX text.
-4. Update configuration to require `BORSDATA_API_KEY` and remove `FINANCIAL_DATASETS_API_KEY` usage.
-5. Add Börsdata fixtures and tests covering rate limiting, KPI mapping, price ingestion, and derived metrics.
+1. Swap line item searches to the Börsdata reports endpoint with local filtering.
+2. Implement the calendar-based replacement for company news and update downstream consumers/UX text.
+3. Update configuration to require `BORSDATA_API_KEY` and remove `FINANCIAL_DATASETS_API_KEY` usage.
+4. Add Börsdata fixtures and tests covering rate limiting, KPI mapping (including screener history), price ingestion, and derived metrics.
+5. Validate screener-driven FinancialMetrics fields against real Börsdata payloads and extend assembler fallbacks for alternative report types as needed.
 
 ## Open Questions
 - What is the best way to persist resolved `kpiId` lookups (e.g., cached JSON vs in-memory) to limit metadata parsing?

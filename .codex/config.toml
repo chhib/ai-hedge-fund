@@ -1,0 +1,18 @@
+# ~/.codex/config.toml
+[default]
+ask_for_approval = "never"  # or "on-failure" for slightly safer auto-execution
+sandbox = "workspace-write"  # allows writing to project files
+
+# Allow downloads from common sources
+allowed_domains = [
+  "github.com",
+  "raw.githubusercontent.com",
+  "*.github.com",
+  "api.github.com",
+  "borsdata.se",
+  "*.borsdata.se",
+  "apidoc.borsdata.se"
+]
+
+# Alternative: use full_auto = true instead of ask_for_approval + sandbox lines
+# full_auto = true
