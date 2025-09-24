@@ -11,16 +11,24 @@ from src.data.models import (
     FinancialMetrics,
     FinancialMetricsResponse,
     Price,
-    PriceResponse,
     LineItem,
     LineItemResponse,
     InsiderTrade,
     InsiderTradeResponse,
     CompanyFactsResponse,
 )
+from src.data.borsdata_client import BorsdataAPIError, BorsdataClient
 
 # Global cache instance
 _cache = get_cache()
+_borsdata_client = BorsdataClient()
+
+
+def _get_borsdata_client(api_key: str | None) -> BorsdataClient:
+    """Return a Börsdata client configured with the requested API key."""
+    if api_key:
+        return BorsdataClient(api_key=api_key)
+    return _borsdata_client
 
 
 def _make_api_request(url: str, headers: dict, method: str = "GET", json_data: dict = None, max_retries: int = 3) -> requests.Response:
@@ -60,26 +68,51 @@ def _make_api_request(url: str, headers: dict, method: str = "GET", json_data: d
 def get_prices(ticker: str, start_date: str, end_date: str, api_key: str = None) -> list[Price]:
     """Fetch price data from cache or API."""
     # Create a cache key that includes all parameters to ensure exact matches
-    cache_key = f"{ticker}_{start_date}_{end_date}"
-    
+    cache_key = f"{ticker}_{start_date}_{end_date or 'none'}"
+
     # Check cache first - simple exact match
     if cached_data := _cache.get_prices(cache_key):
         return [Price(**price) for price in cached_data]
 
-    # If not in cache, fetch from API
-    headers = {}
-    financial_api_key = api_key or os.environ.get("FINANCIAL_DATASETS_API_KEY")
-    if financial_api_key:
-        headers["X-API-KEY"] = financial_api_key
+    client = _get_borsdata_client(api_key)
 
-    url = f"https://api.financialdatasets.ai/prices/?ticker={ticker}&interval=day&interval_multiplier=1&start_date={start_date}&end_date={end_date}"
-    response = _make_api_request(url, headers)
-    if response.status_code != 200:
-        raise Exception(f"Error fetching data: {ticker} - {response.status_code} - {response.text}")
+    try:
+        raw_prices = client.get_stock_prices_by_ticker(
+            ticker,
+            start_date=start_date,
+            end_date=end_date,
+            api_key=api_key,
+        )
+    except BorsdataAPIError as exc:
+        raise Exception(f"Error fetching Börsdata prices for {ticker}: {exc}") from exc
 
-    # Parse response with Pydantic model
-    price_response = PriceResponse(**response.json())
-    prices = price_response.prices
+    prices: list[Price] = []
+    for entry in raw_prices:
+        date_str = entry.get("d")
+        close_value = entry.get("c")
+        if not date_str or close_value is None:
+            continue
+
+        def _numerical(value, fallback):
+            return float(value) if value is not None else float(fallback)
+
+        open_value = _numerical(entry.get("o"), close_value)
+        high_value = _numerical(entry.get("h"), close_value)
+        low_value = _numerical(entry.get("l"), close_value)
+        volume_value = int(entry.get("v") or 0)
+
+        time_value = date_str if "T" in date_str else f"{date_str}T00:00:00Z"
+
+        prices.append(
+            Price(
+                open=open_value,
+                close=float(close_value),
+                high=high_value,
+                low=low_value,
+                volume=volume_value,
+                time=time_value,
+            )
+        )
 
     if not prices:
         return []
