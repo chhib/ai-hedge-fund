@@ -2,6 +2,15 @@
 
 This is a proof of concept for an AI-powered hedge fund.  The goal of this project is to explore the use of AI to make trading decisions.  This project is for **educational** purposes only and is not intended for real trading or investment.
 
+## 🚧 Work in Progress
+
+**This is an active fork focused on enhancing the original AI hedge fund system.**
+
+- **Phase 1**: ✅ **Complete** - CLI backtest experience with Börsdata data integration
+- **Phase 2**: 🔄 **In Progress** - Working on getting the web interface fully operational with new Börsdata integration and streaming UI components
+
+The command-line interface is production-ready with comprehensive Börsdata market data integration. Web interface development is ongoing.
+
 This system employs several agents working together:
 
 1. Aswath Damodaran Agent - The Dean of Valuation, focuses on story, numbers, and disciplined valuation
@@ -134,7 +143,7 @@ Note: The `--ollama`, `--start-date`, and `--end-date` flags work for the backte
 
 The new way to run the AI Hedge Fund is through our web application that provides a user-friendly interface. This is recommended for users who prefer visual interfaces over command line tools.
 
-Please see detailed instructions on how to install and run the web application [here](https://github.com/virattt/ai-hedge-fund/tree/main/app).
+Please see detailed instructions on how to install and run the web application [here](https://github.com/chhib/ai-hedge-fund/tree/main/app).
 
 <img width="1721" alt="Screenshot 2025-06-28 at 6 41 03 PM" src="https://github.com/user-attachments/assets/b95ab696-c9f4-416c-9ad1-51feb1f5374b" />
 
@@ -151,7 +160,7 @@ Please see detailed instructions on how to install and run the web application [
 
 ## Feature Requests
 
-If you have a feature request, please open an [issue](https://github.com/virattt/ai-hedge-fund/issues) and make sure it is tagged with `enhancement`.
+If you have a feature request, please open an [issue](https://github.com/chhib/ai-hedge-fund/issues) and make sure it is tagged with `enhancement`.
 
 ## License
 
