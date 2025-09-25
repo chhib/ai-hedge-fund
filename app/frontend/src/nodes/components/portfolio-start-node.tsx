@@ -44,7 +44,7 @@ const runModes = [
 const providerMapping: Record<LanguageModel['provider'], ModelProvider | undefined> = {
   Anthropic: ModelProvider.ANTHROPIC,
   DeepSeek: undefined,
-  Google: undefined,
+  Google: ModelProvider.GOOGLE,
   Groq: ModelProvider.GROQ,
   OpenAI: ModelProvider.OPENAI,
 };

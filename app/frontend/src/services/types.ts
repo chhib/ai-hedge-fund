@@ -6,6 +6,7 @@ export enum ModelProvider {
   ANTHROPIC = 'Anthropic',
   GROQ = 'Groq',
   OLLAMA = 'Ollama',
+  GOOGLE = 'Google',
 }
 
 export interface AgentModelConfig {

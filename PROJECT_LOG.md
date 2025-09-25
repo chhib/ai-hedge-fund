@@ -133,6 +133,30 @@ Rebuild the data ingestion and processing pipeline so the application relies on 
 - Cleared lingering fast-refresh lint warnings by pruning unused design exports and scoping the context hooks with targeted rule exclusions; `npm run lint` now passes with zero warnings.
 - Confirmed `npm run lint` succeeds locally after the fixes; pending manual API key UX smoke test once backend is reachable.
 
+### Session 19 (API smoke test)
+- Started the FastAPI backend and the Vite frontend development server.
+- Performed a smoke test of the API key management functionality using `curl` commands, as the frontend UI did not render correctly outside a browser environment.
+- Successfully created, listed, fetched, and deleted a Börsdata API key via the `/api-keys` endpoint, confirming the backend CRUD operations are working as expected after the recent frontend and backend changes.
+
+### Session 20 (Provider Alignment)
+- Aligned frontend and backend model providers.
+- Added `Google` to the `ModelProvider` enum in `app/frontend/src/services/types.ts`.
+- Updated the `providerMapping` in `app/frontend/src/nodes/components/portfolio-start-node.tsx` and `app/frontend/src/nodes/components/stock-analyzer-node.tsx` to include `Google`.
+- Left `DeepSeek` as unsupported in the frontend as per user feedback.
+
+### Session 21 (Performance Analysis)
+- Successfully ran the backtester with a real LLM agent (`gpt-5`) using a newly created test script (`scripts/run_llm_backtest.py`) that leverages fixture data.
+- Analyzed the agent implementation and the overall architecture to identify potential performance bottlenecks and context window issues.
+- **Findings:**
+    - Context window size is not an immediate concern as prompts are self-contained for each ticker analysis.
+    - Performance is likely to be an issue for long backtests with many tickers and agents, as each agent makes an LLM call for each ticker on each day of the backtest.
+- **Suggested Optimizations:**
+    1.  **LLM Caching:** Implement a caching mechanism for LLM calls to avoid repeated calls with the same inputs.
+    2.  **Agent Scheduling:** Allow agents to be run at different frequencies (e.g., daily, weekly, monthly) to reduce the number of LLM calls.
+
+### Session 22 (User Feedback & Reprioritization)
+- User has requested to pause the performance optimization work and to prioritize making the web interface work with the Börsdata API, to achieve parity with the previous Financial Dataset API implementation.
+
 ## Phase 1 Status: ✅ COMPLETE
 **CLI backtest experience with Börsdata data flows is production-ready.** The system successfully:
 - Ingests price, financial metrics, corporate events, and insider trades from Börsdata fixtures
@@ -141,9 +165,9 @@ Rebuild the data ingestion and processing pipeline so the application relies on 
 - Provides comprehensive test coverage for regression validation
 
 ## Next Actions
-1. **Settings smoke test**: Hit the settings UI against the FastAPI backend to validate API key CRUD + streaming after the lint cleanup.
-2. **Provider alignment**: Decide how to surface Google/DeepSeek models in `ModelProvider` so agent model exports won't have to warn-and-skip unsupported providers.
-3. **Performance optimization**: Monitor CLI output performance and consider context window management for extended agent sessions.
+1. **Frontend Data Integration**: Connect the frontend UI to the backend to fetch and display data from the Börsdata API, ensuring the application works as it did with the previous Financial Dataset API.
+2. **UI/UX Polish**: Ensure the web interface is user-friendly and provides a good experience.
+3. **End-to-end Testing**: Perform end-to-end testing of the web interface with the Börsdata API.
 
 ## Open Questions
 - What is the best way to persist resolved `kpiId` lookups (e.g., cached JSON vs in-memory) to limit metadata parsing?

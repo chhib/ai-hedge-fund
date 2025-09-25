@@ -35,6 +35,8 @@ def main() -> int:
     parser.add_argument("--analysts", type=str, required=False)
     parser.add_argument("--analysts-all", action="store_true")
     parser.add_argument("--ollama", action="store_true")
+    parser.add_argument("--model-name", type=str, required=False, help="The name of the model to use.")
+    parser.add_argument("--model-provider", type=str, required=False, help="The provider of the model.")
 
     args = parser.parse_args()
     init(autoreset=True)
@@ -71,8 +73,14 @@ def main() -> int:
             f"{', '.join(Fore.GREEN + choice.title().replace('_', ' ') + Style.RESET_ALL for choice in choices)}\n"
         )
 
-    # Model selection simplified: default to first ordered model or Ollama flag
-    if args.ollama:
+    # Model selection
+    if args.model_name and args.model_provider:
+        model_name = args.model_name
+        model_provider = args.model_provider
+        print(
+            f"\nUsing model: {Fore.GREEN + Style.BRIGHT}{model_name}{Style.RESET_ALL} from provider: {Fore.CYAN}{model_provider}{Style.RESET_ALL}\n"
+        )
+    elif args.ollama:
         print(f"{Fore.CYAN}Using Ollama for local LLM inference.{Style.RESET_ALL}")
         model_name = questionary.select(
             "Select your Ollama model:",

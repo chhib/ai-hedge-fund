@@ -72,7 +72,9 @@ def get_prices(ticker: str, start_date: str, end_date: str, api_key: str = None)
             api_key=api_key,
         )
     except BorsdataAPIError as exc:
-        raise Exception(f"Error fetching Börsdata prices for {ticker}: {exc}") from exc
+        # Log the error for debugging, but don't crash the agent
+        print(f"Could not fetch prices for {ticker}: {exc}")
+        return []
 
     prices: list[Price] = []
     for entry in raw_prices:
@@ -137,7 +139,9 @@ def get_financial_metrics(
             api_key=api_key,
         )
     except BorsdataAPIError as exc:
-        raise Exception(f"Error fetching Börsdata financial metrics for {ticker}: {exc}") from exc
+        # Log the error for debugging, but don't crash the agent
+        print(f"Could not fetch financial metrics for {ticker}: {exc}")
+        return []
 
     if not financial_metrics:
         return []
@@ -173,7 +177,9 @@ def search_line_items(
             api_key=api_key,
         )
     except BorsdataAPIError as exc:
-        raise Exception(f"Error fetching Börsdata line items for {ticker}: {exc}") from exc
+        # Log the error for debugging, but don't crash the agent
+        print(f"Could not fetch line items for {ticker}: {exc}")
+        return []
 
     if not records:
         return []
@@ -199,7 +205,9 @@ def get_insider_trades(
     try:
         instrument = client.get_instrument(ticker, api_key=api_key)
     except BorsdataAPIError as exc:
-        raise Exception(f"Error fetching Börsdata instrument for {ticker}: {exc}") from exc
+        # Log the error for debugging, but don't crash the agent
+        print(f"Could not fetch instrument for {ticker}: {exc}")
+        return []
 
     instrument_id = instrument.get("insId")
     if instrument_id is None:
@@ -318,7 +326,9 @@ def get_company_events(
     try:
         instrument = client.get_instrument(ticker, api_key=api_key)
     except BorsdataAPIError as exc:
-        raise Exception(f"Error fetching Börsdata instrument for {ticker}: {exc}") from exc
+        # Log the error for debugging, but don't crash the agent
+        print(f"Could not fetch instrument for {ticker}: {exc}")
+        return []
 
     instrument_id = instrument.get("insId")
     if instrument_id is None:
@@ -331,7 +341,9 @@ def get_company_events(
         report_calendar = client.get_report_calendar([instrument_id], api_key=api_key)
         dividend_calendar = client.get_dividend_calendar([instrument_id], api_key=api_key)
     except BorsdataAPIError as exc:
-        raise Exception(f"Error fetching Börsdata calendar data for {ticker}: {exc}") from exc
+        # Log the error for debugging, but don't crash the agent
+        print(f"Could not fetch calendar data for {ticker}: {exc}")
+        return []
 
     events: list[CompanyEvent] = []
 

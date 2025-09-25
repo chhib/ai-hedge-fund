@@ -75,6 +75,9 @@ async def run(request_data: HedgeFundRequest, request: Request, db: Session = De
             progress.register_handler(progress_handler)
 
             try:
+                # Start the disconnect detection task
+                disconnect_task = asyncio.create_task(wait_for_disconnect())
+
                 # Start the graph execution in a background task
                 run_task = asyncio.create_task(
                     run_graph_async(
@@ -88,9 +91,6 @@ async def run(request_data: HedgeFundRequest, request: Request, db: Session = De
                         request=request_data,  # Pass the full request for agent-specific model access
                     )
                 )
-                
-                # Start the disconnect detection task
-                disconnect_task = asyncio.create_task(wait_for_disconnect())
                 
                 # Send initial message
                 yield StartEvent().to_sse()
@@ -259,13 +259,13 @@ async def backtest(request_data: BacktestRequest, request: Request, db: Session 
             progress.register_handler(progress_handler)
             
             try:
+                # Start the disconnect detection task
+                disconnect_task = asyncio.create_task(wait_for_disconnect())
+
                 # Start the backtest in a background task
                 backtest_task = asyncio.create_task(
                     backtest_service.run_backtest_async(progress_callback=progress_callback)
                 )
-                
-                # Start the disconnect detection task
-                disconnect_task = asyncio.create_task(wait_for_disconnect())
                 
                 # Send initial message
                 yield StartEvent().to_sse()
