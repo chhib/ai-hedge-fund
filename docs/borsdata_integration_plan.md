@@ -31,7 +31,7 @@ This document lays out the concrete steps to migrate the application from the le
 - Replace company facts lookups using instrument metadata + description endpoints; document missing attributes that Börsdata does not expose.
 
 ## 5. Testing Strategy
-- Create Börsdata-specific fixtures under `tests/backtesting/borsdata/` with saved JSON payloads for instruments, prices, KPI summary, reports, and holdings.
+- Maintain Börsdata-specific fixtures under `tests/fixtures/api/` (prices, financial metrics, calendar, insider trades) so integration tests and harnesses can replay API responses offline.
 - Add unit tests for:
   - KPI mapping resolution (metadata lookup + screener fallbacks).
   - Rate limiter behaviour (burst > 100 calls triggers wait/backoff).
