@@ -17,6 +17,7 @@ def sentiment_analyst_agent(state: AgentState, agent_id: str = "sentiment_analys
     api_key = get_api_key_from_state(state, "BORSDATA_API_KEY")
     # Initialize sentiment analysis for each ticker
     sentiment_analysis = {}
+    any_ticker_succeeded = False
 
     for ticker in tickers:
         progress.update_status(agent_id, ticker, "Fetching insider trades")
@@ -145,6 +146,7 @@ def sentiment_analyst_agent(state: AgentState, agent_id: str = "sentiment_analys
         }
 
         progress.update_status(agent_id, ticker, "Done", analysis=json.dumps(reasoning, indent=4))
+        any_ticker_succeeded = True
 
     # Create the sentiment message
     message = HumanMessage(
@@ -159,7 +161,10 @@ def sentiment_analyst_agent(state: AgentState, agent_id: str = "sentiment_analys
     # Add the signal to the analyst_signals list
     state["data"]["analyst_signals"][agent_id] = sentiment_analysis
 
-    progress.update_status(agent_id, None, "Done")
+    if any_ticker_succeeded:
+        progress.update_status(agent_id, None, "Done")
+    else:
+        progress.update_status(agent_id, None, "Error")
 
     return {
         "messages": [message],

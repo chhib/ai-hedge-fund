@@ -4,8 +4,24 @@ from colorama import Fore, Style
 from tabulate import tabulate
 
 from .analysts import ANALYST_ORDER
+from src.data.borsdata_client import BorsdataClient, BorsdataAPIError
+from src.tools.api import _use_global_instruments
 import os
 import json
+
+
+def get_company_name(ticker: str) -> str:
+    """Get company name for a ticker from Börsdata."""
+    try:
+        client = BorsdataClient()
+        api_key = os.environ.get("BORSDATA_API_KEY")
+        instrument = client.get_instrument(ticker, api_key=api_key, use_global=_use_global_instruments)
+        
+        # Try different possible field names for company name
+        name = instrument.get("name") or instrument.get("companyName") or instrument.get("longName") or instrument.get("shortName")
+        return name if name else ticker
+    except (BorsdataAPIError, Exception):
+        return ticker
 
 
 def sort_agent_signals(signals):
@@ -31,8 +47,14 @@ def print_trading_output(result: dict) -> None:
 
     # Print decisions for each ticker
     for ticker, decision in decisions.items():
-        print(f"\n{Fore.WHITE}{Style.BRIGHT}Analysis for {Fore.CYAN}{ticker}{Style.RESET_ALL}")
-        print(f"{Fore.WHITE}{Style.BRIGHT}{'=' * 50}{Style.RESET_ALL}")
+        company_name = get_company_name(ticker)
+        if company_name != ticker:
+            header = f"Analysis for {company_name} ({ticker})"
+        else:
+            header = f"Analysis for {ticker}"
+        
+        print(f"\n{Fore.WHITE}{Style.BRIGHT}{header}{Style.RESET_ALL}")
+        print(f"{Fore.WHITE}{Style.BRIGHT}{'=' * len(header)}{Style.RESET_ALL}")
 
         # Prepare analyst signals table for this ticker
         table_data = []

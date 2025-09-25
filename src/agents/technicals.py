@@ -48,6 +48,7 @@ def technical_analyst_agent(state: AgentState, agent_id: str = "technical_analys
     api_key = get_api_key_from_state(state, "BORSDATA_API_KEY")
     # Initialize analysis for each ticker
     technical_analysis = {}
+    any_ticker_succeeded = False
 
     for ticker in tickers:
         progress.update_status(agent_id, ticker, "Analyzing price data")
@@ -61,7 +62,7 @@ def technical_analyst_agent(state: AgentState, agent_id: str = "technical_analys
         )
 
         if not prices:
-            progress.update_status(agent_id, ticker, "Failed: No price data found")
+            progress.update_status(agent_id, ticker, "Error")
             continue
 
         # Convert prices to a DataFrame
@@ -136,6 +137,7 @@ def technical_analyst_agent(state: AgentState, agent_id: str = "technical_analys
             },
         }
         progress.update_status(agent_id, ticker, "Done", analysis=json.dumps(technical_analysis, indent=4))
+        any_ticker_succeeded = True
 
     # Create the technical analyst message
     message = HumanMessage(
@@ -149,7 +151,10 @@ def technical_analyst_agent(state: AgentState, agent_id: str = "technical_analys
     # Add the signal to the analyst_signals list
     state["data"]["analyst_signals"][agent_id] = technical_analysis
 
-    progress.update_status(agent_id, None, "Done")
+    if any_ticker_succeeded:
+        progress.update_status(agent_id, None, "Done")
+    else:
+        progress.update_status(agent_id, None, "Error")
 
     return {
         "messages": state["messages"] + [message],

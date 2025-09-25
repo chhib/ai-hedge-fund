@@ -127,6 +127,15 @@ Rebuild the data ingestion and processing pipeline so the application relies on 
 - Started taming Phase 2 lint debt: introduced shared JSON/flow data types, rewired node/tabs contexts and API clients to drop key `any` usage, and stubbed safer SSE handling; `npm run lint` still reports remaining violations to clear next.
 
 ### Session 18 (Frontend lint pass)
+
+### Session 19 (Global instruments support and UI improvements)
+- Added support for Börsdata Global instruments via new `--tickers-global` flag, allowing analysis of international companies (AAPL, MSFT, NVDA) alongside Nordic/European tickers via `--tickers` flag.
+- Implemented global instruments endpoint integration in `BorsdataClient` with separate caching for global vs Nordic instruments, updated all assemblers and API functions to support `use_global` parameter.
+- Enhanced CLI with `--test` flag that pre-configures gpt-5 model with fundamentals, technical, and sentiment analysts to skip interactive prompts for faster testing.
+- Fixed progress status indicators to show `✗ Error` (red) when agents fail to fetch required data instead of misleading `✓ Done` status, improving user feedback accuracy.
+- Added company name display to analysis headers (e.g., "Analysis for Adverty (ADVT)" instead of just "Analysis for ADVT") with fallback to ticker when company name unavailable.
+- Updated README.md to document new global instruments support, test mode functionality, organized agent descriptions into logical categories, and reference comprehensive trading strategies documentation.
+- Removed outdated `docs/borsdata_integration_plan.md` and updated system status from "Phase 2 in progress" to "Web interface operational" reflecting current working state.
 - Wrapped Ollama settings helpers and resize/search hooks with `useCallback`/dependency fixes so React hook exhaustive-deps warnings are resolved without re-render churn.
 - Replaced the remaining `any` annotations across enhanced flow hooks, JSON/investment dialogs, and node components with typed React Flow + context models; also tightened badge variants and regex escapes.
 - Added explicit provider-to-`ModelProvider` mapping when exporting agent models so we warn (once) on unsupported providers instead of shipping invalid enum values downstream.

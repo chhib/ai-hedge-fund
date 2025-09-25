@@ -15,6 +15,7 @@ from src.utils.visualize import save_graph_as_png
 from src.cli.input import (
     parse_cli_inputs,
 )
+from src.tools.api import set_use_global_instruments
 
 import argparse
 from datetime import datetime
@@ -141,6 +142,9 @@ if __name__ == "__main__":
 
     tickers = inputs.tickers
     selected_analysts = inputs.selected_analysts
+    
+    # Set global instruments flag
+    set_use_global_instruments(inputs.use_global)
 
     # Construct portfolio here
     portfolio = {
