@@ -22,6 +22,7 @@ class MetricMapping(TypedDict, total=False):
     default_report_type: ReportType
     screener_calc_group: str
     screener_calc: str
+    screener_calc_group_overrides: dict[str, str]
     notes: str
     dependencies: list[str]
 
@@ -188,6 +189,7 @@ FINANCIAL_METRICS_MAPPING: dict[str, MetricMapping] = {
         "default_report_type": "year",
         "screener_calc_group": "1year",
         "screener_calc": "percent",
+        "screener_calc_group_overrides": {"quarter": "quarter"},
     },
     "earnings_growth": {
         "source": "screener",
@@ -195,6 +197,7 @@ FINANCIAL_METRICS_MAPPING: dict[str, MetricMapping] = {
         "default_report_type": "year",
         "screener_calc_group": "1year",
         "screener_calc": "percent",
+        "screener_calc_group_overrides": {"quarter": "quarter"},
     },
     "book_value_growth": {
         "source": "screener",
@@ -202,6 +205,7 @@ FINANCIAL_METRICS_MAPPING: dict[str, MetricMapping] = {
         "default_report_type": "year",
         "screener_calc_group": "1year",
         "screener_calc": "percent",
+        "screener_calc_group_overrides": {"quarter": "quarter"},
     },
     "earnings_per_share_growth": {
         "source": "screener",
@@ -209,6 +213,7 @@ FINANCIAL_METRICS_MAPPING: dict[str, MetricMapping] = {
         "default_report_type": "year",
         "screener_calc_group": "1year",
         "screener_calc": "percent",
+        "screener_calc_group_overrides": {"quarter": "quarter"},
     },
     "free_cash_flow_growth": {
         "source": "screener",
@@ -216,6 +221,7 @@ FINANCIAL_METRICS_MAPPING: dict[str, MetricMapping] = {
         "default_report_type": "year",
         "screener_calc_group": "1year",
         "screener_calc": "percent",
+        "screener_calc_group_overrides": {"quarter": "quarter"},
     },
     "operating_income_growth": {
         "source": "screener",
@@ -223,6 +229,7 @@ FINANCIAL_METRICS_MAPPING: dict[str, MetricMapping] = {
         "default_report_type": "year",
         "screener_calc_group": "1year",
         "screener_calc": "percent",
+        "screener_calc_group_overrides": {"quarter": "quarter"},
     },
     "ebitda_growth": {
         "source": "screener",
@@ -230,6 +237,7 @@ FINANCIAL_METRICS_MAPPING: dict[str, MetricMapping] = {
         "default_report_type": "year",
         "screener_calc_group": "1year",
         "screener_calc": "percent",
+        "screener_calc_group_overrides": {"quarter": "quarter"},
     },
     "payout_ratio": {
         "source": "kpi",

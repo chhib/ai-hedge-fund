@@ -3,7 +3,7 @@ from src.tools.api import (
     get_market_cap,
     search_line_items,
     get_insider_trades,
-    get_company_news,
+    get_company_events,
 )
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.messages import HumanMessage
@@ -78,7 +78,7 @@ def peter_lynch_agent(state: AgentState, agent_id: str = "peter_lynch_agent"):
         insider_trades = get_insider_trades(ticker, end_date, limit=50, api_key=api_key)
 
         progress.update_status(agent_id, ticker, "Fetching company calendar")
-        calendar_events = get_company_news(ticker, end_date, limit=50, api_key=api_key)
+        calendar_events = get_company_events(ticker, end_date, limit=50, api_key=api_key)
 
         # Perform sub-analyses:
         progress.update_status(agent_id, ticker, "Analyzing growth")

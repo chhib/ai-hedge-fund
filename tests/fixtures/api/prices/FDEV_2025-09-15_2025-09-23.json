@@ -1,0 +1,75 @@
+{
+  "ticker": "FDEV",
+  "prices": [
+    {
+      "ticker": "FDEV",
+      "open": 4.025,
+      "close": 4.085,
+      "high": 4.095,
+      "low": 3.975,
+      "volume": 407900,
+      "time": "2025-09-15T00:00:00Z",
+      "time_milliseconds": 1757894400000
+    },
+    {
+      "ticker": "FDEV",
+      "open": 4.09,
+      "close": 4.08,
+      "high": 4.09,
+      "low": 4.045,
+      "volume": 7476600,
+      "time": "2025-09-16T00:00:00Z",
+      "time_milliseconds": 1757980800000
+    },
+    {
+      "ticker": "FDEV",
+      "open": 4.055,
+      "close": 4.065,
+      "high": 4.0825,
+      "low": 4.055,
+      "volume": 535300,
+      "time": "2025-09-17T00:00:00Z",
+      "time_milliseconds": 1758067200000
+    },
+    {
+      "ticker": "FDEV",
+      "open": 4.06,
+      "close": 4.065,
+      "high": 4.085,
+      "low": 4.06,
+      "volume": 173200,
+      "time": "2025-09-18T00:00:00Z",
+      "time_milliseconds": 1758153600000
+    },
+    {
+      "ticker": "FDEV",
+      "open": 4.0625,
+      "close": 4.0325,
+      "high": 4.0625,
+      "low": 4.0325,
+      "volume": 261900,
+      "time": "2025-09-19T00:00:00Z",
+      "time_milliseconds": 1758240000000
+    },
+    {
+      "ticker": "FDEV",
+      "open": 4.185,
+      "close": 4.1775,
+      "high": 4.185,
+      "low": 4.17,
+      "volume": 568700,
+      "time": "2025-09-22T00:00:00Z",
+      "time_milliseconds": 1758499200000
+    },
+    {
+      "ticker": "FDEV",
+      "open": 4.16,
+      "close": 4.16,
+      "high": 4.16,
+      "low": 4.15,
+      "volume": 431000,
+      "time": "2025-09-23T00:00:00Z",
+      "time_milliseconds": 1758585600000
+    }
+  ]
+}

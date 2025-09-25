@@ -300,7 +300,7 @@ def get_insider_trades(
     return trades
 
 
-def get_company_news(
+def get_company_events(
     ticker: str,
     end_date: str,
     start_date: str | None = None,
@@ -310,7 +310,7 @@ def get_company_news(
     """Fetch company calendar events (reports + dividends) for a ticker."""
 
     cache_key = f"{ticker}_{start_date or 'none'}_{end_date}_{limit}"
-    if cached_data := _cache.get_company_news(cache_key):
+    if cached_data := _cache.get_company_events(cache_key):
         return [CompanyEvent(**event) for event in cached_data]
 
     client = _get_borsdata_client(api_key)
@@ -410,7 +410,7 @@ def get_company_news(
     events.sort(key=lambda e: e.date, reverse=True)
     events = events[:limit]
 
-    _cache.set_company_news(cache_key, [event.model_dump() for event in events])
+    _cache.set_company_events(cache_key, [event.model_dump() for event in events])
     return events
 
 

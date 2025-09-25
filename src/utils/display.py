@@ -1,5 +1,8 @@
+from typing import Any, Mapping
+
 from colorama import Fore, Style
 from tabulate import tabulate
+
 from .analysts import ANALYST_ORDER
 import os
 import json
@@ -226,7 +229,7 @@ def print_trading_output(result: dict) -> None:
         print(f"{Fore.CYAN}{wrapped_reasoning}{Style.RESET_ALL}")
 
 
-def print_backtest_results(table_rows: list) -> None:
+def print_backtest_results(table_rows: list, context: Mapping[str, Any] | None = None) -> None:
     """Print the backtest results in a nicely formatted table"""
     # Clear the screen
     os.system("cls" if os.name == "nt" else "clear")
@@ -266,6 +269,46 @@ def print_backtest_results(table_rows: list) -> None:
             print(f"Sortino Ratio: {latest_summary[12]}")
         if latest_summary[13]:  # Max drawdown
             print(f"Max Drawdown: {latest_summary[13]}")
+
+    if context:
+        context_date = context.get("date", "")
+        company_events = context.get("company_events", {})
+        insider_trades = context.get("insider_trades", {})
+
+        if company_events or insider_trades:
+            print(f"\n{Fore.WHITE}{Style.BRIGHT}MARKET CONTEXT {context_date}:{Style.RESET_ALL}")
+
+        if company_events:
+            print(f"{Fore.CYAN}Corporate Events:{Style.RESET_ALL}")
+            for ticker, events in sorted(company_events.items()):
+                for event in events[:3]:
+                    title = event.get("title") or event.get("category", "Event").title()
+                    event_date = event.get("date", "Unknown date")
+                    print(
+                        f"  {Fore.CYAN}{ticker}{Style.RESET_ALL} "
+                        f"{event_date} — {Fore.WHITE}{title}{Style.RESET_ALL}"
+                    )
+
+        if insider_trades:
+            print(f"{Fore.CYAN}Insider Trades:{Style.RESET_ALL}")
+            for ticker, trades in sorted(insider_trades.items()):
+                for trade in trades[:3]:
+                    trade_date = trade.get("transaction_date") or trade.get("filing_date") or "Unknown date"
+                    name = trade.get("name") or "Unknown insider"
+                    shares = trade.get("transaction_shares")
+                    direction = "Buy"
+                    if isinstance(shares, (int, float)):
+                        if shares < 0:
+                            direction = "Sell"
+                        elif shares == 0:
+                            direction = "Trade"
+                    else:
+                        direction = "Trade"
+                    shares_label = f"{abs(shares):,.0f}" if isinstance(shares, (int, float)) else "N/A"
+                    print(
+                        f"  {Fore.CYAN}{ticker}{Style.RESET_ALL} {trade_date} — "
+                        f"{Fore.WHITE}{name}{Style.RESET_ALL} ({direction} {shares_label} shares)"
+                    )
 
     # Add vertical spacing
     print("\n" * 2)

@@ -70,6 +70,16 @@ export interface BacktestDayResult {
   gross_exposure: number;
   net_exposure: number;
   long_short_ratio: number | null;
+  portfolio_return?: number;
+  performance_metrics: Record<string, any>;
+  ticker_details: Array<Record<string, any>>;
+  market_context?: MarketContextSnapshot;
+}
+
+export interface MarketContextSnapshot {
+  date: string;
+  company_events: Record<string, Array<Record<string, any>>>;
+  insider_trades: Record<string, Array<Record<string, any>>>;
 }
 
 export interface BacktestPerformanceMetrics {

@@ -12,9 +12,9 @@ class MockConfigurableAgent:
             
         Example:
             decision_sequence = [
-                {"AAPL": {"action": "buy", "quantity": 100}, "MSFT": {"action": "buy", "quantity": 30}},
+                {"TTWO": {"action": "buy", "quantity": 100}, "LUG": {"action": "buy", "quantity": 30}},
                 {},  # Hold all (empty dict means hold)
-                {"AAPL": {"action": "sell", "quantity": 30}},  # Partial sell
+                {"TTWO": {"action": "sell", "quantity": 30}},  # Partial sell
             ]
         """
         self.decision_sequence = decision_sequence

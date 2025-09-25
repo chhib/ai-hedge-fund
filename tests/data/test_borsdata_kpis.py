@@ -114,3 +114,22 @@ def test_financial_metrics_assembler_builds_metrics_from_summary_and_reports():
     assert math.isclose(previous.operating_cash_flow_ratio, 2.5)
     expected_previous_cycle = 35.0 + (365.0 / 8.0)
     assert math.isclose(previous.operating_cycle, expected_previous_cycle)
+
+
+def test_financial_metrics_assembler_uses_period_specific_screener_group_when_available():
+    client = StubBorsdataClient()
+    client.screener = {
+        (210, "quarter", "percent"): {"value": {"n": 3.5}},
+    }
+    assembler = FinancialMetricsAssembler(client)
+
+    metrics = assembler.assemble(
+        ticker="TEST",
+        end_date="2024-03-31",
+        period="quarter",
+        limit=1,
+        api_key=None,
+    )
+
+    assert len(metrics) == 1
+    assert math.isclose(metrics[0].revenue_growth, 0.035)

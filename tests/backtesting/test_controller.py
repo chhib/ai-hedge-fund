@@ -14,7 +14,7 @@ def test_agent_controller_normalizes_and_snapshots(portfolio):
     ctrl = AgentController()
     out = ctrl.run_agent(
         dummy_agent,
-        tickers=["AAPL", "MSFT"],
+        tickers=["TTWO", "LUG"],
         start_date="2024-01-01",
         end_date="2024-01-10",
         portfolio=portfolio,
@@ -24,11 +24,11 @@ def test_agent_controller_normalizes_and_snapshots(portfolio):
     )
 
     # Decisions normalized for all tickers
-    assert out["decisions"]["AAPL"]["action"] == "buy"
-    assert out["decisions"]["AAPL"]["quantity"] == 10.0
+    assert out["decisions"]["TTWO"]["action"] == "buy"
+    assert out["decisions"]["TTWO"]["quantity"] == 10.0
     # Missing ticker defaults to hold/0
-    assert out["decisions"]["MSFT"]["action"] == "hold"
-    assert out["decisions"]["MSFT"]["quantity"] == 0.0
+    assert out["decisions"]["LUG"]["action"] == "hold"
+    assert out["decisions"]["LUG"]["quantity"] == 0.0
     # Analyst signals are passed through
     assert "agentA" in out["analyst_signals"]
 

@@ -308,6 +308,9 @@ async def backtest(request_data: BacktestRequest, request: Request, db: Session 
                         "performance_metrics": performance_metrics.model_dump(),
                         "final_portfolio": result["final_portfolio"],
                         "total_days": len(result["results"]),
+                        "results": result["results"],
+                        "market_context": result.get("market_context", []),
+                        "portfolio_values": result.get("portfolio_values", []),
                     }
                 )
                 yield final_data.to_sse()
@@ -349,4 +352,3 @@ async def get_agents():
         return {"agents": get_agents_list()}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to retrieve agents: {str(e)}")
-

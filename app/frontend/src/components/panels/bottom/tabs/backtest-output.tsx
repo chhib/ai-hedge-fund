@@ -1,8 +1,102 @@
+import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
 import { MoreHorizontal } from 'lucide-react';
 import { getActionColor } from './output-tab-utils';
+import type { MarketContextSnapshot } from '@/services/types';
+
+type CompanyEventItem = {
+  amount?: number | null;
+  category?: string;
+  currency?: string | null;
+  date?: string;
+  description?: string | null;
+  event_id?: string | number | null;
+  report_type?: string | null;
+  title?: string | null;
+  ticker?: string | null;
+};
+
+type InsiderTradeItem = {
+  filing_date?: string | null;
+  issuer?: string | null;
+  name?: string | null;
+  shares_owned_after_transaction?: number | null;
+  shares_owned_before_transaction?: number | null;
+  security_title?: string | null;
+  title?: string | null;
+  ticker?: string | null;
+  transaction_date?: string | null;
+  transaction_price_per_share?: number | null;
+  transaction_shares?: number | null;
+  transaction_value?: number | null;
+};
+
+const hasContextEntries = (record?: Record<string, Array<Record<string, unknown>>> | null) => {
+  if (!record) return false;
+  return Object.values(record).some((entries) => Array.isArray(entries) && entries.length > 0);
+};
+
+const formatDate = (value?: string | null) => {
+  if (!value) return '--';
+
+  const parsedTimestamp = new Date(value);
+  if (!Number.isNaN(parsedTimestamp.getTime())) {
+    return parsedTimestamp.toLocaleDateString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  }
+
+  const fallbackTimestamp = new Date(`${value}T00:00:00Z`);
+  if (!Number.isNaN(fallbackTimestamp.getTime())) {
+    return fallbackTimestamp.toLocaleDateString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  }
+
+  return value;
+};
+
+const formatNumber = (value?: number | null, options?: Intl.NumberFormatOptions) => {
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return '--';
+  }
+
+  return new Intl.NumberFormat(undefined, {
+    maximumFractionDigits: 2,
+    ...options,
+  }).format(value);
+};
+
+const formatEventAmount = (event: CompanyEventItem) => {
+  if (event.amount === null || event.amount === undefined) {
+    return null;
+  }
+
+  const amount = formatNumber(event.amount, { maximumFractionDigits: 4 });
+  if (event.currency) {
+    return `${amount} ${event.currency}`;
+  }
+
+  return amount;
+};
+
+const inferTradeName = (trade: InsiderTradeItem) => {
+  if (trade.name && trade.name.trim().length > 0) {
+    return trade.name;
+  }
+
+  if (trade.issuer && trade.issuer.trim().length > 0) {
+    return trade.issuer;
+  }
+
+  return '--';
+};
 
 // Component for displaying backtest progress
 function BacktestProgress({ agentData }: { agentData: Record<string, any> }) {
@@ -26,6 +120,142 @@ function BacktestProgress({ agentData }: { agentData: Record<string, any> }) {
             <MoreHorizontal className="h-4 w-4 text-yellow-500" />
             <span className="font-medium">Backtest Runner</span>
             <span className="text-yellow-500 flex-1">{backtestAgent.message || backtestAgent.status}</span>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// Render most recent calendar + insider context while the stream is active
+function BacktestMarketContextLive({ agentData }: { agentData: Record<string, any> }) {
+  const backtestAgent = agentData['backtest'];
+
+  if (!backtestAgent || !Array.isArray(backtestAgent.backtestResults) || backtestAgent.backtestResults.length === 0) {
+    return null;
+  }
+
+  const latestBacktestResult = backtestAgent.backtestResults[backtestAgent.backtestResults.length - 1];
+  const snapshot: MarketContextSnapshot | undefined = latestBacktestResult?.market_context;
+
+  if (!snapshot || (!hasContextEntries(snapshot.company_events) && !hasContextEntries(snapshot.insider_trades))) {
+    return null;
+  }
+
+  const eventRows = Object.entries(snapshot.company_events ?? {}).flatMap(([ticker, events]) =>
+    (events as CompanyEventItem[]).map((event, index) => ({ ticker, event, index }))
+  );
+
+  const tradeRows = Object.entries(snapshot.insider_trades ?? {}).flatMap(([ticker, trades]) =>
+    (trades as InsiderTradeItem[]).map((trade, index) => ({ ticker, trade, index }))
+  );
+
+  return (
+    <Card className="bg-transparent mb-4">
+      <CardHeader>
+        <CardTitle className="text-lg">Latest Market Context</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="grid gap-6 lg:grid-cols-2">
+          <div>
+            <h4 className="font-medium mb-2">Company Events</h4>
+            {eventRows.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No company events have posted yet.</p>
+            ) : (
+              <div className="max-h-72 overflow-y-auto pr-1">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Ticker</TableHead>
+                      <TableHead>Category</TableHead>
+                      <TableHead>Details</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {eventRows.map(({ ticker, event, index }) => {
+                      const amountText = formatEventAmount(event);
+                      const key = `${ticker}-${event.event_id ?? event.title ?? index}`;
+
+                      return (
+                        <TableRow key={key}>
+                          <TableCell>{formatDate(event.date ?? snapshot.date)}</TableCell>
+                          <TableCell className="font-medium text-cyan-500">{ticker}</TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={event.category === 'dividend' ? 'success' : 'secondary'}
+                              className="capitalize"
+                            >
+                              {event.category ?? 'event'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="font-medium leading-tight">{event.title ?? '--'}</div>
+                            {event.report_type && (
+                              <div className="text-xs text-muted-foreground mt-1">
+                                Report: {event.report_type}
+                              </div>
+                            )}
+                            {amountText && (
+                              <div className="text-xs text-muted-foreground mt-1">{amountText}</div>
+                            )}
+                            {event.description && (
+                              <div className="text-xs text-muted-foreground mt-1">{event.description}</div>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </div>
+          <div>
+            <h4 className="font-medium mb-2">Insider Trades</h4>
+            {tradeRows.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No insider trades have arrived for this window.</p>
+            ) : (
+              <div className="max-h-72 overflow-y-auto pr-1">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Ticker</TableHead>
+                      <TableHead>Insider</TableHead>
+                      <TableHead>Shares</TableHead>
+                      <TableHead>Value</TableHead>
+                      <TableHead>Price</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {tradeRows.map(({ ticker, trade, index }) => {
+                      const key = `${ticker}-${trade.transaction_date ?? trade.filing_date ?? index}`;
+                      const tradeTicker = (trade.ticker ?? ticker ?? '').toString().toUpperCase();
+
+                      return (
+                        <TableRow key={key}>
+                          <TableCell>{formatDate(trade.transaction_date ?? trade.filing_date ?? snapshot.date)}</TableCell>
+                          <TableCell className="font-medium text-cyan-500">{tradeTicker || ticker}</TableCell>
+                          <TableCell>
+                            <div className="font-medium leading-tight">{inferTradeName(trade)}</div>
+                            {trade.title && (
+                              <div className="text-xs text-muted-foreground">{trade.title}</div>
+                            )}
+                            {trade.security_title && (
+                              <div className="text-xs text-muted-foreground">{trade.security_title}</div>
+                            )}
+                          </TableCell>
+                          <TableCell>{formatNumber(trade.transaction_shares, { maximumFractionDigits: 0 })}</TableCell>
+                          <TableCell>{formatNumber(trade.transaction_value)}</TableCell>
+                          <TableCell>{formatNumber(trade.transaction_price_per_share)}</TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
           </div>
         </div>
       </CardContent>
@@ -297,6 +527,200 @@ function BacktestResults({ outputData }: { outputData: any }) {
   );
 }
 
+// Summarize the historical context snapshots shipped with the completed run
+function BacktestMarketContextHistory({ outputData }: { outputData: any }) {
+  const snapshots = (outputData?.market_context ?? []) as MarketContextSnapshot[];
+
+  if (!Array.isArray(snapshots) || snapshots.length === 0) {
+    return null;
+  }
+
+  const snapshotsWithSignal = snapshots.filter((snapshot) =>
+    snapshot && (hasContextEntries(snapshot.company_events) || hasContextEntries(snapshot.insider_trades))
+  );
+
+  if (snapshotsWithSignal.length === 0) {
+    return null;
+  }
+
+  const sortedSnapshots = [...snapshotsWithSignal].sort((a, b) => {
+    const aTime = Date.parse(a.date);
+    const bTime = Date.parse(b.date);
+
+    if (!Number.isNaN(bTime) && !Number.isNaN(aTime)) {
+      return bTime - aTime;
+    }
+
+    return b.date.localeCompare(a.date);
+  });
+
+  const MAX_HISTORY = 10;
+  const MAX_ITEMS_PER_TICKER = 3;
+  const snapshotsToRender = sortedSnapshots.slice(0, MAX_HISTORY);
+
+  return (
+    <Card className="bg-transparent mb-4">
+      <CardHeader>
+        <CardTitle className="text-lg">Market Context Timeline</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-4 max-h-[28rem] overflow-y-auto pr-1">
+          {snapshotsToRender.map((snapshot) => {
+            const eventEntries = Object.entries(snapshot.company_events ?? {});
+            const tradeEntries = Object.entries(snapshot.insider_trades ?? {});
+            const eventCount = eventEntries.reduce((total, [, items]) => total + items.length, 0);
+            const tradeCount = tradeEntries.reduce((total, [, items]) => total + items.length, 0);
+
+            return (
+              <div
+                key={snapshot.date}
+                className="rounded-md border border-border/50 bg-background/60 p-3 space-y-3"
+              >
+                <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+                  <div className="font-medium">{formatDate(snapshot.date)}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {eventCount} event{eventCount === 1 ? '' : 's'} · {tradeCount} insider trade{tradeCount === 1 ? '' : 's'}
+                  </div>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <h5 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+                      Company Events
+                    </h5>
+                    {eventEntries.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No events recorded for this period.</p>
+                    ) : (
+                      <ul className="space-y-2">
+                        {eventEntries.map(([ticker, items]) => {
+                          const typedItems = items as CompanyEventItem[];
+                          const visibleItems = typedItems.slice(0, MAX_ITEMS_PER_TICKER);
+                          const remaining = typedItems.length - visibleItems.length;
+
+                          return (
+                            <li key={`${snapshot.date}-${ticker}`}
+                              className="space-y-1"
+                            >
+                              <div className="text-xs font-medium uppercase text-muted-foreground">{ticker}</div>
+                              <ul className="space-y-1">
+                                {visibleItems.map((event, index) => {
+                                  const amountText = formatEventAmount(event);
+                                  const key = `${snapshot.date}-${ticker}-${event.event_id ?? index}`;
+
+                                  return (
+                                    <li
+                                      key={key}
+                                      className="rounded border border-border/40 bg-background/50 px-2 py-1"
+                                    >
+                                      <div className="flex items-center justify-between gap-2">
+                                        <span className="text-sm font-medium leading-tight">
+                                          {event.title ?? event.category ?? 'Event'}
+                                        </span>
+                                        <Badge
+                                          variant={event.category === 'dividend' ? 'success' : 'secondary'}
+                                          className="capitalize"
+                                        >
+                                          {event.category ?? 'event'}
+                                        </Badge>
+                                      </div>
+                                      <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                                        <span>{formatDate(event.date ?? snapshot.date)}</span>
+                                        {amountText && <span>{amountText}</span>}
+                                        {event.report_type && <span>Report: {event.report_type}</span>}
+                                      </div>
+                                      {event.description && (
+                                        <div className="mt-1 text-xs text-muted-foreground">
+                                          {event.description}
+                                        </div>
+                                      )}
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                              {remaining > 0 && (
+                                <div className="text-xs text-muted-foreground">+{remaining} more</div>
+                              )}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </div>
+
+                  <div>
+                    <h5 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+                      Insider Trades
+                    </h5>
+                    {tradeEntries.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No trades recorded for this period.</p>
+                    ) : (
+                      <ul className="space-y-2">
+                        {tradeEntries.map(([ticker, items]) => {
+                          const typedTrades = items as InsiderTradeItem[];
+                          const visibleTrades = typedTrades.slice(0, MAX_ITEMS_PER_TICKER);
+                          const remaining = typedTrades.length - visibleTrades.length;
+
+                          return (
+                            <li key={`${snapshot.date}-${ticker}-trades`} className="space-y-1">
+                              <div className="text-xs font-medium uppercase text-muted-foreground">{ticker}</div>
+                              <ul className="space-y-1">
+                                {visibleTrades.map((trade, index) => {
+                                  const key = `${snapshot.date}-${ticker}-${trade.transaction_date ?? trade.filing_date ?? index}`;
+
+                                  return (
+                                    <li
+                                      key={key}
+                                      className="rounded border border-border/40 bg-background/50 px-2 py-1"
+                                    >
+                                      <div className="flex items-center justify-between gap-2">
+                                        <span className="text-sm font-medium leading-tight">
+                                          {inferTradeName(trade)}
+                                        </span>
+                                        <span className="text-xs text-muted-foreground">
+                                          {formatDate(trade.transaction_date ?? trade.filing_date ?? snapshot.date)}
+                                        </span>
+                                      </div>
+                                      <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                                        <span>Shares: {formatNumber(trade.transaction_shares, { maximumFractionDigits: 0 })}</span>
+                                        <span>Value: {formatNumber(trade.transaction_value)}</span>
+                                        {trade.transaction_price_per_share !== undefined && trade.transaction_price_per_share !== null && (
+                                          <span>Price: {formatNumber(trade.transaction_price_per_share)}</span>
+                                        )}
+                                      </div>
+                                      {trade.title && (
+                                        <div className="mt-1 text-xs text-muted-foreground">{trade.title}</div>
+                                      )}
+                                      {trade.security_title && (
+                                        <div className="text-xs text-muted-foreground">{trade.security_title}</div>
+                                      )}
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                              {remaining > 0 && (
+                                <div className="text-xs text-muted-foreground">+{remaining} more</div>
+                              )}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        {snapshotsWithSignal.length > MAX_HISTORY && (
+          <div className="mt-3 text-xs text-muted-foreground">
+            Showing the {MAX_HISTORY} most recent context snapshots.
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // Component for displaying real-time backtest performance
 function BacktestPerformanceMetrics({ agentData }: { agentData: Record<string, any> }) {
   const backtestAgent = agentData['backtest'];
@@ -405,7 +829,9 @@ export function BacktestOutput({
   return (
     <>
       <BacktestProgress agentData={agentData} />
+      {agentData && <BacktestMarketContextLive agentData={agentData} />}
       {outputData && <BacktestResults outputData={outputData} />}
+      {outputData && <BacktestMarketContextHistory outputData={outputData} />}
       {agentData && agentData['backtest'] && (
         <BacktestPerformanceMetrics agentData={agentData} />
       )}

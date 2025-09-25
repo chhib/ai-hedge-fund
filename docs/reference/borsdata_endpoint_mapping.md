@@ -53,7 +53,7 @@ Adaptation path:
 ## Company News Coverage
 The Swagger spec and README lack any `/news` endpoints. Börsdata currently exposes calendars (`/v1/instruments/report/calendar`, `/dividend/calendar`) and descriptions but no general news feed.
 Implication:
-- Legacy `get_company_news` cannot be ported directly. We must either (1) drop/replace news-driven features, (2) source news from an alternative provider, or (3) leverage report/dividend calendars as partial substitutes. This gap needs a product/UX decision before removing FinancialDatasets news support.
+- The legacy "company news" fetch could not be ported directly. Our new `get_company_events` helper leverages report and dividend calendars instead, but we must either (1) accept calendar coverage as the substitute, (2) source narrative news from a different provider, or (3) deprecate the old feature entirely. This gap needs a product/UX decision before removing FinancialDatasets news support.
 
 ## Market Cap & Company Facts
 - No direct market-cap endpoint. Options:

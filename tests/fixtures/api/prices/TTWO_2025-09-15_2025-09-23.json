@@ -1,0 +1,75 @@
+{
+  "ticker": "TTWO",
+  "prices": [
+    {
+      "ticker": "TTWO",
+      "open": 246.25,
+      "close": 247.25,
+      "high": 250.2484,
+      "low": 245.92,
+      "volume": 1333464,
+      "time": "2025-09-15T00:00:00Z",
+      "time_milliseconds": 1757894400000
+    },
+    {
+      "ticker": "TTWO",
+      "open": 247.54,
+      "close": 247.73,
+      "high": 250.96,
+      "low": 246.7218,
+      "volume": 1764313,
+      "time": "2025-09-16T00:00:00Z",
+      "time_milliseconds": 1757980800000
+    },
+    {
+      "ticker": "TTWO",
+      "open": 248.0,
+      "close": 250.52,
+      "high": 251.2,
+      "low": 245.7,
+      "volume": 1690939,
+      "time": "2025-09-17T00:00:00Z",
+      "time_milliseconds": 1758067200000
+    },
+    {
+      "ticker": "TTWO",
+      "open": 251.09,
+      "close": 249.74,
+      "high": 252.61,
+      "low": 249.11,
+      "volume": 2167138,
+      "time": "2025-09-18T00:00:00Z",
+      "time_milliseconds": 1758153600000
+    },
+    {
+      "ticker": "TTWO",
+      "open": 251.96,
+      "close": 250.85,
+      "high": 252.4,
+      "low": 247.8064,
+      "volume": 3620235,
+      "time": "2025-09-19T00:00:00Z",
+      "time_milliseconds": 1758240000000
+    },
+    {
+      "ticker": "TTWO",
+      "open": 249.39,
+      "close": 251.64,
+      "high": 255.33,
+      "low": 249.39,
+      "volume": 1609367,
+      "time": "2025-09-22T00:00:00Z",
+      "time_milliseconds": 1758499200000
+    },
+    {
+      "ticker": "TTWO",
+      "open": 251.64,
+      "close": 251.28,
+      "high": 254.12,
+      "low": 250.84,
+      "volume": 1573068,
+      "time": "2025-09-23T00:00:00Z",
+      "time_milliseconds": 1758585600000
+    }
+  ]
+}

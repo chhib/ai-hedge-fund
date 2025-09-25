@@ -110,6 +110,10 @@ class BacktestDayResult(BaseModel):
     gross_exposure: float
     net_exposure: float
     long_short_ratio: Optional[float] = None
+    portfolio_return: Optional[float] = None
+    performance_metrics: Dict[str, Any] = Field(default_factory=dict)
+    ticker_details: List[Dict[str, Any]] = Field(default_factory=list)
+    market_context: Optional[Dict[str, Any]] = None
 
 
 class BacktestPerformanceMetrics(BaseModel):
@@ -126,6 +130,8 @@ class BacktestResponse(BaseModel):
     results: List[BacktestDayResult]
     performance_metrics: BacktestPerformanceMetrics
     final_portfolio: Dict[str, Any]
+    market_context: Optional[List[Dict[str, Any]]] = None
+    portfolio_values: Optional[List[Dict[str, Any]]] = None
 
 
 class HedgeFundRequest(BaseHedgeFundRequest):

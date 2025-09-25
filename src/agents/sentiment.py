@@ -5,7 +5,7 @@ import pandas as pd
 import numpy as np
 import json
 from src.utils.api_key import get_api_key_from_state
-from src.tools.api import get_insider_trades, get_company_news
+from src.tools.api import get_insider_trades, get_company_events
 
 
 ##### Sentiment Agent #####
@@ -37,7 +37,7 @@ def sentiment_analyst_agent(state: AgentState, agent_id: str = "sentiment_analys
 
         progress.update_status(agent_id, ticker, "Fetching company calendar")
 
-        calendar_events = get_company_news(ticker, end_date, limit=100, api_key=api_key)
+        calendar_events = get_company_events(ticker, end_date, limit=100, api_key=api_key)
         calendar_signals: list[str] = []
         for event in calendar_events:
             category = getattr(event, "category", "")

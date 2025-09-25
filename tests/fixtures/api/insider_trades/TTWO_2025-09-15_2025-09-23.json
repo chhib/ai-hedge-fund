@@ -1,0 +1,49 @@
+{
+  "insider_trades": [
+    {
+      "ticker": "TTWO",
+      "issuer": "Take-Two Interactive",
+      "name": "Karl Slatoff",
+      "title": "President",
+      "is_board_director": false,
+      "transaction_date": "2025-09-22",
+      "transaction_shares": -7500.0,
+      "transaction_price_per_share": 146.25,
+      "transaction_value": -1096875.0,
+      "shares_owned_before_transaction": null,
+      "shares_owned_after_transaction": null,
+      "security_title": null,
+      "filing_date": "2025-09-23"
+    },
+    {
+      "ticker": "TTWO",
+      "issuer": "Take-Two Interactive",
+      "name": "Lainie Goldstein",
+      "title": "Chief Financial Officer",
+      "is_board_director": false,
+      "transaction_date": "2025-09-20",
+      "transaction_shares": 3200.0,
+      "transaction_price_per_share": 142.1,
+      "transaction_value": 454720.0,
+      "shares_owned_before_transaction": null,
+      "shares_owned_after_transaction": null,
+      "security_title": null,
+      "filing_date": "2025-09-21"
+    },
+    {
+      "ticker": "TTWO",
+      "issuer": "Take-Two Interactive",
+      "name": "Strauss Zelnick",
+      "title": "Executive Chairman",
+      "is_board_director": true,
+      "transaction_date": "2025-09-18",
+      "transaction_shares": 1500.0,
+      "transaction_price_per_share": 139.5,
+      "transaction_value": 209250.0,
+      "shares_owned_before_transaction": null,
+      "shares_owned_after_transaction": null,
+      "security_title": null,
+      "filing_date": "2025-09-19"
+    }
+  ]
+}

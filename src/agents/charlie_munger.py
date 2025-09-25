@@ -1,5 +1,5 @@
 from src.graph.state import AgentState, show_agent_reasoning
-from src.tools.api import get_financial_metrics, get_market_cap, search_line_items, get_insider_trades, get_company_news
+from src.tools.api import get_financial_metrics, get_market_cap, search_line_items, get_insider_trades, get_company_events
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel
@@ -70,7 +70,7 @@ def charlie_munger_agent(state: AgentState, agent_id: str = "charlie_munger_agen
         
         progress.update_status(agent_id, ticker, "Fetching company calendar")
         # Calendar events provide upcoming reports/dividends as qualitative context
-        company_events = get_company_news(
+        company_events = get_company_events(
             ticker,
             end_date,
             limit=10,

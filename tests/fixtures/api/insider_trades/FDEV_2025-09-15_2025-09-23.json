@@ -1,0 +1,49 @@
+{
+  "insider_trades": [
+    {
+      "ticker": "FDEV",
+      "issuer": "Frontier Developments",
+      "name": "Jonny Watts",
+      "title": "Chief Creative Officer",
+      "is_board_director": false,
+      "transaction_date": "2025-09-22",
+      "transaction_shares": -9500.0,
+      "transaction_price_per_share": 12.3,
+      "transaction_value": -116850.0,
+      "shares_owned_before_transaction": null,
+      "shares_owned_after_transaction": null,
+      "security_title": null,
+      "filing_date": "2025-09-22"
+    },
+    {
+      "ticker": "FDEV",
+      "issuer": "Frontier Developments",
+      "name": "Alex Bevis",
+      "title": "Chief Financial Officer",
+      "is_board_director": false,
+      "transaction_date": "2025-09-19",
+      "transaction_shares": 4000.0,
+      "transaction_price_per_share": 11.75,
+      "transaction_value": 47000.0,
+      "shares_owned_before_transaction": null,
+      "shares_owned_after_transaction": null,
+      "security_title": null,
+      "filing_date": "2025-09-20"
+    },
+    {
+      "ticker": "FDEV",
+      "issuer": "Frontier Developments",
+      "name": "David Braben",
+      "title": "Founder & President",
+      "is_board_director": true,
+      "transaction_date": "2025-09-17",
+      "transaction_shares": 1500.0,
+      "transaction_price_per_share": 11.5,
+      "transaction_value": 17250.0,
+      "shares_owned_before_transaction": null,
+      "shares_owned_after_transaction": null,
+      "security_title": null,
+      "filing_date": "2025-09-18"
+    }
+  ]
+}

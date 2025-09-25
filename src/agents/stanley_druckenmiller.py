@@ -4,7 +4,7 @@ from src.tools.api import (
     get_market_cap,
     search_line_items,
     get_insider_trades,
-    get_company_news,
+    get_company_events,
     get_prices,
 )
 from langchain_core.prompts import ChatPromptTemplate
@@ -82,7 +82,7 @@ def stanley_druckenmiller_agent(state: AgentState, agent_id: str = "stanley_druc
         insider_trades = get_insider_trades(ticker, end_date, limit=50, api_key=api_key)
 
         progress.update_status(agent_id, ticker, "Fetching company calendar")
-        calendar_events = get_company_news(ticker, end_date, limit=50, api_key=api_key)
+        calendar_events = get_company_events(ticker, end_date, limit=50, api_key=api_key)
 
         progress.update_status(agent_id, ticker, "Fetching recent price data for momentum")
         prices = get_prices(ticker, start_date=start_date, end_date=end_date, api_key=api_key)

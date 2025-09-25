@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from dateutil.relativedelta import relativedelta
 import pandas as pd
 import numpy as np
@@ -6,12 +6,13 @@ from typing import Callable, Dict, List, Optional, Any
 import asyncio
 
 from src.tools.api import (
-    get_company_news,
+    get_company_events,
     get_price_data,
     get_prices,
     get_financial_metrics,
     get_insider_trades,
 )
+from src.data.models import CompanyEvent, InsiderTrade
 from app.backend.services.graph import run_graph_async, parse_hedge_fund_response
 from app.backend.services.portfolio import create_portfolio
 
@@ -56,6 +57,10 @@ class BacktestService:
         self.model_provider = model_provider
         self.request = request
         self.portfolio_values = []
+        self.prefetched_company_events: Dict[str, List[CompanyEvent | Dict[str, Any]]] = {}
+        self.prefetched_insider_trades: Dict[str, List[InsiderTrade | Dict[str, Any]]] = {}
+        self.daily_context: List[Dict[str, Any]] = []
+        self._start_date_obj = datetime.strptime(self.start_date, "%Y-%m-%d").date()
 
     def execute_trade(self, ticker: str, action: str, quantity: float, current_price: float) -> int:
         """
@@ -229,8 +234,22 @@ class BacktestService:
         for ticker in self.tickers:
             get_prices(ticker, start_date_str, self.end_date, api_key=api_key)
             get_financial_metrics(ticker, self.end_date, limit=10, api_key=api_key)
-            get_insider_trades(ticker, self.end_date, start_date=self.start_date, limit=1000, api_key=api_key)
-            get_company_news(ticker, self.end_date, start_date=self.start_date, limit=1000, api_key=api_key)
+            insider_trades = get_insider_trades(
+                ticker,
+                self.end_date,
+                start_date=self.start_date,
+                limit=1000,
+                api_key=api_key,
+            )
+            company_events = get_company_events(
+                ticker,
+                self.end_date,
+                start_date=self.start_date,
+                limit=1000,
+                api_key=api_key,
+            )
+            self.prefetched_insider_trades[ticker] = insider_trades
+            self.prefetched_company_events[ticker] = company_events
 
     def _update_performance_metrics(self, performance_metrics: Dict[str, Any]):
         """Update performance metrics using daily returns."""
@@ -279,12 +298,81 @@ class BacktestService:
             performance_metrics["max_drawdown"] = 0.0
             performance_metrics["max_drawdown_date"] = None
 
+    def _build_context_for_date(self, *, current_date: date) -> Dict[str, Any]:
+        """Construct a market context snapshot for the provided date."""
+        context_events: Dict[str, List[Dict[str, Any]]] = {}
+        context_insider: Dict[str, List[Dict[str, Any]]] = {}
+
+        for ticker in self.tickers:
+            events = self.prefetched_company_events.get(ticker, [])
+            filtered_events: List[Dict[str, Any]] = []
+
+            for event in events:
+                if isinstance(event, CompanyEvent):
+                    event_date_str = event.date
+                    event_payload = event.model_dump()
+                elif isinstance(event, dict):
+                    event_date_str = event.get("date")
+                    event_payload = dict(event)
+                else:
+                    continue
+
+                if not event_date_str:
+                    continue
+
+                try:
+                    event_date = date.fromisoformat(event_date_str)
+                except (TypeError, ValueError):
+                    continue
+
+                if self._start_date_obj <= event_date <= current_date:
+                    filtered_events.append(event_payload)
+
+            if filtered_events:
+                context_events[ticker] = filtered_events
+
+            trades = self.prefetched_insider_trades.get(ticker, [])
+            filtered_trades: List[Dict[str, Any]] = []
+
+            for trade in trades:
+                if isinstance(trade, InsiderTrade):
+                    trade_date_str = trade.transaction_date or trade.filing_date
+                    trade_payload = trade.model_dump()
+                elif isinstance(trade, dict):
+                    trade_date_str = trade.get("transaction_date") or trade.get("filing_date")
+                    trade_payload = dict(trade)
+                else:
+                    continue
+
+                if not trade_date_str:
+                    continue
+
+                try:
+                    trade_date = date.fromisoformat(trade_date_str)
+                except (TypeError, ValueError):
+                    continue
+
+                if self._start_date_obj <= trade_date <= current_date:
+                    filtered_trades.append(trade_payload)
+
+            if filtered_trades:
+                context_insider[ticker] = filtered_trades
+
+        return {
+            "date": current_date.strftime("%Y-%m-%d"),
+            "company_events": context_events,
+            "insider_trades": context_insider,
+        }
+
     async def run_backtest_async(self, progress_callback: Optional[Callable] = None) -> Dict[str, Any]:
         """
         Run the backtest asynchronously with optional progress callbacks.
         Uses the pre-compiled graph for trading decisions.
         """
         # Pre-fetch all data at the start
+        self.prefetched_company_events = {}
+        self.prefetched_insider_trades = {}
+        self.daily_context = []
         self.prefetch_data()
 
         dates = pd.date_range(self.start_date, self.end_date, freq="B")
@@ -475,8 +563,12 @@ class BacktestService:
                     "bearish_count": bearish_count,
                     "neutral_count": neutral_count,
                 }
-                
+
                 date_result["ticker_details"].append(ticker_detail)
+
+            context_snapshot = self._build_context_for_date(current_date=current_date.date())
+            date_result["market_context"] = context_snapshot
+            self.daily_context.append(context_snapshot)
 
             backtest_results.append(date_result)
 
@@ -506,6 +598,7 @@ class BacktestService:
             "performance_metrics": performance_metrics,
             "portfolio_values": self.portfolio_values,
             "final_portfolio": self.portfolio,
+            "market_context": self.daily_context,
         }
 
     def run_backtest_sync(self) -> Dict[str, Any]:

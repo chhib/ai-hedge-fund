@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime
-from typing import Sequence, Dict
+from datetime import datetime, date
+from typing import Sequence, Dict, Any
 
 import pandas as pd
 from dateutil.relativedelta import relativedelta
@@ -16,12 +16,13 @@ from .output import OutputBuilder
 from .benchmarks import BenchmarkCalculator
 
 from src.tools.api import (
-    get_company_news,
+    get_company_events,
     get_price_data,
     get_prices,
     get_financial_metrics,
     get_insider_trades,
 )
+from src.data.models import CompanyEvent, InsiderTrade
 
 
 class BacktestEngine:
@@ -53,6 +54,7 @@ class BacktestEngine:
         self._model_name = model_name
         self._model_provider = model_provider
         self._selected_analysts = selected_analysts
+        self._start_date_obj = datetime.strptime(self._start_date, "%Y-%m-%d").date()
 
         self._portfolio = Portfolio(
             tickers=tickers,
@@ -77,6 +79,9 @@ class BacktestEngine:
             "gross_exposure": None,
             "net_exposure": None,
         }
+        self._prefetched_company_events: dict[str, list[Any]] = {}
+        self._prefetched_insider_trades: dict[str, list[Any]] = {}
+        self._daily_context: list[dict[str, Any]] = []
 
     def _prefetch_data(self) -> None:
         end_date_dt = datetime.strptime(self._end_date, "%Y-%m-%d")
@@ -86,11 +91,75 @@ class BacktestEngine:
         for ticker in self._tickers:
             get_prices(ticker, start_date_str, self._end_date)
             get_financial_metrics(ticker, self._end_date, limit=10)
-            get_insider_trades(ticker, self._end_date, start_date=self._start_date, limit=1000)
-            get_company_news(ticker, self._end_date, start_date=self._start_date, limit=1000)
+            insider_trades = get_insider_trades(
+                ticker,
+                self._end_date,
+                start_date=self._start_date,
+                limit=1000,
+            )
+            company_events = get_company_events(
+                ticker,
+                self._end_date,
+                start_date=self._start_date,
+                limit=1000,
+            )
+            self._prefetched_insider_trades[ticker] = insider_trades
+            self._prefetched_company_events[ticker] = company_events
         
         # Preload data for SPY for benchmark comparison
         get_prices("SPY", self._start_date, self._end_date)
+
+    def _build_context_for_date(self, *, current_date: date) -> dict[str, Any]:
+        context_events: dict[str, list[dict[str, Any]]] = {}
+        context_insider: dict[str, list[dict[str, Any]]] = {}
+        for ticker in self._tickers:
+            events = self._prefetched_company_events.get(ticker, [])
+            filtered_events: list[dict[str, Any]] = []
+            for event in events:
+                if isinstance(event, CompanyEvent):
+                    event_date_str = event.date
+                    event_payload = event.model_dump()
+                elif isinstance(event, dict):
+                    event_date_str = event.get("date")
+                    event_payload = dict(event)
+                else:
+                    continue
+                try:
+                    event_date = date.fromisoformat(event_date_str)
+                except (TypeError, ValueError):
+                    continue
+                if self._start_date_obj <= event_date <= current_date:
+                    filtered_events.append(event_payload)
+            if filtered_events:
+                context_events[ticker] = filtered_events
+
+            trades = self._prefetched_insider_trades.get(ticker, [])
+            filtered_trades: list[dict[str, Any]] = []
+            for trade in trades:
+                if isinstance(trade, InsiderTrade):
+                    trade_date_str = trade.transaction_date or trade.filing_date
+                    trade_payload = trade.model_dump()
+                elif isinstance(trade, dict):
+                    trade_date_str = trade.get("transaction_date") or trade.get("filing_date")
+                    trade_payload = dict(trade)
+                else:
+                    continue
+                if not trade_date_str:
+                    continue
+                try:
+                    trade_date = date.fromisoformat(trade_date_str)
+                except (TypeError, ValueError):
+                    continue
+                if self._start_date_obj <= trade_date <= current_date:
+                    filtered_trades.append(trade_payload)
+            if filtered_trades:
+                context_insider[ticker] = filtered_trades
+
+        return {
+            "date": current_date.strftime("%Y-%m-%d"),
+            "company_events": context_events,
+            "insider_trades": context_insider,
+        }
 
 
     def run_backtest(self) -> PerformanceMetrics:
@@ -177,8 +246,10 @@ class BacktestEngine:
             )
             # Prepend today's rows to historical rows so latest day is on top
             self._table_rows = rows + self._table_rows
+            latest_context = self._build_context_for_date(current_date=current_date.date())
+            self._daily_context.append(latest_context)
             # Print full history with latest day first (matches backtester.py behavior)
-            self._results.print_rows(self._table_rows)
+            self._results.print_rows(self._table_rows, context=latest_context)
 
             # Update performance metrics after printing (match original timing)
             if len(self._portfolio_values) > 3:
@@ -191,4 +262,5 @@ class BacktestEngine:
     def get_portfolio_values(self) -> Sequence[PortfolioValuePoint]:
         return list(self._portfolio_values)
 
-
+    def get_daily_context(self) -> Sequence[dict[str, Any]]:
+        return list(self._daily_context)

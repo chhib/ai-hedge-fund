@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import List, Mapping, Sequence
+from typing import Any, List, Mapping, Sequence
 
 from .portfolio import Portfolio
 from .types import AgentOutput
@@ -92,7 +92,5 @@ class OutputBuilder:
 
         return date_rows
 
-    def print_rows(self, rows: List[list]) -> None:
-        print_backtest_results(rows)
-
-
+    def print_rows(self, rows: List[list], context: Mapping[str, Any] | None = None) -> None:
+        print_backtest_results(rows, context=context)

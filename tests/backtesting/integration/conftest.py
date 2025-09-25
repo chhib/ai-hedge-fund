@@ -110,10 +110,10 @@ def patch_engine_prices(monkeypatch):
     monkeypatch.setattr("src.backtesting.engine.get_financial_metrics", _fake_get_financial_metrics)
     def _fake_get_insider_trades(ticker: str, end_date: str, start_date: str | None = None, limit: int = 1000, api_key: str | None = None):
         return _load_insider_from_fixture(ticker, start_date, end_date, limit)
-    def _fake_get_company_news(ticker: str, end_date: str, start_date: str | None = None, limit: int = 1000, api_key: str | None = None):
+    def _fake_get_company_events(ticker: str, end_date: str, start_date: str | None = None, limit: int = 1000, api_key: str | None = None):
         return _load_calendar_from_fixture(ticker, start_date, end_date, limit)
     monkeypatch.setattr("src.backtesting.engine.get_insider_trades", _fake_get_insider_trades)
-    monkeypatch.setattr("src.backtesting.engine.get_company_news", _fake_get_company_news)
+    monkeypatch.setattr("src.backtesting.engine.get_company_events", _fake_get_company_events)
 
     # Patch price data loader to use fixtures
     def _fake_get_price_data(ticker: str, start_date: str, end_date: str, api_key: str | None = None):

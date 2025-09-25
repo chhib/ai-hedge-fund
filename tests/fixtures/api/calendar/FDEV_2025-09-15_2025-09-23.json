@@ -1,0 +1,25 @@
+{
+  "events": [
+    {
+      "ticker": "FDEV",
+      "date": "2025-09-21",
+      "category": "report",
+      "title": "Report release (FY)",
+      "description": "Frontier Developments full-year results",
+      "report_type": "FY",
+      "event_id": "report:770113:2025-09-21:FY"
+    },
+    {
+      "ticker": "FDEV",
+      "date": "2025-09-18",
+      "category": "dividend",
+      "title": "Dividend 0.15 GBP",
+      "description": "Final cash dividend declared in pounds sterling",
+      "amount": 0.15,
+      "currency": "GBP",
+      "distribution_frequency": 1,
+      "dividend_type": 1,
+      "event_id": "dividend:770113:2025-09-18:0.15:GBP"
+    }
+  ]
+}

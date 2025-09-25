@@ -102,22 +102,26 @@ class FinancialMetricsAssembler:
             kpi_id = metric_to_kpi.get(metric_name)
             if kpi_id is None:
                 continue
-            calc_group = config.get("screener_calc_group")
             calc = config.get("screener_calc")
-            if not calc_group or not calc:
+            if not calc:
                 continue
-            cache_key = (kpi_id, calc_group, calc)
-            if cache_key not in screener_cache:
-                value = self._fetch_screener_value(
-                    instrument_id,
-                    kpi_id,
-                    calc_group,
-                    calc,
-                    api_key=api_key,
-                    is_percent=calc.lower() == "percent",
-                )
-                screener_cache[cache_key] = value
-            screener_value = screener_cache.get(cache_key)
+            calc_groups = self._resolve_screener_calc_groups(config, period_value, report_type)
+            screener_value: Optional[float] = None
+            for calc_group in calc_groups:
+                cache_key = (kpi_id, calc_group, calc)
+                if cache_key not in screener_cache:
+                    value = self._fetch_screener_value(
+                        instrument_id,
+                        kpi_id,
+                        calc_group,
+                        calc,
+                        api_key=api_key,
+                        is_percent=calc.lower() == "percent",
+                    )
+                    screener_cache[cache_key] = value
+                screener_value = screener_cache.get(cache_key)
+                if screener_value is not None:
+                    break
             if screener_value is None:
                 continue
             for payload in records:
@@ -189,6 +193,53 @@ class FinancialMetricsAssembler:
         if is_percent:
             numeric /= 100.0
         return numeric
+
+    def _resolve_screener_calc_groups(
+        self,
+        config: Dict[str, Any],
+        period_value: str,
+        report_type: str,
+    ) -> list[str]:
+        """Determine which screener calc groups to attempt for a metric."""
+
+        def normalise_period(value: Optional[str]) -> Optional[str]:
+            if not value:
+                return None
+            cleaned = value.strip().lower()
+            if not cleaned:
+                return None
+            aliases = {
+                "annual": "year",
+                "y": "year",
+                "quarterly": "quarter",
+                "q": "quarter",
+                "ttm": "r12",
+                "rolling": "r12",
+            }
+            return aliases.get(cleaned, cleaned)
+
+        ordered_groups: list[str] = []
+        overrides = config.get("screener_calc_group_overrides") or {}
+        for key in (normalise_period(period_value), normalise_period(report_type)):
+            if not key:
+                continue
+            override_group = overrides.get(key)
+            if override_group:
+                ordered_groups.append(override_group)
+
+        default_group = config.get("screener_calc_group")
+        if default_group:
+            ordered_groups.append(default_group)
+
+        seen: set[str] = set()
+        deduped: list[str] = []
+        for group in ordered_groups:
+            normalised = (group or "").strip().lower()
+            if not normalised or normalised in seen:
+                continue
+            seen.add(normalised)
+            deduped.append(normalised)
+        return deduped
 
     def _compute_derived_metric(
         self,

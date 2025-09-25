@@ -2,9 +2,9 @@ from src.backtesting.valuation import calculate_portfolio_value, compute_exposur
 
 
 def test_calculate_portfolio_value(portfolio, prices):
-    # Long 10 AAPL @100 and short 5 MSFT @200
-    portfolio.apply_long_buy("AAPL", 10, 100.0)
-    portfolio.apply_short_open("MSFT", 5, 200.0)
+    # Long 10 TTWO @100 and short 5 LUG @200
+    portfolio.apply_long_buy("TTWO", 10, 100.0)
+    portfolio.apply_short_open("LUG", 5, 200.0)
 
     value = calculate_portfolio_value(portfolio, prices)
     # cash after trades
@@ -14,8 +14,8 @@ def test_calculate_portfolio_value(portfolio, prices):
 
 
 def test_compute_exposures(portfolio, prices):
-    portfolio.apply_long_buy("AAPL", 10, 100.0)
-    portfolio.apply_short_open("MSFT", 5, 200.0)
+    portfolio.apply_long_buy("TTWO", 10, 100.0)
+    portfolio.apply_short_open("LUG", 5, 200.0)
 
     exp = compute_exposures(portfolio, prices)
     assert exp["Long Exposure"] == 1000.0
@@ -26,14 +26,14 @@ def test_compute_exposures(portfolio, prices):
 
 
 def test_compute_exposures_with_no_shorts_ratio_inf(portfolio, prices):
-    portfolio.apply_long_buy("AAPL", 1, 100.0)
+    portfolio.apply_long_buy("TTWO", 1, 100.0)
     exp = compute_exposures(portfolio, prices)
     assert exp["Short Exposure"] == 0.0
     assert exp["Long/Short Ratio"] == float("inf")
 
 
 def test_compute_portfolio_summary(portfolio, prices):
-    portfolio.apply_long_buy("AAPL", 10, 100.0)
+    portfolio.apply_long_buy("TTWO", 10, 100.0)
     total_value = calculate_portfolio_value(portfolio, prices)
     summary = compute_portfolio_summary(
         portfolio=portfolio,
