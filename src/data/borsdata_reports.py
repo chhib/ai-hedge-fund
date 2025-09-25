@@ -70,12 +70,13 @@ class LineItemAssembler:
         period: Optional[str],
         limit: int,
         api_key: Optional[str],
+        use_global: bool = False,
     ) -> list[Dict[str, Any]]:
         requested = list(dict.fromkeys(line_items))
         if not requested or limit <= 0:
             return []
 
-        instrument = self._client.get_instrument(ticker, api_key=api_key)
+        instrument = self._client.get_instrument(ticker, api_key=api_key, use_global=use_global)
         instrument_id = int(instrument["insId"])
         base_currency = instrument.get("reportCurrency") or instrument.get("stockPriceCurrency") or ""
 

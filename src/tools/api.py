@@ -13,6 +13,14 @@ from src.data.borsdata_client import BorsdataAPIError, BorsdataClient
 from src.data.borsdata_kpis import FinancialMetricsAssembler
 from src.data.borsdata_reports import LineItemAssembler
 
+# Global flag for using global instruments
+_use_global_instruments = False
+
+def set_use_global_instruments(use_global: bool) -> None:
+    """Set whether to use global instruments endpoint."""
+    global _use_global_instruments
+    _use_global_instruments = use_global
+
 # Global cache instance
 _cache = get_cache()
 _borsdata_client = BorsdataClient()
@@ -70,6 +78,7 @@ def get_prices(ticker: str, start_date: str, end_date: str, api_key: str = None)
             start_date=start_date,
             end_date=end_date,
             api_key=api_key,
+            use_global=_use_global_instruments,
         )
     except BorsdataAPIError as exc:
         # Log the error for debugging, but don't crash the agent
@@ -137,6 +146,7 @@ def get_financial_metrics(
             period=period,
             limit=limit,
             api_key=api_key,
+            use_global=_use_global_instruments,
         )
     except BorsdataAPIError as exc:
         # Log the error for debugging, but don't crash the agent
@@ -175,6 +185,7 @@ def search_line_items(
             period=period,
             limit=limit,
             api_key=api_key,
+            use_global=_use_global_instruments,
         )
     except BorsdataAPIError as exc:
         # Log the error for debugging, but don't crash the agent
@@ -203,7 +214,7 @@ def get_insider_trades(
     client = _get_borsdata_client(api_key)
 
     try:
-        instrument = client.get_instrument(ticker, api_key=api_key)
+        instrument = client.get_instrument(ticker, api_key=api_key, use_global=_use_global_instruments)
     except BorsdataAPIError as exc:
         # Log the error for debugging, but don't crash the agent
         print(f"Could not fetch instrument for {ticker}: {exc}")
@@ -324,7 +335,7 @@ def get_company_events(
     client = _get_borsdata_client(api_key)
 
     try:
-        instrument = client.get_instrument(ticker, api_key=api_key)
+        instrument = client.get_instrument(ticker, api_key=api_key, use_global=_use_global_instruments)
     except BorsdataAPIError as exc:
         # Log the error for debugging, but don't crash the agent
         print(f"Could not fetch instrument for {ticker}: {exc}")

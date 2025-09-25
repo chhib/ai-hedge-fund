@@ -20,11 +20,17 @@ def add_common_args(
     include_analyst_flags: bool = True,
     include_ollama: bool = True,
 ) -> argparse.ArgumentParser:
-    parser.add_argument(
+    # Create mutually exclusive group for tickers
+    ticker_group = parser.add_mutually_exclusive_group(required=require_tickers)
+    ticker_group.add_argument(
         "--tickers",
         type=str,
-        required=require_tickers,
-        help="Comma-separated list of stock ticker symbols (e.g., AAPL,MSFT,GOOGL)",
+        help="Comma-separated list of Nordic/European stock ticker symbols (e.g., ERIC.ST,VOLV-B.ST)",
+    )
+    ticker_group.add_argument(
+        "--tickers-global",
+        type=str,
+        help="Comma-separated list of global stock ticker symbols (e.g., AAPL,MSFT,GOOGL)",
     )
     if include_analyst_flags:
         parser.add_argument(
@@ -208,6 +214,7 @@ class CLIInputs:
     end_date: str
     initial_cash: float
     margin_requirement: float
+    use_global: bool = False
     show_reasoning: bool = False
     show_agent_graph: bool = False
     raw_args: Optional[argparse.Namespace] = None
@@ -224,6 +231,9 @@ def parse_cli_inputs(
     parser = argparse.ArgumentParser(description=description)
 
     # Common/interactive flags
+    # Test mode flag - must come before other args
+    parser.add_argument("--test", action="store_true", help="Use test configuration (gpt-5, fundamentals+technicals+sentiment)")
+    
     add_common_args(parser, require_tickers=require_tickers, include_analyst_flags=True, include_ollama=True)
     add_date_args(parser, default_months_back=default_months_back)
 
@@ -252,12 +262,25 @@ def parse_cli_inputs(
     args = parser.parse_args()
 
     # Normalize parsed values
-    tickers = parse_tickers(getattr(args, "tickers", None))
-    selected_analysts = select_analysts({
-        "analysts_all": getattr(args, "analysts_all", False),
-        "analysts": getattr(args, "analysts", None),
-    })
-    model_name, model_provider = select_model(getattr(args, "ollama", False))
+    regular_tickers = parse_tickers(getattr(args, "tickers", None))
+    global_tickers = parse_tickers(getattr(args, "tickers_global", None))
+    tickers = regular_tickers + global_tickers
+    use_global = bool(global_tickers)
+    
+    # Handle test mode
+    if getattr(args, "test", False):
+        selected_analysts = ["fundamentals_analyst", "technical_analyst", "sentiment_analyst"]
+        model_name, model_provider = "gpt-5", "OpenAI"
+        print(f"\n{Fore.YELLOW}Test mode enabled:{Style.RESET_ALL}")
+        print(f"  Model: {Fore.GREEN}gpt-5{Style.RESET_ALL}")
+        print(f"  Analysts: {Fore.GREEN}fundamentals_analyst, technical_analyst, sentiment_analyst{Style.RESET_ALL}\n")
+    else:
+        selected_analysts = select_analysts({
+            "analysts_all": getattr(args, "analysts_all", False),
+            "analysts": getattr(args, "analysts", None),
+        })
+        model_name, model_provider = select_model(getattr(args, "ollama", False))
+    
     start_date, end_date = resolve_dates(getattr(args, "start_date", None), getattr(args, "end_date", None), default_months_back=default_months_back)
 
     return CLIInputs(
@@ -269,6 +292,7 @@ def parse_cli_inputs(
         end_date=end_date,
         initial_cash=getattr(args, "initial_cash", 100000.0),
         margin_requirement=getattr(args, "margin_requirement", 0.0),
+        use_global=use_global,
         show_reasoning=getattr(args, "show_reasoning", False),
         show_agent_graph=getattr(args, "show_agent_graph", False),
         raw_args=args,

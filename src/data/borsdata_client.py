@@ -81,6 +81,9 @@ class BorsdataClient:
         self._instrument_cache_timestamp = 0.0
         self._instrument_by_id: Dict[int, Dict[str, Any]] = {}
         self._instrument_by_ticker: Dict[str, Dict[str, Any]] = {}
+        self._global_instrument_cache_timestamp = 0.0
+        self._global_instrument_by_id: Dict[int, Dict[str, Any]] = {}
+        self._global_instrument_by_ticker: Dict[str, Dict[str, Any]] = {}
         self._metadata_cache_ttl = metadata_cache_ttl
         self._kpi_metadata_timestamp = 0.0
         self._kpi_metadata: list[Dict[str, Any]] = []
@@ -158,10 +161,35 @@ class BorsdataClient:
 
         self._instrument_cache_timestamp = time.time()
 
+    def _refresh_global_instrument_cache(self, *, api_key: Optional[str]) -> None:
+        payload = self._request("GET", "/v1/instruments/global", api_key=api_key)
+        instruments: Iterable[Dict[str, Any]] = payload.get("instruments") or []
+
+        self._global_instrument_by_id = {}
+        self._global_instrument_by_ticker = {}
+        for instrument in instruments:
+            ins_id = instrument.get("insId")
+            if ins_id is None:
+                continue
+            ins_id = int(ins_id)
+            self._global_instrument_by_id[ins_id] = instrument
+
+            for key in ("ticker", "yahoo"):
+                ticker_value = instrument.get(key)
+                if ticker_value:
+                    self._global_instrument_by_ticker.setdefault(ticker_value.upper(), instrument)
+
+        self._global_instrument_cache_timestamp = time.time()
+
     def _ensure_instrument_cache(self, *, api_key: Optional[str], force_refresh: bool) -> None:
         cache_stale = (time.time() - self._instrument_cache_timestamp) >= self._instrument_cache_ttl
         if force_refresh or not self._instrument_by_id or cache_stale:
             self._refresh_instrument_cache(api_key=api_key)
+
+    def _ensure_global_instrument_cache(self, *, api_key: Optional[str], force_refresh: bool) -> None:
+        cache_stale = (time.time() - self._global_instrument_cache_timestamp) >= self._instrument_cache_ttl
+        if force_refresh or not self._global_instrument_by_id or cache_stale:
+            self._refresh_global_instrument_cache(api_key=api_key)
 
     def _refresh_kpi_metadata(self, *, api_key: Optional[str]) -> None:
         payload = self._request("GET", "/v1/instruments/kpis/metadata", api_key=api_key)
@@ -191,7 +219,7 @@ class BorsdataClient:
         self._ensure_instrument_cache(api_key=api_key, force_refresh=force_refresh)
         return list(self._instrument_by_id.values())
 
-    def get_instrument(self, ticker: str, *, api_key: Optional[str] = None, force_refresh: bool = False) -> Dict[str, Any]:
+    def get_instrument(self, ticker: str, *, api_key: Optional[str] = None, force_refresh: bool = False, use_global: bool = False) -> Dict[str, Any]:
         if not ticker:
             raise BorsdataAPIError("Ticker symbol is required")
 
@@ -199,15 +227,27 @@ class BorsdataClient:
         if not normalised:
             raise BorsdataAPIError("Ticker symbol is required")
 
-        self._ensure_instrument_cache(api_key=api_key, force_refresh=force_refresh)
-        instrument = self._instrument_by_ticker.get(normalised)
-        if instrument is None:
-            # Some tickers may only be available after a fresh sync
-            self._ensure_instrument_cache(api_key=api_key, force_refresh=True)
+        if use_global:
+            self._ensure_global_instrument_cache(api_key=api_key, force_refresh=force_refresh)
+            instrument = self._global_instrument_by_ticker.get(normalised)
+            if instrument is None:
+                # Some tickers may only be available after a fresh sync
+                self._ensure_global_instrument_cache(api_key=api_key, force_refresh=True)
+                instrument = self._global_instrument_by_ticker.get(normalised)
+            
+            if instrument is None:
+                raise BorsdataAPIError(f"Ticker '{ticker}' not found in Börsdata global instruments")
+        else:
+            self._ensure_instrument_cache(api_key=api_key, force_refresh=force_refresh)
             instrument = self._instrument_by_ticker.get(normalised)
+            if instrument is None:
+                # Some tickers may only be available after a fresh sync
+                self._ensure_instrument_cache(api_key=api_key, force_refresh=True)
+                instrument = self._instrument_by_ticker.get(normalised)
 
-        if instrument is None:
-            raise BorsdataAPIError(f"Ticker '{ticker}' not found in Börsdata instruments")
+            if instrument is None:
+                raise BorsdataAPIError(f"Ticker '{ticker}' not found in Börsdata instruments")
+        
         return instrument
 
     def get_kpi_metadata(self, *, api_key: Optional[str] = None, force_refresh: bool = False) -> list[Dict[str, Any]]:
@@ -322,8 +362,9 @@ class BorsdataClient:
         end_date: Optional[str] = None,
         max_count: Optional[int] = None,
         api_key: Optional[str] = None,
+        use_global: bool = False,
     ) -> list[Dict[str, Any]]:
-        instrument = self.get_instrument(ticker, api_key=api_key)
+        instrument = self.get_instrument(ticker, api_key=api_key, use_global=use_global)
         return self.get_stock_prices(
             instrument_id=instrument["insId"],
             start_date=start_date,

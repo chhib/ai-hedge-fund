@@ -16,6 +16,7 @@ def fundamentals_analyst_agent(state: AgentState, agent_id: str = "fundamentals_
     api_key = get_api_key_from_state(state, "BORSDATA_API_KEY")
     # Initialize fundamental analysis for each ticker
     fundamental_analysis = {}
+    any_ticker_succeeded = False
 
     for ticker in tickers:
         progress.update_status(agent_id, ticker, "Fetching financial metrics")
@@ -30,7 +31,7 @@ def fundamentals_analyst_agent(state: AgentState, agent_id: str = "fundamentals_
         )
 
         if not financial_metrics:
-            progress.update_status(agent_id, ticker, "Failed: No financial metrics found")
+            progress.update_status(agent_id, ticker, "Error")
             continue
 
         # Pull the most recent financial metrics
@@ -141,6 +142,7 @@ def fundamentals_analyst_agent(state: AgentState, agent_id: str = "fundamentals_
         }
 
         progress.update_status(agent_id, ticker, "Done", analysis=json.dumps(reasoning, indent=4))
+        any_ticker_succeeded = True
 
     # Create the fundamental analysis message
     message = HumanMessage(
@@ -155,7 +157,10 @@ def fundamentals_analyst_agent(state: AgentState, agent_id: str = "fundamentals_
     # Add the signal to the analyst_signals list
     state["data"]["analyst_signals"][agent_id] = fundamental_analysis
 
-    progress.update_status(agent_id, None, "Done")
+    if any_ticker_succeeded:
+        progress.update_status(agent_id, None, "Done")
+    else:
+        progress.update_status(agent_id, None, "Error")
     
     return {
         "messages": [message],

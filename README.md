@@ -2,35 +2,42 @@
 
 This is a proof of concept for an AI-powered hedge fund.  The goal of this project is to explore the use of AI to make trading decisions.  This project is for **educational** purposes only and is not intended for real trading or investment.
 
-## 🚧 Work in Progress
+## 🚧 System Overview
 
-**This is an active fork focused on enhancing the original AI hedge fund system.**
+**This is an enhanced AI hedge fund system with comprehensive market data integration.**
 
-- **Phase 1**: ✅ **Complete** - CLI backtest experience with Börsdata data integration
-- **Phase 2**: 🔄 **In Progress** - Working on getting the web interface fully operational with new Börsdata integration and streaming UI components
+- **Command-line interface**: ✅ **Production Ready** - Full CLI experience with Börsdata data integration for Nordic/European and Global markets
+- **Web interface**: ✅ **Operational** - Full-stack web application with streaming UI components and Börsdata integration
 
-The command-line interface is production-ready with comprehensive Börsdata market data integration. Web interface development is ongoing.
+The system provides both command-line and web interfaces with comprehensive market analysis capabilities.
 
 This system employs several agents working together:
 
-1. Aswath Damodaran Agent - The Dean of Valuation, focuses on story, numbers, and disciplined valuation
-2. Ben Graham Agent - The godfather of value investing, only buys hidden gems with a margin of safety
-3. Bill Ackman Agent - An activist investor, takes bold positions and pushes for change
-4. Cathie Wood Agent - The queen of growth investing, believes in the power of innovation and disruption
-5. Charlie Munger Agent - Warren Buffett's partner, only buys wonderful businesses at fair prices
-6. Michael Burry Agent - The Big Short contrarian who hunts for deep value
-7. Mohnish Pabrai Agent - The Dhandho investor, who looks for doubles at low risk
-8. Peter Lynch Agent - Practical investor who seeks "ten-baggers" in everyday businesses
-9. Phil Fisher Agent - Meticulous growth investor who uses deep "scuttlebutt" research 
-10. Rakesh Jhunjhunwala Agent - The Big Bull of India
-11. Stanley Druckenmiller Agent - Macro legend who hunts for asymmetric opportunities with growth potential
-12. Warren Buffett Agent - The oracle of Omaha, seeks wonderful companies at a fair price
-13. Valuation Agent - Calculates the intrinsic value of a stock and generates trading signals
-14. Sentiment Agent - Analyzes market sentiment and generates trading signals
-15. Fundamentals Agent - Analyzes fundamental data and generates trading signals
-16. Technicals Agent - Analyzes technical indicators and generates trading signals
-17. Risk Manager - Calculates risk metrics and sets position limits
-18. Portfolio Manager - Makes final trading decisions and generates orders
+### Core Analysis Agents
+- **Fundamentals Analyst** - Evaluates company health through financial thresholds (ROE, margins, growth metrics)
+- **Technical Analyst** - Combines 5 strategies: trend following, mean reversion, momentum, volatility, statistical arbitrage
+- **Sentiment Analyst** - Analyzes insider trades and corporate events to gauge market sentiment
+- **Valuation Analyst** - Calculates intrinsic value using DCF, Owner Earnings, EV/EBITDA, and Residual Income models
+- **Risk Manager** - Sets position limits based on volatility and correlation analysis
+
+### Legendary Investor Agents
+- **Warren Buffett** - Value investing with 30% margin of safety using conservative DCF
+- **Ben Graham** - Father of value investing, Graham Number and net-net analysis
+- **Charlie Munger** - Quality businesses with economic moats and predictable earnings
+- **Peter Lynch** - Growth at reasonable price (PEG ratio) with "ten-bagger" potential
+- **Phil Fisher** - Growth investing through "scuttlebutt" research and R&D analysis
+- **Bill Ackman** - Activist investing targeting operational improvement opportunities
+- **Cathie Wood** - Disruptive innovation focus with aggressive growth assumptions
+- **Michael Burry** - Contrarian deep value with high free cash flow yields
+- **Mohnish Pabrai** - "Heads I win, tails I don't lose much" with downside protection
+- **Stanley Druckenmiller** - Macro momentum with growth and risk/reward analysis
+- **Rakesh Jhunjhunwala** - High-quality growth with ROE > 20% requirements
+- **Aswath Damodaran** - Academic valuation using CAPM and sophisticated DCF models
+
+### Portfolio Management
+- **Portfolio Manager** - Aggregates all signals and makes final trading decisions within risk limits
+
+For detailed strategy implementations and thresholds, see [Trading Agent Strategies](docs/trading_agent_strategies.md).
 
 <img width="1042" alt="Screenshot 2025-03-22 at 6 19 07 PM" src="https://github.com/user-attachments/assets/cbae3dcf-b571-490d-b0ad-3f0f035ac0d4" />
 
@@ -112,25 +119,50 @@ poetry install
 ```
 
 #### Run the AI Hedge Fund
+
+The system supports both Nordic/European and global company analysis:
+
+**Nordic/European companies** (via Börsdata Nordic instruments):
 ```bash
-poetry run python src/main.py --ticker AAPL,MSFT,NVDA
+poetry run python src/main.py --tickers ERIC.ST,VOLV-B.ST,ADVT
+```
+
+**Global companies** (via Börsdata Global instruments):
+```bash
+poetry run python src/main.py --tickers-global AAPL,MSFT,NVDA
+```
+
+**Quick test mode** (uses gpt-5 with fundamentals, technical, and sentiment analysts):
+```bash
+# Test with Nordic company
+poetry run python src/main.py --tickers ADVT --test
+
+# Test with global company
+poetry run python src/main.py --tickers-global AAPL --test
 ```
 
 You can also specify a `--ollama` flag to run the AI hedge fund using local LLMs.
 
 ```bash
-poetry run python src/main.py --ticker AAPL,MSFT,NVDA --ollama
+poetry run python src/main.py --tickers-global AAPL,MSFT,NVDA --ollama
 ```
 
 You can optionally specify the start and end dates to make decisions over a specific time period.
 
 ```bash
-poetry run python src/main.py --ticker AAPL,MSFT,NVDA --start-date 2024-01-01 --end-date 2024-03-01
+poetry run python src/main.py --tickers-global AAPL,MSFT,NVDA --start-date 2024-01-01 --end-date 2024-03-01
 ```
 
 #### Run the Backtester
+
+**Nordic/European companies:**
 ```bash
-poetry run python src/backtester.py --ticker AAPL,MSFT,NVDA
+poetry run python src/backtester.py --tickers ERIC.ST,VOLV-B.ST,ADVT
+```
+
+**Global companies:**
+```bash
+poetry run python src/backtester.py --tickers-global AAPL,MSFT,NVDA
 ```
 
 **Example Output:**
