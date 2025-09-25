@@ -1,3 +1,4 @@
+import type { AgentNodeData } from '@/contexts/node-context';
 import { CheckCircle, Clock, MoreHorizontal, XCircle } from 'lucide-react';
 
 // Helper function to detect if content is JSON
@@ -74,7 +75,7 @@ export function getActionColor(action: string): string {
 }
 
 // Helper function to sort agents in display order
-export function sortAgents(agents: [string, any][]): [string, any][] {
+export function sortAgents(agents: Array<[string, AgentNodeData]>): Array<[string, AgentNodeData]> {
   return agents.sort(([agentA, dataA], [agentB, dataB]) => {
     // First, sort by agent type priority (Risk Management and Portfolio Management at bottom)
     const getPriority = (agentName: string) => {

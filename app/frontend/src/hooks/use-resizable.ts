@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 interface UseResizableOptions {
   minWidth?: number;
@@ -27,23 +27,14 @@ export function useResizable({
   const isDraggingRef = useRef(false);
 
   // Handle manual resizing with mouse
-  const startResize = (e: React.MouseEvent) => {
-    e.preventDefault();
-    // Set both the ref (for immediate use in mousemove) and state (for rendering)
-    isDraggingRef.current = true;
-    setIsDragging(true);
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', stopResize);
-  };
-
-  const handleMouseMove = (e: MouseEvent) => {
+  const handleMouseMove = useCallback((e: MouseEvent) => {
     // Use the ref value instead of state for checking
     if (!isDraggingRef.current) return;
-    
+
     // Get element's position
     const elementRect = elementRef.current?.getBoundingClientRect();
     if (!elementRect) return;
-    
+
     if (side === 'bottom') {
       // For bottom panel: dragging up decreases height
       const newHeight = elementRect.bottom - e.clientY;
@@ -59,21 +50,30 @@ export function useResizable({
         // For right sidebar: dragging left decreases width
         newWidth = elementRect.right - e.clientX;
       }
-      
+
       // Calculate new width (limit between minWidth and maxWidth)
       newWidth = Math.max(minWidth, Math.min(maxWidth, newWidth));
-      
+
       setWidth(newWidth);
     }
-  };
+  }, [maxHeight, maxWidth, minHeight, minWidth, side]);
 
-  const stopResize = () => {
+  const stopResize = useCallback(() => {
     // Update both ref and state
     isDraggingRef.current = false;
     setIsDragging(false);
     document.removeEventListener('mousemove', handleMouseMove);
     document.removeEventListener('mouseup', stopResize);
-  };
+  }, [handleMouseMove]);
+
+  const startResize = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    // Set both the ref (for immediate use in mousemove) and state (for rendering)
+    isDraggingRef.current = true;
+    setIsDragging(true);
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', stopResize);
+  }, [handleMouseMove, stopResize]);
 
   // Clean up event listeners when component unmounts
   useEffect(() => {
@@ -81,7 +81,7 @@ export function useResizable({
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', stopResize);
     };
-  }, []);
+  }, [handleMouseMove, stopResize]);
 
   return {
     width,

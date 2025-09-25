@@ -10,19 +10,26 @@ from app.backend.models.schemas import (
     ApiKeyResponse,
     ApiKeySummaryResponse,
     ApiKeyBulkUpdateRequest,
-    ErrorResponse
+    ErrorResponse,
 )
 
 router = APIRouter(prefix="/api-keys", tags=["api-keys"])
 
 
+_API_KEY_LIST_RESPONSES = {
+    500: {"model": ErrorResponse, "description": "Internal server error"},
+}
+
+_API_KEY_MUTATION_RESPONSES = {
+    400: {"model": ErrorResponse, "description": "Invalid request"},
+    500: {"model": ErrorResponse, "description": "Internal server error"},
+}
+
+
 @router.post(
     "/",
     response_model=ApiKeyResponse,
-    responses={
-        400: {"model": ErrorResponse, "description": "Invalid request"},
-        500: {"model": ErrorResponse, "description": "Internal server error"},
-    },
+    responses=_API_KEY_MUTATION_RESPONSES,
 )
 async def create_or_update_api_key(request: ApiKeyCreateRequest, db: Session = Depends(get_db)):
     """Create a new API key or update existing one"""
@@ -39,12 +46,19 @@ async def create_or_update_api_key(request: ApiKeyCreateRequest, db: Session = D
         raise HTTPException(status_code=500, detail=f"Failed to create/update API key: {str(e)}")
 
 
+router.add_api_route(
+    "",
+    create_or_update_api_key,
+    methods=["POST"],
+    response_model=ApiKeyResponse,
+    responses=_API_KEY_MUTATION_RESPONSES,
+)
+
+
 @router.get(
     "/",
     response_model=List[ApiKeySummaryResponse],
-    responses={
-        500: {"model": ErrorResponse, "description": "Internal server error"},
-    },
+    responses=_API_KEY_LIST_RESPONSES,
 )
 async def get_api_keys(include_inactive: bool = False, db: Session = Depends(get_db)):
     """Get all API keys (without actual key values for security)"""
@@ -54,6 +68,16 @@ async def get_api_keys(include_inactive: bool = False, db: Session = Depends(get
         return [ApiKeySummaryResponse.from_orm(key) for key in api_keys]
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to retrieve API keys: {str(e)}")
+
+
+# Support `/api-keys` without trailing slash to avoid redirect-dependent clients
+router.add_api_route(
+    "",
+    get_api_keys,
+    methods=["GET"],
+    response_model=List[ApiKeySummaryResponse],
+    responses=_API_KEY_LIST_RESPONSES,
+)
 
 
 @router.get(

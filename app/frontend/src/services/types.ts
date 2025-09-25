@@ -1,9 +1,12 @@
+import type { JsonObject, JsonRecord } from '@/types/json';
+
 // Shared types for API requests and responses
 export enum ModelProvider {
   OPENAI = 'OpenAI',
   ANTHROPIC = 'Anthropic',
   GROQ = 'Groq',
   OLLAMA = 'Ollama',
+  GOOGLE = 'Google',
 }
 
 export interface AgentModelConfig {
@@ -15,7 +18,7 @@ export interface AgentModelConfig {
 export interface GraphNode {
   id: string;
   type?: string;
-  data?: any;
+  data?: JsonObject;
   position?: { x: number; y: number };
 }
 
@@ -24,7 +27,7 @@ export interface GraphEdge {
   source: string;
   target: string;
   type?: string;
-  data?: any;
+  data?: JsonObject;
 }
 
 export interface PortfolioPosition {
@@ -61,9 +64,9 @@ export interface BacktestDayResult {
   date: string;
   portfolio_value: number;
   cash: number;
-  decisions: Record<string, any>;
+  decisions: JsonRecord;
   executed_trades: Record<string, number>;
-  analyst_signals: Record<string, any>;
+  analyst_signals: JsonRecord;
   current_prices: Record<string, number>;
   long_exposure: number;
   short_exposure: number;
@@ -71,15 +74,15 @@ export interface BacktestDayResult {
   net_exposure: number;
   long_short_ratio: number | null;
   portfolio_return?: number;
-  performance_metrics: Record<string, any>;
-  ticker_details: Array<Record<string, any>>;
+  performance_metrics: JsonRecord;
+  ticker_details: JsonObject[];
   market_context?: MarketContextSnapshot;
 }
 
 export interface MarketContextSnapshot {
   date: string;
-  company_events: Record<string, Array<Record<string, any>>>;
-  insider_trades: Record<string, Array<Record<string, any>>>;
+  company_events: Record<string, JsonObject[]>;
+  insider_trades: Record<string, JsonObject[]>;
 }
 
 export interface BacktestPerformanceMetrics {
@@ -90,4 +93,4 @@ export interface BacktestPerformanceMetrics {
   long_short_ratio?: number;
   gross_exposure?: number;
   net_exposure?: number;
-} 
+}

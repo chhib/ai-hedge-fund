@@ -1,6 +1,8 @@
 import { LanguageModel } from '@/data/models';
 import { createContext, ReactNode, useCallback, useContext, useState } from 'react';
 
+import type { JsonObject, JsonRecord } from '@/types/json';
+
 export type NodeStatus = 'IDLE' | 'IN_PROGRESS' | 'COMPLETE' | 'ERROR';
 
 // Message history item
@@ -20,13 +22,13 @@ export interface AgentNodeData {
   messages: MessageItem[];
   timestamp?: string;
   analysis: string | null;
-  backtestResults?: any[];
+  backtestResults?: JsonObject[];
 }
 
 // Data structure for the output node data (from complete event)
 export interface OutputNodeData {
-  decisions: Record<string, any>;
-  analyst_signals: Record<string, any>;
+  decisions: JsonRecord;
+  analyst_signals: JsonRecord;
   // Backtest-specific fields
   performance_metrics?: {
     sharpe_ratio?: number;
@@ -40,7 +42,7 @@ export interface OutputNodeData {
   final_portfolio?: {
     cash: number;
     margin_used: number;
-    positions: Record<string, any>;
+    positions: JsonRecord;
   };
   total_days?: number;
 }
@@ -135,9 +137,9 @@ export function NodeProvider({ children }: { children: ReactNode }) {
           const messageItem: MessageItem = {
             timestamp: data.timestamp,
             message: data.message,
-            ticker: ticker,
-            analysis: {} as Record<string, string>,
-          }
+            ticker,
+            analysis: {},
+          };
 
           // Add analysis for ticker to messageItem if ticker is not null
           if (ticker && data.analysis) {
@@ -187,7 +189,8 @@ export function NodeProvider({ children }: { children: ReactNode }) {
     setAgentModels(prev => {
       if (model === null) {
         // Remove the agent model if setting to null
-        const { [compositeKey]: removed, ...rest } = prev;
+        const { [compositeKey]: _ignored, ...rest } = prev;
+        void _ignored;
         return rest;
       } else {
         // Set the agent model
@@ -256,7 +259,8 @@ export function NodeProvider({ children }: { children: ReactNode }) {
       
       // Clear output data for specified flow
       setOutputNodeData(prev => {
-        const { [flowId]: removed, ...rest } = prev;
+        const { [flowId]: _ignored, ...rest } = prev;
+        void _ignored;
         return rest;
       });
     }
@@ -427,6 +431,7 @@ export function NodeProvider({ children }: { children: ReactNode }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useNodeContext() {
   const context = useContext(NodeContext);
   

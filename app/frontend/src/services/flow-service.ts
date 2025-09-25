@@ -1,14 +1,19 @@
 import { Flow } from '@/types/flow';
+import type { JsonObject } from '@/types/json';
+
+type FlowNodes = Flow['nodes'];
+type FlowEdges = Flow['edges'];
+type FlowViewport = Flow['viewport'];
 
 const API_BASE_URL = 'http://localhost:8000';
 
 export interface CreateFlowRequest {
   name: string;
   description?: string;
-  nodes: any;
-  edges: any;
-  viewport?: any;
-  data?: any;
+  nodes: FlowNodes;
+  edges: FlowEdges;
+  viewport?: FlowViewport;
+  data?: JsonObject;
   is_template?: boolean;
   tags?: string[];
 }
@@ -16,10 +21,10 @@ export interface CreateFlowRequest {
 export interface UpdateFlowRequest {
   name?: string;
   description?: string;
-  nodes?: any;
-  edges?: any;
-  viewport?: any;
-  data?: any;
+  nodes?: FlowNodes;
+  edges?: FlowEdges;
+  viewport?: FlowViewport;
+  data?: JsonObject;
   is_template?: boolean;
   tags?: string[];
 }
@@ -96,7 +101,7 @@ export const flowService = {
   },
 
   // Create a default flow for new users
-  async createDefaultFlow(nodes: any, edges: any, viewport?: any): Promise<Flow> {
+  async createDefaultFlow(nodes: FlowNodes, edges: FlowEdges, viewport?: FlowViewport): Promise<Flow> {
     return this.createFlow({
       name: 'My First Flow',
       description: 'Welcome to AI Hedge Fund! Start building your flow here.',

@@ -120,6 +120,43 @@ Rebuild the data ingestion and processing pipeline so the application relies on 
 - Created comprehensive test coverage validating the fix handles negative earnings scenarios correctly: positive earnings, negative latest earnings, negative oldest earnings, and both negative earnings cases.
 - Bug was triggered during UNIBAP ticker analysis when Warren Buffett agent attempted intrinsic value calculation with negative earnings data.
 
+### Session 17 (Phase 2 restart)
+- Eliminated the 307 redirect on `GET /api-keys` by registering explicit slashless routes so the settings UI can hit the endpoint without relying on client-side redirect handling.
+- Added FastAPI TestClient coverage in `tests/backend/test_api_keys_routes.py` to exercise Börsdata API key creation, retrieval, listing via `/api-keys`, and deletion flows against an isolated in-memory SQLite database.
+- Verified new backend tests locally with `poetry run pytest tests/backend/test_api_keys_routes.py -q` (pass) and confirmed the FastAPI server now returns `200 OK` for `/api-keys` without needing a trailing slash.
+- Started taming Phase 2 lint debt: introduced shared JSON/flow data types, rewired node/tabs contexts and API clients to drop key `any` usage, and stubbed safer SSE handling; `npm run lint` still reports remaining violations to clear next.
+
+### Session 18 (Frontend lint pass)
+- Wrapped Ollama settings helpers and resize/search hooks with `useCallback`/dependency fixes so React hook exhaustive-deps warnings are resolved without re-render churn.
+- Replaced the remaining `any` annotations across enhanced flow hooks, JSON/investment dialogs, and node components with typed React Flow + context models; also tightened badge variants and regex escapes.
+- Added explicit provider-to-`ModelProvider` mapping when exporting agent models so we warn (once) on unsupported providers instead of shipping invalid enum values downstream.
+- Cleared lingering fast-refresh lint warnings by pruning unused design exports and scoping the context hooks with targeted rule exclusions; `npm run lint` now passes with zero warnings.
+- Confirmed `npm run lint` succeeds locally after the fixes; pending manual API key UX smoke test once backend is reachable.
+
+### Session 19 (API smoke test)
+- Started the FastAPI backend and the Vite frontend development server.
+- Performed a smoke test of the API key management functionality using `curl` commands, as the frontend UI did not render correctly outside a browser environment.
+- Successfully created, listed, fetched, and deleted a Börsdata API key via the `/api-keys` endpoint, confirming the backend CRUD operations are working as expected after the recent frontend and backend changes.
+
+### Session 20 (Provider Alignment)
+- Aligned frontend and backend model providers.
+- Added `Google` to the `ModelProvider` enum in `app/frontend/src/services/types.ts`.
+- Updated the `providerMapping` in `app/frontend/src/nodes/components/portfolio-start-node.tsx` and `app/frontend/src/nodes/components/stock-analyzer-node.tsx` to include `Google`.
+- Left `DeepSeek` as unsupported in the frontend as per user feedback.
+
+### Session 21 (Performance Analysis)
+- Successfully ran the backtester with a real LLM agent (`gpt-5`) using a newly created test script (`scripts/run_llm_backtest.py`) that leverages fixture data.
+- Analyzed the agent implementation and the overall architecture to identify potential performance bottlenecks and context window issues.
+- **Findings:**
+    - Context window size is not an immediate concern as prompts are self-contained for each ticker analysis.
+    - Performance is likely to be an issue for long backtests with many tickers and agents, as each agent makes an LLM call for each ticker on each day of the backtest.
+- **Suggested Optimizations:**
+    1.  **LLM Caching:** Implement a caching mechanism for LLM calls to avoid repeated calls with the same inputs.
+    2.  **Agent Scheduling:** Allow agents to be run at different frequencies (e.g., daily, weekly, monthly) to reduce the number of LLM calls.
+
+### Session 22 (User Feedback & Reprioritization)
+- User has requested to pause the performance optimization work and to prioritize making the web interface work with the Börsdata API, to achieve parity with the previous Financial Dataset API implementation.
+
 ## Phase 1 Status: ✅ COMPLETE
 **CLI backtest experience with Börsdata data flows is production-ready.** The system successfully:
 - Ingests price, financial metrics, corporate events, and insider trades from Börsdata fixtures
@@ -128,13 +165,14 @@ Rebuild the data ingestion and processing pipeline so the application relies on 
 - Provides comprehensive test coverage for regression validation
 
 ## Next Actions
-1. **Phase 2 preparation**: Review frontend lint debt and streaming UI components once Phase 1 deployment is confirmed.
-2. **Production readiness**: Consider migrating from fixture data to live Börsdata API calls in staging environment.
-3. **Performance optimization**: Monitor CLI output performance and consider context window management for extended agent sessions.
+1. **Frontend Data Integration**: Connect the frontend UI to the backend to fetch and display data from the Börsdata API, ensuring the application works as it did with the previous Financial Dataset API.
+2. **UI/UX Polish**: Ensure the web interface is user-friendly and provides a good experience.
+3. **End-to-end Testing**: Perform end-to-end testing of the web interface with the Börsdata API.
 
 ## Open Questions
 - What is the best way to persist resolved `kpiId` lookups (e.g., cached JSON vs in-memory) to limit metadata parsing?
 - Do we need caching beyond rate limiting to manage quotas once endpoints and usage patterns are finalized?
 - Should we periodically clear the LLM agent's context window to maintain efficient reasoning over long sessions?
+- Do we officially support Google/DeepSeek providers in the backend, or should the frontend omit them from model selection until the enum catches up?
 
 **IMPORTANT**: Update this log at the end of each work session: note completed steps, new decisions, blockers, and refreshed next actions. Always use session numbers (Session X, Session X+1, etc.) for progress entries. Update the "Last updated" date at the top with the actual current date when making changes.

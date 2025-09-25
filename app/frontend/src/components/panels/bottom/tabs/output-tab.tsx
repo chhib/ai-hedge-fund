@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { BacktestOutput } from './backtest-output';
 import { sortAgents } from './output-tab-utils';
 import { RegularOutput } from './regular-output';
+import type { AgentNodeData } from '@/contexts/node-context';
 
 interface OutputTabProps {
   className?: string;
@@ -13,26 +14,32 @@ interface OutputTabProps {
 export function OutputTab({ className }: OutputTabProps) {
   const { currentFlowId } = useFlowContext();
   const { getAgentNodeDataForFlow, getOutputNodeDataForFlow } = useNodeContext();
-  const [updateTrigger, setUpdateTrigger] = useState(0);
-  
-  // Get current flow data
-  const agentData = getAgentNodeDataForFlow(currentFlowId?.toString() || null);
-  const outputData = getOutputNodeDataForFlow(currentFlowId?.toString() || null);
+  const [refreshKey, setRefreshKey] = useState(0);
   
   // Force re-render periodically to show real-time updates
   useEffect(() => {
     const interval = setInterval(() => {
-      setUpdateTrigger(prev => prev + 1);
+      setRefreshKey(prev => prev + 1);
     }, 1000);
     
     return () => clearInterval(interval);
   }, []);
   
+  // Get current flow data (refreshKey ensures component updates with fresh data)
+  const agentData = getAgentNodeDataForFlow(currentFlowId?.toString() || null) || {};
+  const outputData = getOutputNodeDataForFlow(currentFlowId?.toString() || null);
+  
+  // refreshKey used to ensure periodic data refresh
+  void refreshKey; // Mark as intentionally unused in this context
+  
   // Detect if this is a backtest run
   const isBacktestRun = agentData && agentData['backtest'];
   
   // Sort agents for display (exclude backtest agent from regular agent list)
-  const sortedAgents = sortAgents(Object.entries(agentData).filter(([agentId]) => agentId !== 'backtest'));
+  const agentEntries = Object.entries(agentData) as Array<[string, AgentNodeData]>;
+  const sortedAgents = sortAgents(
+    agentEntries.filter(([agentId]) => agentId !== 'backtest')
+  );
   
   return (
     <div className={cn("h-full overflow-y-auto font-mono text-sm", className)}>
@@ -43,7 +50,10 @@ export function OutputTab({ className }: OutputTabProps) {
       
       {/* Render regular output if not a backtest run */}
       {!isBacktestRun && (
-        <RegularOutput sortedAgents={sortedAgents} outputData={outputData} />
+        <RegularOutput 
+          sortedAgents={sortedAgents}
+          outputData={outputData} 
+        />
       )}
       
       {/* Empty State */}

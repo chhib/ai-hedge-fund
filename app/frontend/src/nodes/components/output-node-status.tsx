@@ -17,13 +17,14 @@ export function OutputNodeStatus({
   isProcessing,
   isAnyAgentRunning,
   isOutputAvailable,
-  isConnected,
+  isConnected: _isConnected,
   onViewOutput,
   processingText = "In Progress",
   completingText = "Completing",
   availableText = "View Output",
   idleText = "Idle"
 }: OutputNodeStatusProps) {
+  void _isConnected;
   // Determine the current state and appropriate styling
   const isLocallyProcessing = isProcessing; // Connected agents are running
   const isGloballyProcessing = !isProcessing && isAnyAgentRunning; // Other agents running

@@ -10,11 +10,12 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import type { OutputNodeData } from '@/contexts/node-context';
 
 interface JsonOutputDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  outputNodeData: any;
+  outputNodeData: OutputNodeData | null;
   connectedAgentIds: Set<string>;
 }
 
@@ -33,14 +34,16 @@ export function JsonOutputDialog({
   const connectedBackendAgentKeys = Array.from(connectedAgentIds).map(nodeId => `${nodeId}_agent`);
   
   // Filter the outputNodeData to only include connected agents
-  const filteredOutputData = {
+  const filteredAnalystSignals = Object.fromEntries(
+    Object.entries(outputNodeData.analyst_signals ?? {})
+      .filter(([agentId]) =>
+        agentId === 'risk_management_agent' || connectedBackendAgentKeys.includes(agentId)
+      )
+  ) as OutputNodeData['analyst_signals'];
+
+  const filteredOutputData: OutputNodeData = {
     ...outputNodeData,
-    analyst_signals: Object.fromEntries(
-      Object.entries(outputNodeData.analyst_signals || {})
-        .filter(([agentId]) => 
-          agentId === 'risk_management_agent' || connectedBackendAgentKeys.includes(agentId)
-        )
-    )
+    analyst_signals: filteredAnalystSignals,
   };
 
   const jsonString = JSON.stringify(filteredOutputData, null, 2);

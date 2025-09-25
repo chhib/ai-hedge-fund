@@ -8,11 +8,11 @@ export interface Tab {
   id: string;
   type: TabType;
   title: string;
-  content: ReactNode;
+  content: ReactNode | null;
   // For flow tabs
   flow?: Flow;
   // For other tabs (settings, etc.)
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 // Serializable version of Tab for localStorage (without content)
@@ -21,7 +21,7 @@ interface SerializableTab {
   type: TabType;
   title: string;
   flow?: Flow;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 interface TabsContextType {
@@ -40,6 +40,7 @@ interface TabsContextType {
 
 const TabsContext = createContext<TabsContextType | null>(null);
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useTabsContext() {
   const context = useContext(TabsContext);
   if (!context) {

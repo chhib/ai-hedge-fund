@@ -22,10 +22,12 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useFlowContext } from '@/contexts/flow-context';
 import { useLayoutContext } from '@/contexts/layout-context';
 import { useNodeContext } from '@/contexts/node-context';
+import type { LanguageModel } from '@/data/models';
 import { useFlowConnection } from '@/hooks/use-flow-connection';
 import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts';
 import { useNodeState } from '@/hooks/use-node-state';
 import { cn, formatKeyboardShortcut } from '@/lib/utils';
+import { ModelProvider } from '@/services/types';
 import { type StockAnalyzerNode } from '../types';
 import { NodeShell } from './node-shell';
 
@@ -33,6 +35,14 @@ const runModes = [
   { value: 'single', label: 'Single Run' },
   { value: 'backtest', label: 'Backtest' },
 ];
+
+const providerMapping: Record<LanguageModel['provider'], ModelProvider | undefined> = {
+  Anthropic: ModelProvider.ANTHROPIC,
+  DeepSeek: undefined,
+  Google: ModelProvider.GOOGLE,
+  Groq: ModelProvider.GROQ,
+  OpenAI: ModelProvider.OPENAI,
+};
 
 export function StockAnalyzerNode({
   data,
@@ -179,10 +189,15 @@ export function StockAnalyzerNode({
     for (const node of agentNodes) {
       const model = allAgentModels[node.id];
       if (model) {
+        const mappedProvider = providerMapping[model.provider];
+        if (!mappedProvider) {
+          console.warn(`Unsupported provider "${model.provider}" for agent ${node.id}`);
+          continue;
+        }
         agentModels.push({
           agent_id: node.id,
           model_name: model.model_name,
-          model_provider: model.provider as any
+          model_provider: mappedProvider
         });
       }
     }

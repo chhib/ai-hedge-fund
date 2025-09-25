@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useFlowContext } from '@/contexts/flow-context';
-import { useNodeContext } from '@/contexts/node-context';
+import { useNodeContext, type OutputNodeData } from '@/contexts/node-context';
 import { useOutputNodeConnection } from '@/hooks/use-output-node-connection';
 import { api } from '@/services/api';
 import { type JsonOutputNode } from '../types';
@@ -40,7 +40,7 @@ export function JsonOutputNode({
     }
   }, [saveToFile, isOutputAvailable, outputNodeData]);
 
-  const saveJsonFile = async (data: any) => {
+  const saveJsonFile = async (data: OutputNodeData) => {
     try {
       // Generate filename with current date and time in user's timezone
       const now = new Date();

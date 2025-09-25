@@ -6,6 +6,26 @@ import {
   BacktestPerformanceMetrics,
   BacktestRequest
 } from '@/services/types';
+import type { JsonObject } from '@/types/json';
+
+interface BacktestStreamPayload extends JsonObject {
+  agent?: string;
+  status?: string;
+  ticker?: string | null;
+  analysis?: string;
+  timestamp?: string;
+  data?: BacktestCompletePayload;
+  message?: string;
+}
+
+interface BacktestCompletePayload extends JsonObject {
+  performance_metrics?: BacktestPerformanceMetrics;
+  final_portfolio?: JsonObject;
+  total_days?: number;
+  market_context?: JsonObject[];
+  results?: BacktestDayResult[];
+  portfolio_values?: JsonObject[];
+}
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -50,15 +70,17 @@ export const backtestApi = {
       let buffer = '';
       
       // Local array to accumulate backtest results
-      let backtestResults: any[] = [];
+      let backtestResults: BacktestDayResult[] = [];
       
       // Function to process the stream
       const processStream = async () => {
         try {
-          while (true) {
+          let doneReading = false;
+          while (!doneReading) {
             const { done, value } = await reader.read();
             
             if (done) {
+              doneReading = true;
               break;
             }
             
@@ -80,7 +102,7 @@ export const backtestApi = {
                 
                 if (eventTypeMatch && dataMatch) {
                   const eventType = eventTypeMatch[1];
-                  const eventData = JSON.parse(dataMatch[1]);
+                  const eventData = JSON.parse(dataMatch[1]) as BacktestStreamPayload;
                   
                   console.log(`Parsed backtest ${eventType} event:`, eventData);
                   
@@ -131,7 +153,7 @@ export const backtestApi = {
                         // If this progress update contains backtest result data, add it to local array
                         if (eventData.analysis) {
                           try {
-                            const backtestResultData = JSON.parse(eventData.analysis);
+                            const backtestResultData = JSON.parse(eventData.analysis) as BacktestDayResult;
                             // Add to local array and keep only the last 50 results to avoid memory issues
                             backtestResults = [...backtestResults, backtestResultData].slice(-50);
                           } catch (error) {
@@ -233,10 +255,11 @@ export const backtestApi = {
               });
             }
           }
-        } catch (error: any) {
-          if (error.name === 'AbortError') {
-          } else {
-            console.error('Error reading backtest SSE stream:', error);
+        } catch (error: unknown) {
+          if (error instanceof Error && error.name === 'AbortError') {
+            return;
+          }
+          console.error('Error reading backtest SSE stream:', error);
             // Mark nodes as error when there's a connection error
             nodeContext.updateAgentNode(flowId, 'portfolio-start', {
               status: 'ERROR',
@@ -247,18 +270,17 @@ export const backtestApi = {
             if (flowId) {
               flowConnectionManager.setConnection(flowId, {
                 state: 'error',
-                error: error.message || 'Connection error',
+                error: error instanceof Error ? error.message : 'Connection error',
                 abortController: null,
               });
             }
-          }
         }
       };
       
       // Start processing the stream
       processStream();
     })
-    .catch((error: any) => {
+    .catch((error: unknown) => {
       console.error('Backtest SSE connection error:', error);
       // Mark nodes as error when there's a connection error
       nodeContext.updateAgentNode(flowId, 'portfolio-start', {
@@ -270,7 +292,7 @@ export const backtestApi = {
       if (flowId) {
         flowConnectionManager.setConnection(flowId, {
           state: 'error',
-          error: error.message || 'Connection failed',
+          error: error instanceof Error ? error.message : 'Connection failed',
           abortController: null,
         });
       }
