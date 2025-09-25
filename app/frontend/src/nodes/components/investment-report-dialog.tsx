@@ -4,7 +4,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
-import { Badge } from '@/components/ui/badge';
+import { Badge, type BadgeProps } from '@/components/ui/badge';
 import {
   Card,
   CardContent,
@@ -26,20 +26,45 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import type { OutputNodeData } from '@/contexts/node-context';
 import { extractBaseAgentKey } from '@/data/node-mappings';
 import { createAgentDisplayNames } from '@/utils/text-utils';
 import { ArrowDown, ArrowUp, Minus } from 'lucide-react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
+type BadgeVariant = NonNullable<BadgeProps['variant']>;
+
+interface InvestmentDecision {
+  action?: string;
+  quantity?: number;
+  confidence?: number;
+}
+
+interface AnalystSignalDetail {
+  signal: string;
+  confidence: number;
+  reasoning?: unknown;
+}
+
+type AnalystSignalsByAgent = Record<string, Record<string, AnalystSignalDetail>>;
+type DecisionsByTicker = Record<string, InvestmentDecision>;
+
 interface InvestmentReportDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  outputNodeData: any;
+  outputNodeData: OutputNodeData | null;
   connectedAgentIds: Set<string>;
 }
 
 type ActionType = 'long' | 'short' | 'hold';
+
+const toActionType = (action?: string): ActionType => {
+  if (action === 'long' || action === 'short' || action === 'hold') {
+    return action;
+  }
+  return 'hold';
+};
 
 export function InvestmentReportDialog({
   isOpen,
@@ -58,6 +83,14 @@ export function InvestmentReportDialog({
     return null;
   }
 
+  const decisions = outputNodeData.decisions as DecisionsByTicker;
+  const analystSignals = (outputNodeData.analyst_signals ?? {}) as AnalystSignalsByAgent;
+  const currentPrices =
+    'current_prices' in outputNodeData
+      ? ((outputNodeData as OutputNodeData & { current_prices?: Record<string, number | string> })
+          .current_prices ?? {})
+      : {};
+
   const getActionIcon = (action: ActionType) => {
     switch (action) {
       case 'long':
@@ -72,35 +105,29 @@ export function InvestmentReportDialog({
   };
 
   const getSignalBadge = (signal: string) => {
-    const variant = signal === 'bullish' ? 'success' :
-                   signal === 'bearish' ? 'destructive' : 'outline';
+    const variant: BadgeVariant = signal === 'bullish'
+      ? 'success'
+      : signal === 'bearish'
+        ? 'destructive'
+        : 'outline';
 
-    return (
-      <Badge variant={variant as any}>
-        {signal}
-      </Badge>
-    );
+    return <Badge variant={variant}>{signal}</Badge>;
   };
 
   const getConfidenceBadge = (confidence: number) => {
-    let variant = 'outline';
+    let variant: BadgeVariant = 'outline';
     if (confidence >= 50) variant = 'success';
     else if (confidence >= 0) variant = 'warning';
-    else variant = 'outline';
     const rounded = Number(confidence.toFixed(1));
-    return (
-      <Badge variant={variant as any}>
-        {rounded}%
-      </Badge>
-    );
+    return <Badge variant={variant}>{rounded}%</Badge>;
   };
 
   // Extract unique tickers from the data
-  const tickers = Object.keys(outputNodeData.decisions || {});
+  const tickers = Object.keys(decisions);
 
   // Use the unique node IDs directly since they're now stored as keys in analyst_signals
   const connectedUniqueAgentIds = Array.from(connectedAgentIds);
-  const agents = Object.keys(outputNodeData.analyst_signals || {})
+  const agents = Object.keys(analystSignals)
     .filter(agent =>
       extractBaseAgentKey(agent) !== 'risk_management_agent' && connectedUniqueAgentIds.includes(agent)
     );
@@ -137,20 +164,22 @@ export function InvestmentReportDialog({
                   </TableHeader>
                   <TableBody>
                     {tickers.map(ticker => {
-                      const decision = outputNodeData.decisions[ticker];
-                      const currentPrice = outputNodeData.current_prices?.[ticker] || 'N/A';
+                      const decision = decisions[ticker];
+                      if (!decision) return null;
+                      const currentPrice = currentPrices[ticker] ?? 'N/A';
+                      const action = toActionType(decision.action);
                       return (
                         <TableRow key={ticker}>
                           <TableCell className="font-medium">{ticker}</TableCell>
                           <TableCell>${typeof currentPrice === 'number' ? currentPrice.toFixed(2) : currentPrice}</TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2">
-                              {getActionIcon(decision.action as ActionType)}
+                              {getActionIcon(action)}
                               <span className="capitalize">{decision.action}</span>
                             </div>
                           </TableCell>
                           <TableCell>{decision.quantity}</TableCell>
-                          <TableCell>{getConfidenceBadge(decision.confidence)}</TableCell>
+                          <TableCell>{getConfidenceBadge(decision.confidence ?? 0)}</TableCell>
                         </TableRow>
                       );
                     })}
@@ -169,9 +198,9 @@ export function InvestmentReportDialog({
                     <div className="flex items-center gap-2">
                       {ticker}
                       <div className="flex items-center gap-1">
-                        {getActionIcon(outputNodeData.decisions[ticker].action as ActionType)}
+                        {getActionIcon(toActionType(decisions[ticker]?.action))}
                         <span className="text-sm font-normal text-muted-foreground">
-                          {outputNodeData.decisions[ticker].action} {outputNodeData.decisions[ticker].quantity} shares
+                          {decisions[ticker]?.action} {decisions[ticker]?.quantity} shares
                         </span>
                       </div>
                     </div>
@@ -181,7 +210,7 @@ export function InvestmentReportDialog({
                       {/* Agent Signals */}
                       <div className="grid grid-cols-1 gap-4">
                         {agents.map(agent => {
-                          const signal = outputNodeData.analyst_signals[agent]?.[ticker];
+                          const signal = analystSignals[agent]?.[ticker];
                           if (!signal) return null;
 
                           return (

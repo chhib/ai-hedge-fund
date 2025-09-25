@@ -9,7 +9,8 @@ import {
 import { useToastManager } from '@/hooks/use-toast-manager';
 import { flowService } from '@/services/flow-service';
 import { TabService } from '@/services/tab-service';
-import { Flow } from '@/types/flow';
+import type { Node } from '@xyflow/react';
+import { Flow, FlowNodeData } from '@/types/flow';
 import { useCallback, useEffect, useState } from 'react';
 
 export interface UseFlowManagementTabsReturn {
@@ -60,14 +61,14 @@ export function useFlowManagementTabs(): UseFlowManagementTabsReturn {
   const saveCurrentFlowWithStates = useCallback(async (): Promise<Flow | null> => {
     try {
       // Get current nodes from React Flow
-      const currentNodes = reactFlowInstance.getNodes();
+      const currentNodes = reactFlowInstance.getNodes() as Node<FlowNodeData>[];
       
       // Get node context data (runtime data: agent status, messages, output data)
       const flowId = currentFlowId?.toString() || null;
       const nodeContextData = exportNodeContextData(flowId);
       
       // Enhance nodes with internal states
-      const nodesWithStates = currentNodes.map((node: any) => {
+      const nodesWithStates: Node<FlowNodeData>[] = currentNodes.map((node): Node<FlowNodeData> => {
         const internalState = getNodeInternalState(node.id);
         return {
           ...node,
@@ -228,7 +229,7 @@ export function useFlowManagementTabs(): UseFlowManagementTabsReturn {
             
             // Restore internal states for each node (use-node-state data - configuration only)
             if (flowData.nodes) {
-              flowData.nodes.forEach((node: any) => {
+              flowData.nodes.forEach((node: Node<FlowNodeData>) => {
                 if (node.data?.internal_state) {
                   setNodeInternalState(node.id, node.data.internal_state);
                 }

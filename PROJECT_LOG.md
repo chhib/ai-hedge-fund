@@ -126,6 +126,13 @@ Rebuild the data ingestion and processing pipeline so the application relies on 
 - Verified new backend tests locally with `poetry run pytest tests/backend/test_api_keys_routes.py -q` (pass) and confirmed the FastAPI server now returns `200 OK` for `/api-keys` without needing a trailing slash.
 - Started taming Phase 2 lint debt: introduced shared JSON/flow data types, rewired node/tabs contexts and API clients to drop key `any` usage, and stubbed safer SSE handling; `npm run lint` still reports remaining violations to clear next.
 
+### Session 18 (Frontend lint pass)
+- Wrapped Ollama settings helpers and resize/search hooks with `useCallback`/dependency fixes so React hook exhaustive-deps warnings are resolved without re-render churn.
+- Replaced the remaining `any` annotations across enhanced flow hooks, JSON/investment dialogs, and node components with typed React Flow + context models; also tightened badge variants and regex escapes.
+- Added explicit provider-to-`ModelProvider` mapping when exporting agent models so we warn (once) on unsupported providers instead of shipping invalid enum values downstream.
+- Cleared lingering fast-refresh lint warnings by pruning unused design exports and scoping the context hooks with targeted rule exclusions; `npm run lint` now passes with zero warnings.
+- Confirmed `npm run lint` succeeds locally after the fixes; pending manual API key UX smoke test once backend is reachable.
+
 ## Phase 1 Status: ✅ COMPLETE
 **CLI backtest experience with Börsdata data flows is production-ready.** The system successfully:
 - Ingests price, financial metrics, corporate events, and insider trades from Börsdata fixtures
@@ -134,13 +141,14 @@ Rebuild the data ingestion and processing pipeline so the application relies on 
 - Provides comprehensive test coverage for regression validation
 
 ## Next Actions
-1. **Frontend integration**: Exercise the settings UI against the FastAPI backend (verify API key CRUD flows + streaming dashboards) and address the outstanding `npm run lint` debt blocking clean builds.
-2. **Production readiness**: Consider migrating from fixture data to live Börsdata API calls in staging environment.
+1. **Settings smoke test**: Hit the settings UI against the FastAPI backend to validate API key CRUD + streaming after the lint cleanup.
+2. **Provider alignment**: Decide how to surface Google/DeepSeek models in `ModelProvider` so agent model exports won't have to warn-and-skip unsupported providers.
 3. **Performance optimization**: Monitor CLI output performance and consider context window management for extended agent sessions.
 
 ## Open Questions
 - What is the best way to persist resolved `kpiId` lookups (e.g., cached JSON vs in-memory) to limit metadata parsing?
 - Do we need caching beyond rate limiting to manage quotas once endpoints and usage patterns are finalized?
 - Should we periodically clear the LLM agent's context window to maintain efficient reasoning over long sessions?
+- Do we officially support Google/DeepSeek providers in the backend, or should the frontend omit them from model selection until the enum catches up?
 
 **IMPORTANT**: Update this log at the end of each work session: note completed steps, new decisions, blockers, and refreshed next actions. Always use session numbers (Session X, Session X+1, etc.) for progress entries. Update the "Last updated" date at the top with the actual current date when making changes.

@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { AlertTriangle, Brain, CheckCircle, Download, Play, RefreshCw, Server, Square, Trash2, X } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 interface OllamaStatus {
   installed: boolean;
@@ -62,7 +62,7 @@ export function OllamaSettings() {
     displayName: ''
   });
 
-  const fetchOllamaStatus = async () => {
+  const fetchOllamaStatus = useCallback(async () => {
     try {
       const response = await fetch('http://localhost:8000/ollama/status');
       if (response.ok) {
@@ -77,9 +77,9 @@ export function OllamaSettings() {
       console.error('Failed to fetch Ollama status:', error);
       setError('Failed to connect to backend service');
     }
-  };
+  }, []);
 
-  const fetchRecommendedModels = async () => {
+  const fetchRecommendedModels = useCallback(async () => {
     try {
       const response = await fetch('http://localhost:8000/ollama/models/recommended');
       if (response.ok) {
@@ -91,7 +91,7 @@ export function OllamaSettings() {
     } catch (error) {
       console.error('Failed to fetch recommended models:', error);
     }
-  };
+  }, []);
 
   const startOllamaServer = async () => {
     setActionLoading('start-server');
@@ -363,14 +363,14 @@ export function OllamaSettings() {
     setCancelConfirmation({ isOpen: false, modelName: '', displayName: '' });
   };
 
-  const refreshStatus = async () => {
+  const refreshStatus = useCallback(async () => {
     setLoading(true);
     setError(null);
     await Promise.all([fetchOllamaStatus(), fetchRecommendedModels()]);
     setLoading(false);
-  };
+  }, [fetchOllamaStatus, fetchRecommendedModels]);
 
-  const checkForActiveDownloads = async () => {
+  const checkForActiveDownloads = useCallback(async () => {
     // Check if Ollama is running
     if (!ollamaStatus?.running) return;
 
@@ -401,9 +401,9 @@ export function OllamaSettings() {
       // Ignore errors - probably no active downloads or server not available
       console.debug('No active downloads found or error checking:', error);
     }
-  };
+  }, [ollamaStatus?.running, reconnectToDownload]);
 
-  const reconnectToDownload = async (modelName: string) => {
+  const reconnectToDownload = useCallback(async (modelName: string) => {
     // Don't reconnect if we're already tracking this download
     if (activeDownloads.has(modelName)) {
       console.debug(`Already tracking download for ${modelName}`);
@@ -534,18 +534,18 @@ export function OllamaSettings() {
         return newSet;
       });
     }
-  };
+  }, [activeDownloads]);
 
   useEffect(() => {
     refreshStatus();
-  }, []);
+  }, [refreshStatus]);
 
   // Check for active downloads after we have status and models data
   useEffect(() => {
     if (ollamaStatus?.running && recommendedModels.length > 0) {
       checkForActiveDownloads();
     }
-  }, [ollamaStatus?.running, recommendedModels.length]); // Only depend on running status and whether we have models
+  }, [ollamaStatus?.running, recommendedModels.length, checkForActiveDownloads]); // Only depend on running status and whether we have models
 
   // Cleanup polling intervals on unmount
   useEffect(() => {

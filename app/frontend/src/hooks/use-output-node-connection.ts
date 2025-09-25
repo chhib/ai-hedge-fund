@@ -1,4 +1,4 @@
-import { getConnectedEdges, useReactFlow } from '@xyflow/react';
+import { useReactFlow } from '@xyflow/react';
 import { useMemo } from 'react';
 
 import { useFlowContext } from '@/contexts/flow-context';
@@ -23,10 +23,9 @@ export function useOutputNodeConnection(nodeId: string) {
     // Get all nodes and edges
     const nodes = getNodes();
     const edges = getEdges();
-    
+
     // Find edges connected to this output node
-    const connectedEdges = getConnectedEdges([{ id: nodeId }] as any, edges);
-    const connectedAgentIds = connectedEdges
+    const connectedAgentIds = edges
       .filter(edge => edge.target === nodeId)
       .map(edge => edge.source)
       .filter(sourceId => {

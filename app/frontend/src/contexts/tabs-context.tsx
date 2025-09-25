@@ -40,6 +40,7 @@ interface TabsContextType {
 
 const TabsContext = createContext<TabsContextType | null>(null);
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useTabsContext() {
   const context = useContext(TabsContext);
   if (!context) {

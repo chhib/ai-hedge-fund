@@ -32,6 +32,7 @@ interface FlowContextType {
 
 const FlowContext = createContext<FlowContextType | null>(null);
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useFlowContext() {
   const context = useContext(FlowContext);
   if (!context) {

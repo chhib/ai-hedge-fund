@@ -6,7 +6,8 @@ import {
     setCurrentFlowId as setNodeStateFlowId
 } from '@/hooks/use-node-state';
 import { flowService } from '@/services/flow-service';
-import { Flow } from '@/types/flow';
+import type { Node } from '@xyflow/react';
+import { Flow, FlowNodeData } from '@/types/flow';
 import { useCallback } from 'react';
 
 /**
@@ -21,14 +22,14 @@ export function useEnhancedFlowActions() {
   const saveCurrentFlowWithCompleteState = useCallback(async (name?: string, description?: string): Promise<Flow | null> => {
     try {
       // Get current nodes from React Flow
-      const currentNodes = reactFlowInstance.getNodes();
+      const currentNodes = reactFlowInstance.getNodes() as Node<FlowNodeData>[];
       
       // Get node context data (runtime data: agent status, messages, output data)
       const flowId = currentFlowId?.toString() || null;
       const nodeContextData = exportNodeContextData(flowId);
       
       // Enhance nodes with internal states
-      const nodesWithStates = currentNodes.map((node: any) => {
+      const nodesWithStates: Node<FlowNodeData>[] = currentNodes.map((node): Node<FlowNodeData> => {
         const internalState = getNodeInternalState(node.id);
         return {
           ...node,
@@ -87,7 +88,7 @@ export function useEnhancedFlowActions() {
 
       // Then restore internal states for each node (use-node-state data)
       if (flow.nodes) {
-        flow.nodes.forEach((node: any) => {
+        flow.nodes.forEach((node: Node<FlowNodeData>) => {
           if (node.data?.internal_state) {
             setNodeInternalState(node.id, node.data.internal_state);
           }
