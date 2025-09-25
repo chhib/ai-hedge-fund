@@ -324,30 +324,30 @@ function BacktestTradingTable({ agentData }: { agentData: AgentData }) {
     if (backtestResult.ticker_details) {
       backtestResult.ticker_details.forEach((ticker: Record<string, unknown>) => {
         tableRows.push({
-          type: 'ticker',
+          type: 'ticker' as const,
           date: backtestResult.date,
-          ticker: ticker.ticker,
-          action: ticker.action,
-          quantity: ticker.quantity,
-          price: ticker.price,
-          shares_owned: ticker.shares_owned,
-          long_shares: ticker.long_shares,
-          short_shares: ticker.short_shares,
-          position_value: ticker.position_value,
-          bullish_count: ticker.bullish_count,
-          bearish_count: ticker.bearish_count,
-          neutral_count: ticker.neutral_count,
+          ticker: String(ticker.ticker ?? ''),
+          action: String(ticker.action ?? ''),
+          quantity: Number(ticker.quantity ?? 0),
+          price: Number(ticker.price ?? 0),
+          shares_owned: Number(ticker.shares_owned ?? 0),
+          long_shares: Number(ticker.long_shares ?? 0),
+          short_shares: Number(ticker.short_shares ?? 0),
+          position_value: Number(ticker.position_value ?? 0),
+          bullish_count: Number(ticker.bullish_count ?? 0),
+          bearish_count: Number(ticker.bearish_count ?? 0),
+          neutral_count: Number(ticker.neutral_count ?? 0),
         });
       });
     }
     
     // Add portfolio summary row for this period
     tableRows.push({
-      type: 'summary',
+      type: 'summary' as const,
       date: backtestResult.date,
       portfolio_value: backtestResult.portfolio_value,
       cash: backtestResult.cash,
-      portfolio_return: backtestResult.portfolio_return,
+      portfolio_return: backtestResult.portfolio_return ?? 0,
       total_position_value: backtestResult.portfolio_value - backtestResult.cash,
       performance_metrics: backtestResult.performance_metrics,
     });
@@ -500,15 +500,15 @@ function BacktestResults({ outputData }: { outputData: BacktestOutputData | null
             <div className="space-y-1 text-sm">
               <div className="flex justify-between">
                 <span>Total Days:</span>
-                <span className="font-medium">{total_days}</span>
+                <span className="font-medium">{total_days || 0}</span>
               </div>
               <div className="flex justify-between">
                 <span>Final Cash:</span>
-                <span className="font-medium">${final_portfolio.cash.toLocaleString()}</span>
+                <span className="font-medium">${final_portfolio?.cash?.toLocaleString() || '0'}</span>
               </div>
               <div className="flex justify-between">
                 <span>Margin Used:</span>
-                <span className="font-medium">${final_portfolio.margin_used.toLocaleString()}</span>
+                <span className="font-medium">${final_portfolio?.margin_used?.toLocaleString() || '0'}</span>
               </div>
             </div>
           </div>
@@ -542,7 +542,7 @@ function BacktestResults({ outputData }: { outputData: BacktestOutputData | null
         </div>
         
         {/* Final Positions */}
-        {final_portfolio.positions && (
+        {final_portfolio?.positions && (
           <div>
             <h4 className="font-medium mb-2">Final Positions</h4>
             <Table>

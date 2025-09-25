@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils';
 import { SidebarStorageService } from '@/services/sidebar-storage';
 import { TabService } from '@/services/tab-service';
 import { ReactFlowProvider } from '@xyflow/react';
-import { ReactNode, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { TopBar } from './layout/top-bar';
 
 // Create a LayoutContent component to access the FlowContext, TabsContext, and LayoutContext
@@ -162,9 +162,7 @@ function LayoutContent() {
   );
 }
 
-interface LayoutProps {
-  children: ReactNode;
-}
+// Layout component manages the application layout structure
 
 export function Layout() {
   return (

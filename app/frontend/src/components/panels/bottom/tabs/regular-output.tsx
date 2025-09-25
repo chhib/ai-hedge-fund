@@ -187,7 +187,7 @@ function AnalysisResultsSection({ outputData }: { outputData: RegularOutputData 
                             </TableCell>
                             <TableCell>{signal.confidence || 0}%</TableCell>
                             <TableCell className="max-w-md">
-                              <ReasoningContent content={signal.reasoning} />
+                              <ReasoningContent content={signal.reasoning || null} />
                             </TableCell>
                           </TableRow>
                         );
@@ -224,7 +224,7 @@ function AnalysisResultsSection({ outputData }: { outputData: RegularOutputData 
                       <TableRow>
                         <TableCell className="font-medium">Reasoning</TableCell>
                         <TableCell className="max-w-md">
-                          <ReasoningContent content={decision.reasoning} />
+                          <ReasoningContent content={decision.reasoning || null} />
                         </TableCell>
                       </TableRow>
                     )}

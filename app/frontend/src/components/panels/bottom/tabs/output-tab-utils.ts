@@ -92,8 +92,8 @@ export function sortAgents(agents: [string, Record<string, unknown>][]): [string
     }
     
     // If same priority, sort by timestamp (ascending - oldest first)
-    const timestampA = dataA.timestamp ? new Date(dataA.timestamp).getTime() : 0;
-    const timestampB = dataB.timestamp ? new Date(dataB.timestamp).getTime() : 0;
+    const timestampA = dataA.timestamp ? new Date(dataA.timestamp as string).getTime() : 0;
+    const timestampB = dataB.timestamp ? new Date(dataB.timestamp as string).getTime() : 0;
     
     if (timestampA !== timestampB) {
       return timestampA - timestampB;

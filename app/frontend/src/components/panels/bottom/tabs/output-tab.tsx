@@ -35,7 +35,11 @@ export function OutputTab({ className }: OutputTabProps) {
   const isBacktestRun = agentData && agentData['backtest'];
   
   // Sort agents for display (exclude backtest agent from regular agent list)
-  const sortedAgents = sortAgents(Object.entries(agentData).filter(([agentId]) => agentId !== 'backtest'));
+  const sortedAgents = sortAgents(
+    Object.entries(agentData)
+      .filter(([agentId]) => agentId !== 'backtest')
+      .map(([id, data]) => [id, data as unknown as Record<string, unknown>])
+  );
   
   return (
     <div className={cn("h-full overflow-y-auto font-mono text-sm", className)}>
@@ -46,7 +50,10 @@ export function OutputTab({ className }: OutputTabProps) {
       
       {/* Render regular output if not a backtest run */}
       {!isBacktestRun && (
-        <RegularOutput sortedAgents={sortedAgents} outputData={outputData} />
+        <RegularOutput 
+          sortedAgents={sortedAgents.map(([id, data]) => [id, data as any])} 
+          outputData={outputData} 
+        />
       )}
       
       {/* Empty State */}
