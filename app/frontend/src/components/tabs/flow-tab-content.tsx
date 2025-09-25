@@ -5,7 +5,7 @@ import { setNodeInternalState, setCurrentFlowId as setNodeStateFlowId } from '@/
 import { cn } from '@/lib/utils';
 import { flowService } from '@/services/flow-service';
 import { Flow as FlowType } from '@/types/flow';
-import { useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 
 // Import the flow connection manager to check if flow is actively running
 
@@ -19,7 +19,7 @@ export function FlowTabContent({ flow, className }: FlowTabContentProps) {
   const { activeTabId } = useTabsContext();
 
   // Enhanced load function that restores both use-node-state and node context data
-  const loadFlowWithCompleteState = async (flowToLoad: FlowType) => {
+  const loadFlowWithCompleteState = useCallback(async (flowToLoad: FlowType) => {
     try {
       const flowId = flowToLoad.id.toString();
       
@@ -35,13 +35,12 @@ export function FlowTabContent({ flow, className }: FlowTabContentProps) {
       await loadFlow(flowToLoad);
 
       // Then restore internal states for each node (use-node-state data)
-      if (flowToLoad.nodes) {
-        flowToLoad.nodes.forEach((node: any) => {
-          if (node.data?.internal_state) {
-            setNodeInternalState(node.id, node.data.internal_state);
-          }
-        });
-      }
+      flowToLoad.nodes.forEach(node => {
+        const internalState = node.data?.internal_state;
+        if (internalState) {
+          setNodeInternalState(node.id, internalState);
+        }
+      });
       
       // NOTE: We intentionally do NOT restore nodeContextData here
       // Runtime execution data (messages, analysis, agent status) should start fresh
@@ -50,7 +49,7 @@ export function FlowTabContent({ flow, className }: FlowTabContentProps) {
       console.error('Failed to load flow with complete state:', error);
       throw error;
     }
-  };
+  }, [loadFlow]);
 
   // Fetch the latest flow state when this tab becomes active
   useEffect(() => {
@@ -72,7 +71,7 @@ export function FlowTabContent({ flow, className }: FlowTabContentProps) {
 
       fetchAndLoadFlow();
     }
-  }, [activeTabId, flow.id, flow, loadFlow]);
+  }, [activeTabId, flow, loadFlowWithCompleteState, flow.id]);
 
   return (
     <div className={cn("h-full w-full", className)}>

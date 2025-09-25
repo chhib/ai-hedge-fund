@@ -168,9 +168,13 @@ export function OllamaSettings() {
 
       if (reader) {
         try {
-          while (true) {
+          let doneReading = false;
+          while (!doneReading) {
             const { done, value } = await reader.read();
-            if (done) break;
+            if (done) {
+              doneReading = true;
+              break;
+            }
 
             const chunk = decoder.decode(value, { stream: true });
             const lines = chunk.split('\n');

@@ -120,6 +120,12 @@ Rebuild the data ingestion and processing pipeline so the application relies on 
 - Created comprehensive test coverage validating the fix handles negative earnings scenarios correctly: positive earnings, negative latest earnings, negative oldest earnings, and both negative earnings cases.
 - Bug was triggered during UNIBAP ticker analysis when Warren Buffett agent attempted intrinsic value calculation with negative earnings data.
 
+### Session 17 (Phase 2 restart)
+- Eliminated the 307 redirect on `GET /api-keys` by registering explicit slashless routes so the settings UI can hit the endpoint without relying on client-side redirect handling.
+- Added FastAPI TestClient coverage in `tests/backend/test_api_keys_routes.py` to exercise Börsdata API key creation, retrieval, listing via `/api-keys`, and deletion flows against an isolated in-memory SQLite database.
+- Verified new backend tests locally with `poetry run pytest tests/backend/test_api_keys_routes.py -q` (pass) and confirmed the FastAPI server now returns `200 OK` for `/api-keys` without needing a trailing slash.
+- Started taming Phase 2 lint debt: introduced shared JSON/flow data types, rewired node/tabs contexts and API clients to drop key `any` usage, and stubbed safer SSE handling; `npm run lint` still reports remaining violations to clear next.
+
 ## Phase 1 Status: ✅ COMPLETE
 **CLI backtest experience with Börsdata data flows is production-ready.** The system successfully:
 - Ingests price, financial metrics, corporate events, and insider trades from Börsdata fixtures
@@ -128,7 +134,7 @@ Rebuild the data ingestion and processing pipeline so the application relies on 
 - Provides comprehensive test coverage for regression validation
 
 ## Next Actions
-1. **Phase 2 preparation**: Review frontend lint debt and streaming UI components once Phase 1 deployment is confirmed.
+1. **Frontend integration**: Exercise the settings UI against the FastAPI backend (verify API key CRUD flows + streaming dashboards) and address the outstanding `npm run lint` debt blocking clean builds.
 2. **Production readiness**: Consider migrating from fixture data to live Börsdata API calls in staging environment.
 3. **Performance optimization**: Monitor CLI output performance and consider context window management for extended agent sessions.
 

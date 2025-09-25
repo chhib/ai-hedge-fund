@@ -4,8 +4,20 @@ import { flowConnectionManager } from '@/hooks/use-flow-connection';
 import { clearAllNodeStates, getAllNodeStates, setNodeInternalState, setCurrentFlowId as setNodeStateFlowId } from '@/hooks/use-node-state';
 import { flowService } from '@/services/flow-service';
 import { Flow } from '@/types/flow';
+import type { JsonObject, JsonValue } from '@/types/json';
 import { MarkerType, ReactFlowInstance, useReactFlow, XYPosition } from '@xyflow/react';
 import { createContext, ReactNode, useCallback, useContext, useState } from 'react';
+
+const isJsonObject = (value: JsonValue): value is JsonObject =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const extractNodeStates = (data: JsonObject): JsonObject => {
+  const candidate = data.nodeStates;
+  if (candidate && isJsonObject(candidate)) {
+    return candidate;
+  }
+  return data;
+};
 
 interface FlowContextType {
   addComponentToFlow: (componentName: string) => Promise<void>;
@@ -143,14 +155,14 @@ export function FlowProvider({ children }: FlowProviderProps) {
       // Only restore additional internal states if they exist in the flow data
       if (flow.data) {
         // Handle backward compatibility - data might be direct nodeStates or structured data
-        const dataToRestore = flow.data.nodeStates || flow.data;
-        
-        if (dataToRestore) {
-          Object.entries(dataToRestore).forEach(([nodeId, nodeState]) => {
-            setNodeInternalState(nodeId, nodeState as Record<string, any>);
-          });
-        }
-        
+        const dataToRestore = extractNodeStates(flow.data);
+
+        Object.entries(dataToRestore).forEach(([nodeId, nodeState]) => {
+          if (isJsonObject(nodeState)) {
+            setNodeInternalState(nodeId, nodeState);
+          }
+        });
+
         // nodeContextData restoration will be handled by enhanced load functions
       }
       

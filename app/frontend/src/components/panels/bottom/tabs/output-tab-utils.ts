@@ -1,3 +1,4 @@
+import type { AgentNodeData } from '@/contexts/node-context';
 import { CheckCircle, Clock, MoreHorizontal, XCircle } from 'lucide-react';
 
 // Helper function to detect if content is JSON
@@ -74,7 +75,7 @@ export function getActionColor(action: string): string {
 }
 
 // Helper function to sort agents in display order
-export function sortAgents(agents: [string, Record<string, unknown>][]): [string, Record<string, unknown>][] {
+export function sortAgents(agents: Array<[string, AgentNodeData]>): Array<[string, AgentNodeData]> {
   return agents.sort(([agentA, dataA], [agentB, dataB]) => {
     // First, sort by agent type priority (Risk Management and Portfolio Management at bottom)
     const getPriority = (agentName: string) => {
@@ -92,8 +93,8 @@ export function sortAgents(agents: [string, Record<string, unknown>][]): [string
     }
     
     // If same priority, sort by timestamp (ascending - oldest first)
-    const timestampA = dataA.timestamp ? new Date(dataA.timestamp as string).getTime() : 0;
-    const timestampB = dataB.timestamp ? new Date(dataB.timestamp as string).getTime() : 0;
+    const timestampA = dataA.timestamp ? new Date(dataA.timestamp).getTime() : 0;
+    const timestampB = dataB.timestamp ? new Date(dataB.timestamp).getTime() : 0;
     
     if (timestampA !== timestampB) {
       return timestampA - timestampB;

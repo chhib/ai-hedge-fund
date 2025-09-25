@@ -1,17 +1,13 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import type { AgentNodeData } from '@/contexts/node-context';
 import { cn } from '@/lib/utils';
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { getActionColor, getDisplayName, getSignalColor, getStatusIcon } from './output-tab-utils';
 import { ReasoningContent } from './reasoning-content';
 
-interface AgentData {
-  status: string;
-  message?: string;
-  ticker?: string;
-  timestamp?: string;
-}
+type AgentDisplayData = Pick<AgentNodeData, 'status' | 'message' | 'ticker' | 'timestamp'>;
 
 interface Decision {
   action?: string;
@@ -32,7 +28,7 @@ interface RegularOutputData {
 }
 
 // Progress Section Component
-function ProgressSection({ sortedAgents }: { sortedAgents: [string, AgentData][] }) {
+function ProgressSection({ sortedAgents }: { sortedAgents: Array<[string, AgentDisplayData]> }) {
   if (sortedAgents.length === 0) return null;
 
   return (
@@ -244,7 +240,7 @@ export function RegularOutput({
   sortedAgents, 
   outputData 
 }: { 
-  sortedAgents: [string, AgentData][]; 
+  sortedAgents: Array<[string, AgentDisplayData]>; 
   outputData: RegularOutputData | null; 
 }) {
   return (

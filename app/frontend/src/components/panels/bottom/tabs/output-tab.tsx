@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { BacktestOutput } from './backtest-output';
 import { sortAgents } from './output-tab-utils';
 import { RegularOutput } from './regular-output';
+import type { AgentNodeData } from '@/contexts/node-context';
 
 interface OutputTabProps {
   className?: string;
@@ -35,10 +36,9 @@ export function OutputTab({ className }: OutputTabProps) {
   const isBacktestRun = agentData && agentData['backtest'];
   
   // Sort agents for display (exclude backtest agent from regular agent list)
+  const agentEntries = Object.entries(agentData) as Array<[string, AgentNodeData]>;
   const sortedAgents = sortAgents(
-    Object.entries(agentData)
-      .filter(([agentId]) => agentId !== 'backtest')
-      .map(([id, data]) => [id, data as unknown as Record<string, unknown>])
+    agentEntries.filter(([agentId]) => agentId !== 'backtest')
   );
   
   return (
@@ -51,7 +51,7 @@ export function OutputTab({ className }: OutputTabProps) {
       {/* Render regular output if not a backtest run */}
       {!isBacktestRun && (
         <RegularOutput 
-          sortedAgents={sortedAgents.map(([id, data]) => [id, data as any])} 
+          sortedAgents={sortedAgents}
           outputData={outputData} 
         />
       )}

@@ -6,6 +6,17 @@ import { flowConnectionManager } from '@/hooks/use-flow-connection';
 import {
   HedgeFundRequest
 } from '@/services/types';
+import type { JsonObject } from '@/types/json';
+
+interface HedgeFundEventPayload extends JsonObject {
+  agent?: string;
+  status?: string;
+  ticker?: string | null;
+  analysis?: string | null;
+  timestamp?: string;
+  data?: OutputNodeData;
+  message?: string;
+}
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -52,7 +63,7 @@ export const api = {
    * @param data The JSON data to save
    * @returns Promise that resolves when the file is saved
    */
-  saveJsonFile: async (filename: string, data: any): Promise<void> => {
+  saveJsonFile: async (filename: string, data: unknown): Promise<void> => {
     try {
       const response = await fetch(`${API_BASE_URL}/storage/save-json`, {
         method: 'POST',
@@ -131,10 +142,12 @@ export const api = {
       // Function to process the stream
       const processStream = async () => {
         try {
-          while (true) {
+          let doneReading = false;
+          while (!doneReading) {
             const { done, value } = await reader.read();
             
             if (done) {
+              doneReading = true;
               break;
             }
             
@@ -156,7 +169,7 @@ export const api = {
                 
                 if (eventTypeMatch && dataMatch) {
                   const eventType = eventTypeMatch[1];
-                  const eventData = JSON.parse(dataMatch[1]);
+                const eventData = JSON.parse(dataMatch[1]) as HedgeFundEventPayload;
                   
                   console.log(`Parsed ${eventType} event:`, eventData);
                   
@@ -256,8 +269,8 @@ export const api = {
               });
             }
           }
-        } catch (error: any) { // Type assertion for error
-          if (error.name !== 'AbortError') {
+        } catch (error: unknown) {
+          if (!(error instanceof Error) || error.name !== 'AbortError') {
             console.error('Error reading SSE stream:', error);
             // Mark all agents as error when there's a connection error
             nodeContext.updateAgentNodes(flowId, getAgentIds(), 'ERROR');
@@ -266,7 +279,7 @@ export const api = {
             if (flowId) {
               flowConnectionManager.setConnection(flowId, {
                 state: 'error',
-                error: error.message || 'Connection error',
+                error: error instanceof Error ? error.message : 'Connection error',
                 abortController: null,
               });
             }
@@ -277,8 +290,8 @@ export const api = {
       // Start processing the stream
       processStream();
     })
-    .catch((error: any) => { // Type assertion for error
-      if (error.name !== 'AbortError') {
+    .catch((error: unknown) => {
+      if (!(error instanceof Error) || error.name !== 'AbortError') {
         console.error('SSE connection error:', error);
         // Mark all agents as error when there's a connection error
         nodeContext.updateAgentNodes(flowId, getAgentIds(), 'ERROR');
@@ -287,7 +300,7 @@ export const api = {
         if (flowId) {
           flowConnectionManager.setConnection(flowId, {
             state: 'error',
-            error: error.message || 'Connection failed',
+            error: error instanceof Error ? error.message : 'Connection failed',
             abortController: null,
           });
         }
