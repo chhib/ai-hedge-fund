@@ -114,8 +114,7 @@ function BacktestProgress({ agentData }: { agentData: AgentData }) {
   
   if (!backtestAgent) return null;
   
-  // Get the latest backtest result from the backtest results array
-  const backtestResults = backtestAgent.backtestResults || [];
+  // Backtest results are processed via state changes and callbacks
   
   return (
     <Card className="bg-transparent mb-4">

@@ -28,8 +28,8 @@ export function OutputTab({ className }: OutputTabProps) {
   const agentData = getAgentNodeDataForFlow(currentFlowId?.toString() || null) || {};
   const outputData = getOutputNodeDataForFlow(currentFlowId?.toString() || null);
   
-  // Use refreshKey to trigger data refresh
-  const _ = refreshKey; // Force dependency on refreshKey for fresh data
+  // refreshKey used to ensure periodic data refresh
+  void refreshKey; // Mark as intentionally unused in this context
   
   // Detect if this is a backtest run
   const isBacktestRun = agentData && agentData['backtest'];
