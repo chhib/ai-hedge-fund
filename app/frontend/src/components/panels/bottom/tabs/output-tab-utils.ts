@@ -74,7 +74,7 @@ export function getActionColor(action: string): string {
 }
 
 // Helper function to sort agents in display order
-export function sortAgents(agents: [string, any][]): [string, any][] {
+export function sortAgents(agents: [string, Record<string, unknown>][]): [string, Record<string, unknown>][] {
   return agents.sort(([agentA, dataA], [agentB, dataB]) => {
     // First, sort by agent type priority (Risk Management and Portfolio Management at bottom)
     const getPriority = (agentName: string) => {

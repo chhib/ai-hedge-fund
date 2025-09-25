@@ -6,8 +6,33 @@ import { useEffect, useState } from 'react';
 import { getActionColor, getDisplayName, getSignalColor, getStatusIcon } from './output-tab-utils';
 import { ReasoningContent } from './reasoning-content';
 
+interface AgentData {
+  status: string;
+  message?: string;
+  ticker?: string;
+  timestamp?: string;
+}
+
+interface Decision {
+  action?: string;
+  quantity?: number;
+  confidence?: number;
+  reasoning?: string;
+}
+
+interface AnalystSignal {
+  signal?: string;
+  confidence?: number;
+  reasoning?: string;
+}
+
+interface RegularOutputData {
+  decisions: Record<string, Decision>;
+  analyst_signals?: Record<string, Record<string, AnalystSignal>>;
+}
+
 // Progress Section Component
-function ProgressSection({ sortedAgents }: { sortedAgents: [string, any][] }) {
+function ProgressSection({ sortedAgents }: { sortedAgents: [string, AgentData][] }) {
   if (sortedAgents.length === 0) return null;
 
   return (
@@ -46,7 +71,7 @@ function ProgressSection({ sortedAgents }: { sortedAgents: [string, any][] }) {
 }
 
 // Summary Section Component
-function SummarySection({ outputData }: { outputData: any }) {
+function SummarySection({ outputData }: { outputData: RegularOutputData | null }) {
   if (!outputData) return null;
 
   return (
@@ -65,7 +90,7 @@ function SummarySection({ outputData }: { outputData: any }) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {Object.entries(outputData.decisions).map(([ticker, decision]: [string, any]) => (
+            {Object.entries(outputData.decisions).map(([ticker, decision]: [string, Decision]) => (
               <TableRow key={ticker}>
                 <TableCell className="font-medium">{ticker}</TableCell>
                 <TableCell>
@@ -85,7 +110,7 @@ function SummarySection({ outputData }: { outputData: any }) {
 }
 
 // Analysis Results Section Component
-function AnalysisResultsSection({ outputData }: { outputData: any }) {
+function AnalysisResultsSection({ outputData }: { outputData: RegularOutputData | null }) {
   // Always call hooks at the top of the function
   const [selectedTicker, setSelectedTicker] = useState<string>('');
   
@@ -139,11 +164,11 @@ function AnalysisResultsSection({ outputData }: { outputData: any }) {
                   </TableHeader>
                                      <TableBody>
                      {Object.entries(outputData.analyst_signals || {})
-                       .filter(([agent, signals]: [string, any]) => 
+                       .filter(([agent, signals]: [string, Record<string, AnalystSignal>]) => 
                          ticker in signals && !agent.includes("risk_management")
                        )
                        .sort(([agentA], [agentB]) => agentA.localeCompare(agentB))
-                       .map(([agent, signals]: [string, any]) => {
+                       .map(([agent, signals]: [string, Record<string, AnalystSignal>]) => {
                          const signal = signals[ticker];
                          const signalType = signal.signal?.toUpperCase() || 'UNKNOWN';
                          const signalColor = getSignalColor(signalType);
@@ -217,8 +242,8 @@ export function RegularOutput({
   sortedAgents, 
   outputData 
 }: { 
-  sortedAgents: [string, any][]; 
-  outputData: any; 
+  sortedAgents: [string, AgentData][]; 
+  outputData: RegularOutputData | null; 
 }) {
   return (
     <>

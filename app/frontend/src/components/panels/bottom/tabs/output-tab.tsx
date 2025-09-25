@@ -13,20 +13,23 @@ interface OutputTabProps {
 export function OutputTab({ className }: OutputTabProps) {
   const { currentFlowId } = useFlowContext();
   const { getAgentNodeDataForFlow, getOutputNodeDataForFlow } = useNodeContext();
-  const [updateTrigger, setUpdateTrigger] = useState(0);
-  
-  // Get current flow data
-  const agentData = getAgentNodeDataForFlow(currentFlowId?.toString() || null);
-  const outputData = getOutputNodeDataForFlow(currentFlowId?.toString() || null);
+  const [refreshKey, setRefreshKey] = useState(0);
   
   // Force re-render periodically to show real-time updates
   useEffect(() => {
     const interval = setInterval(() => {
-      setUpdateTrigger(prev => prev + 1);
+      setRefreshKey(prev => prev + 1);
     }, 1000);
     
     return () => clearInterval(interval);
   }, []);
+  
+  // Get current flow data (refreshKey ensures component updates with fresh data)
+  const agentData = getAgentNodeDataForFlow(currentFlowId?.toString() || null) || {};
+  const outputData = getOutputNodeDataForFlow(currentFlowId?.toString() || null);
+  
+  // Use refreshKey to trigger data refresh
+  const _ = refreshKey; // Force dependency on refreshKey for fresh data
   
   // Detect if this is a backtest run
   const isBacktestRun = agentData && agentData['backtest'];

@@ -4,9 +4,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { cn } from '@/lib/utils';
 import { MoreHorizontal } from 'lucide-react';
 import { getActionColor } from './output-tab-utils';
-import type { MarketContextSnapshot } from '@/services/types';
+import type { MarketContextSnapshot, BacktestDayResult, BacktestPerformanceMetrics } from '@/services/types';
 
-type CompanyEventItem = {
+interface CompanyEventItem {
   amount?: number | null;
   category?: string;
   currency?: string | null;
@@ -16,9 +16,9 @@ type CompanyEventItem = {
   report_type?: string | null;
   title?: string | null;
   ticker?: string | null;
-};
+}
 
-type InsiderTradeItem = {
+interface InsiderTradeItem {
   filing_date?: string | null;
   issuer?: string | null;
   name?: string | null;
@@ -31,7 +31,7 @@ type InsiderTradeItem = {
   transaction_price_per_share?: number | null;
   transaction_shares?: number | null;
   transaction_value?: number | null;
-};
+}
 
 const hasContextEntries = (record?: Record<string, Array<Record<string, unknown>>> | null) => {
   if (!record) return false;
@@ -98,15 +98,24 @@ const inferTradeName = (trade: InsiderTradeItem) => {
   return '--';
 };
 
+interface BacktestAgent {
+  message?: string;
+  status?: string;
+  backtestResults?: BacktestDayResult[];
+}
+
+interface AgentData {
+  backtest?: BacktestAgent;
+}
+
 // Component for displaying backtest progress
-function BacktestProgress({ agentData }: { agentData: Record<string, any> }) {
-  const backtestAgent = agentData['backtest'];
+function BacktestProgress({ agentData }: { agentData: AgentData }) {
+  const backtestAgent = agentData.backtest;
   
   if (!backtestAgent) return null;
   
   // Get the latest backtest result from the backtest results array
   const backtestResults = backtestAgent.backtestResults || [];
-  const latestBacktestResult = backtestResults.length > 0 ? backtestResults[backtestResults.length - 1] : null;
   
   return (
     <Card className="bg-transparent mb-4">
@@ -128,8 +137,8 @@ function BacktestProgress({ agentData }: { agentData: Record<string, any> }) {
 }
 
 // Render most recent calendar + insider context while the stream is active
-function BacktestMarketContextLive({ agentData }: { agentData: Record<string, any> }) {
-  const backtestAgent = agentData['backtest'];
+function BacktestMarketContextLive({ agentData }: { agentData: AgentData }) {
+  const backtestAgent = agentData.backtest;
 
   if (!backtestAgent || !Array.isArray(backtestAgent.backtestResults) || backtestAgent.backtestResults.length === 0) {
     return null;
@@ -263,9 +272,37 @@ function BacktestMarketContextLive({ agentData }: { agentData: Record<string, an
   );
 }
 
+interface TickerRow {
+  type: 'ticker';
+  date: string;
+  ticker: string;
+  action: string;
+  quantity: number;
+  price: number;
+  shares_owned: number;
+  long_shares: number;
+  short_shares: number;
+  position_value: number;
+  bullish_count: number;
+  bearish_count: number;
+  neutral_count: number;
+}
+
+interface SummaryRow {
+  type: 'summary';
+  date: string;
+  portfolio_value: number;
+  cash: number;
+  portfolio_return: number;
+  total_position_value: number;
+  performance_metrics: BacktestPerformanceMetrics;
+}
+
+type TableRow = TickerRow | SummaryRow;
+
 // Component for displaying backtest trading table (similar to CLI)
-function BacktestTradingTable({ agentData }: { agentData: Record<string, any> }) {
-  const backtestAgent = agentData['backtest'];
+function BacktestTradingTable({ agentData }: { agentData: AgentData }) {
+  const backtestAgent = agentData.backtest;
 
   // console.log("backtestAgent", backtestAgent);
   
@@ -281,12 +318,12 @@ function BacktestTradingTable({ agentData }: { agentData: Record<string, any> })
   }
   
   // Build table rows similar to CLI format
-  const tableRows: any[] = [];
+  const tableRows: TableRow[] = [];
   
-  backtestResults.forEach((backtestResult: any) => {    
+  backtestResults.forEach((backtestResult: BacktestDayResult) => {    
     // Add ticker rows for this period
     if (backtestResult.ticker_details) {
-      backtestResult.ticker_details.forEach((ticker: any) => {
+      backtestResult.ticker_details.forEach((ticker: Record<string, unknown>) => {
         tableRows.push({
           type: 'ticker',
           date: backtestResult.date,
@@ -346,7 +383,7 @@ function BacktestTradingTable({ agentData }: { agentData: Record<string, any> })
               </TableRow>
             </TableHeader>
             <TableBody>
-              {recentRows.map((row: any, idx: number) => {
+              {recentRows.map((row: TableRow, idx: number) => {
                 if (row.type === 'ticker') {
                   return (
                     <TableRow key={idx}>
@@ -380,8 +417,23 @@ function BacktestTradingTable({ agentData }: { agentData: Record<string, any> })
   );
 }
 
+interface BacktestOutputData {
+  performance_metrics?: BacktestPerformanceMetrics;
+  final_portfolio?: {
+    cash: number;
+    margin_used: number;
+    positions: Record<string, {
+      long: number;
+      short: number;
+      long_cost_basis: number;
+      short_cost_basis: number;
+    }>;
+  };
+  total_days?: number;
+}
+
 // Component for displaying backtest results
-function BacktestResults({ outputData }: { outputData: any }) {
+function BacktestResults({ outputData }: { outputData: BacktestOutputData | null }) {
   if (!outputData) {
     return null;
   }
@@ -505,7 +557,7 @@ function BacktestResults({ outputData }: { outputData: any }) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {Object.entries(final_portfolio.positions).map(([ticker, position]: [string, any]) => (
+                {Object.entries(final_portfolio.positions).map(([ticker, position]: [string, { long: number; short: number; long_cost_basis: number; short_cost_basis: number }]) => (
                   <TableRow key={ticker}>
                     <TableCell className="font-medium">{ticker}</TableCell>
                     <TableCell className={cn(position.long > 0 ? "text-green-500" : "text-muted-foreground")}>
@@ -527,8 +579,12 @@ function BacktestResults({ outputData }: { outputData: any }) {
   );
 }
 
+interface BacktestHistoryOutputData {
+  market_context?: MarketContextSnapshot[];
+}
+
 // Summarize the historical context snapshots shipped with the completed run
-function BacktestMarketContextHistory({ outputData }: { outputData: any }) {
+function BacktestMarketContextHistory({ outputData }: { outputData: BacktestHistoryOutputData | null }) {
   const snapshots = (outputData?.market_context ?? []) as MarketContextSnapshot[];
 
   if (!Array.isArray(snapshots) || snapshots.length === 0) {
@@ -722,8 +778,8 @@ function BacktestMarketContextHistory({ outputData }: { outputData: any }) {
 }
 
 // Component for displaying real-time backtest performance
-function BacktestPerformanceMetrics({ agentData }: { agentData: Record<string, any> }) {
-  const backtestAgent = agentData['backtest'];
+function BacktestPerformanceMetrics({ agentData }: { agentData: AgentData }) {
+  const backtestAgent = agentData.backtest;
   
   if (!backtestAgent || !backtestAgent.backtestResults) return null;
   
@@ -741,7 +797,7 @@ function BacktestPerformanceMetrics({ agentData }: { agentData: Record<string, a
   const totalReturn = ((currentValue - initialValue) / initialValue) * 100;
   
   // Calculate win rate (periods with positive returns)
-  const periodReturns = backtestResults.slice(1).map((period: any, idx: number) => {
+  const periodReturns = backtestResults.slice(1).map((period: BacktestDayResult, idx: number) => {
     const prevPeriod = backtestResults[idx];
     return ((period.portfolio_value - prevPeriod.portfolio_value) / prevPeriod.portfolio_value) * 100;
   });
@@ -753,7 +809,7 @@ function BacktestPerformanceMetrics({ agentData }: { agentData: Record<string, a
   let maxDrawdown = 0;
   let peak = initialValue;
   
-  backtestResults.forEach((period: any) => {
+  backtestResults.forEach((period: BacktestDayResult) => {
     if (period.portfolio_value > peak) {
       peak = period.portfolio_value;
     }
@@ -818,21 +874,23 @@ function BacktestPerformanceMetrics({ agentData }: { agentData: Record<string, a
   );
 }
 
+interface BacktestOutputProps {
+  agentData: AgentData;
+  outputData: BacktestOutputData & BacktestHistoryOutputData | null;
+}
+
 // Main component for backtest output
 export function BacktestOutput({ 
   agentData, 
   outputData 
-}: { 
-  agentData: Record<string, any>; 
-  outputData: any; 
-}) {
+}: BacktestOutputProps) {
   return (
     <>
       <BacktestProgress agentData={agentData} />
       {agentData && <BacktestMarketContextLive agentData={agentData} />}
       {outputData && <BacktestResults outputData={outputData} />}
       {outputData && <BacktestMarketContextHistory outputData={outputData} />}
-      {agentData && agentData['backtest'] && (
+      {agentData && agentData.backtest && (
         <BacktestPerformanceMetrics agentData={agentData} />
       )}
       <BacktestTradingTable agentData={agentData} />

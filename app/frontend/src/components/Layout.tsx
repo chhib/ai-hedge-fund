@@ -80,25 +80,8 @@ function LayoutContent({ children }: { children: ReactNode }) {
     };
   };
 
-  // Calculate main content positioning accounting for tab bar height
-  const getMainContentStyle = () => {
-    const tabBarHeight = 40; // Approximate tab bar height
-    let top = tabBarHeight;
-    let bottom = 0;
-    
-    if (!isBottomCollapsed) {
-      bottom = bottomPanelHeight;
-    }
-    
-    return {
-      top: `${top}px`,
-      bottom: `${bottom}px`,
-      left: '0',
-      right: '0',
-      width: 'auto',
-      height: 'auto',
-    };
-  };
+  // Main content positioning constants
+  const tabBarHeight = 40; // Tab bar height for positioning
 
   return (
     <div className="flex h-screen w-screen overflow-hidden relative bg-background">
