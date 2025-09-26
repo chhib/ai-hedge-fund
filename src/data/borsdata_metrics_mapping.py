@@ -45,29 +45,49 @@ FINANCIAL_METRICS_MAPPING: dict[str, MetricMapping] = {
         "default_report_type": "r12",
     },
     "price_to_earnings_ratio": {
-        "source": "kpi",
+        "source": "derived",
         "metadata_match": ["P/E", "Price to Earnings"],
         "default_report_type": "r12",
+        "derivation": "price_divided_by_eps",
+        "dependencies": ["latest_close_price", "earnings_per_share"],
+        "notes": "Calculated as current price divided by earnings per share (KPI ID 6)",
     },
     "price_to_book_ratio": {
-        "source": "kpi",
+        "source": "derived",
         "metadata_match": ["P/B", "Price to Book"],
         "default_report_type": "r12",
+        "derivation": "price_divided_by_book_value",
+        "dependencies": ["latest_close_price", "book_value_per_share"],
+        "notes": "Calculated as current price divided by book value per share (KPI ID 8)",
     },
     "price_to_sales_ratio": {
-        "source": "kpi",
+        "source": "derived",
         "metadata_match": ["P/S", "Price to Sales"],
         "default_report_type": "r12",
+        "derivation": "price_divided_by_revenue",
+        "dependencies": ["latest_close_price", "revenue_per_share"],
+        "notes": "Calculated as current price divided by revenue per share (KPI ID 5)",
     },
     "enterprise_value_to_ebitda_ratio": {
         "source": "kpi",
         "metadata_match": ["EV/EBITDA"],
         "default_report_type": "r12",
     },
+    "enterprise_value_to_ebit_ratio": {
+        "source": "kpi",
+        "metadata_match": ["EV/EBIT"],
+        "default_report_type": "r12",
+    },
     "enterprise_value_to_revenue_ratio": {
         "source": "kpi",
         "metadata_match": ["EV/Sales", "EV/Revenue"],
         "default_report_type": "r12",
+    },
+    "ev_to_ebit": {
+        "source": "kpi",
+        "metadata_match": ["EV/EBIT"],
+        "default_report_type": "r12",
+        "notes": "Alias for enterprise_value_to_ebit_ratio, used by Michael Burry agent",
     },
     "free_cash_flow_yield": {
         "source": "kpi",
@@ -246,18 +266,26 @@ FINANCIAL_METRICS_MAPPING: dict[str, MetricMapping] = {
     },
     "earnings_per_share": {
         "source": "kpi",
-        "metadata_match": ["Earnings per Share", "EPS"],
-        "default_report_type": "quarter",
+        "metadata_match": ["Earnings/share"],
+        "default_report_type": "r12",
+        "notes": "Available as KPI ID 6",
     },
     "book_value_per_share": {
         "source": "kpi",
-        "metadata_match": ["Book Value per Share"],
-        "default_report_type": "year",
+        "metadata_match": ["Book value/share"],
+        "default_report_type": "r12",
+        "notes": "Available as KPI ID 8",
     },
     "free_cash_flow_per_share": {
         "source": "kpi",
         "metadata_match": ["Free Cash Flow per Share", "FCF/Share"],
         "default_report_type": "r12",
+    },
+    "revenue_per_share": {
+        "source": "kpi",
+        "metadata_match": ["Revenue/share"],
+        "default_report_type": "r12",
+        "notes": "Available as KPI ID 5",
     },
 }
 
@@ -282,6 +310,29 @@ DERIVED_REPORT_DEPENDENCIES = {
     "latest_close_price": {
         "statement": "price",
         "keys": ["c"],
+    },
+    "revenue_per_share": {
+        "statement": "kpi",
+        "kpi_id": 5,
+        "keys": ["Revenue/share"],
+    },
+    "price_divided_by_eps": {
+        "statement": "calculated",
+        "calculation": "divide",
+        "numerator": "latest_close_price",
+        "denominator": "earnings_per_share",
+    },
+    "price_divided_by_book_value": {
+        "statement": "calculated",
+        "calculation": "divide",
+        "numerator": "latest_close_price",
+        "denominator": "book_value_per_share",
+    },
+    "price_divided_by_revenue": {
+        "statement": "calculated",
+        "calculation": "divide",
+        "numerator": "latest_close_price",
+        "denominator": "revenue_per_share",
     },
 }
 """Helper hints for translating Börsdata report payload keys into derived metrics."""
