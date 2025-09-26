@@ -122,31 +122,41 @@ poetry install
 
 The system supports both Nordic/European and global company analysis:
 
+**Important**: Use exact ticker symbols as they appear in Börsdata. Nordic tickers with spaces (like "HM B", "MTG B") must be quoted.
+
 **Nordic/European companies** (via Börsdata Nordic instruments):
 ```bash
-poetry run python src/main.py --tickers TELIA,VOLV-B,ADVT
+# Swedish companies (note the space in ticker symbols like "HM B", "MTG B")
+poetry run python src/main.py --tickers "HM B,MTG B,TELIA,ADVT"
+
+# Norwegian/Danish companies
+poetry run python src/main.py --tickers "FRO,ZAL,TRMD A"
 ```
 
 **Global companies** (via Börsdata Global instruments):
 ```bash
-poetry run python src/main.py --tickers-global AAPL,MSFT,NVDA
+# US tech stocks
+poetry run python src/main.py --tickers-global AAPL,MSFT,NVDA,META,TSLA
+
+# Mixed global companies
+poetry run python src/main.py --tickers-global AAPL,UBI,BABA
 ```
 
 **Mixed analysis** (both Nordic and global companies in one command):
 ```bash
-poetry run python src/main.py --tickers TELIA,ADVT --tickers-global AAPL,META
+poetry run python src/main.py --tickers "HM B,TELIA" --tickers-global "AAPL,META"
 ```
 
 **Quick test mode** (uses gpt-5 with fundamentals, technical, and sentiment analysts):
 ```bash
 # Test with Nordic company
-poetry run python src/main.py --tickers ADVT --test
+poetry run python src/main.py --tickers "HM B" --test
 
 # Test with global company
 poetry run python src/main.py --tickers-global AAPL --test
 
 # Test with mixed tickers
-poetry run python src/main.py --tickers TELIA,ADVT --tickers-global META,AAPL --test
+poetry run python src/main.py --tickers "BAHN B,TELIA" --tickers-global "AAPL,TSLA" --test
 ```
 
 You can also specify a `--ollama` flag to run the AI hedge fund using local LLMs.

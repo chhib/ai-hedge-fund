@@ -13,13 +13,17 @@ from src.data.borsdata_client import BorsdataAPIError, BorsdataClient
 from src.data.borsdata_kpis import FinancialMetricsAssembler
 from src.data.borsdata_reports import LineItemAssembler
 
-# Global flag for using global instruments
-_use_global_instruments = False
+# Global mapping for ticker markets
+_ticker_markets = {}
 
-def set_use_global_instruments(use_global: bool) -> None:
-    """Set whether to use global instruments endpoint."""
-    global _use_global_instruments
-    _use_global_instruments = use_global
+def set_ticker_markets(ticker_markets: dict[str, str]) -> None:
+    """Set the market mapping for each ticker (Nordic/Global)."""
+    global _ticker_markets
+    _ticker_markets = ticker_markets or {}
+
+def get_use_global_for_ticker(ticker: str) -> bool:
+    """Get whether to use global endpoint for a specific ticker."""
+    return _ticker_markets.get(ticker, "Nordic") == "Global"
 
 # Global cache instance
 _cache = get_cache()
@@ -78,7 +82,7 @@ def get_prices(ticker: str, start_date: str, end_date: str, api_key: str = None)
             start_date=start_date,
             end_date=end_date,
             api_key=api_key,
-            use_global=_use_global_instruments,
+            use_global=get_use_global_for_ticker(ticker),
         )
     except BorsdataAPIError as exc:
         # Log the error for debugging, but don't crash the agent
@@ -146,7 +150,7 @@ def get_financial_metrics(
             period=period,
             limit=limit,
             api_key=api_key,
-            use_global=_use_global_instruments,
+            use_global=get_use_global_for_ticker(ticker),
         )
     except BorsdataAPIError as exc:
         # Log the error for debugging, but don't crash the agent
@@ -185,7 +189,7 @@ def search_line_items(
             period=period,
             limit=limit,
             api_key=api_key,
-            use_global=_use_global_instruments,
+            use_global=get_use_global_for_ticker(ticker),
         )
     except BorsdataAPIError as exc:
         # Log the error for debugging, but don't crash the agent
@@ -214,7 +218,7 @@ def get_insider_trades(
     client = _get_borsdata_client(api_key)
 
     try:
-        instrument = client.get_instrument(ticker, api_key=api_key, use_global=_use_global_instruments)
+        instrument = client.get_instrument(ticker, api_key=api_key, use_global=get_use_global_for_ticker(ticker))
     except BorsdataAPIError as exc:
         # Log the error for debugging, but don't crash the agent
         print(f"Could not fetch instrument for {ticker}: {exc}")
@@ -335,7 +339,7 @@ def get_company_events(
     client = _get_borsdata_client(api_key)
 
     try:
-        instrument = client.get_instrument(ticker, api_key=api_key, use_global=_use_global_instruments)
+        instrument = client.get_instrument(ticker, api_key=api_key, use_global=get_use_global_for_ticker(ticker))
     except BorsdataAPIError as exc:
         # Log the error for debugging, but don't crash the agent
         print(f"Could not fetch instrument for {ticker}: {exc}")

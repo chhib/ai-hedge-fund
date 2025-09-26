@@ -5,7 +5,7 @@ from tabulate import tabulate
 
 from .analysts import ANALYST_ORDER
 from src.data.borsdata_client import BorsdataClient, BorsdataAPIError
-from src.tools.api import _use_global_instruments
+from src.tools.api import get_use_global_for_ticker
 import os
 import json
 
@@ -15,7 +15,7 @@ def get_company_name(ticker: str) -> str:
     try:
         client = BorsdataClient()
         api_key = os.environ.get("BORSDATA_API_KEY")
-        instrument = client.get_instrument(ticker, api_key=api_key, use_global=_use_global_instruments)
+        instrument = client.get_instrument(ticker, api_key=api_key, use_global=get_use_global_for_ticker(ticker))
         
         # Try different possible field names for company name
         name = instrument.get("name") or instrument.get("companyName") or instrument.get("longName") or instrument.get("shortName")

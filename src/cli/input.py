@@ -214,6 +214,7 @@ class CLIInputs:
     initial_cash: float
     margin_requirement: float
     use_global: bool = False
+    ticker_markets: dict[str, str] = None  # Map ticker -> "Nordic" or "Global"
     show_reasoning: bool = False
     show_agent_graph: bool = False
     raw_args: Optional[argparse.Namespace] = None
@@ -266,6 +267,13 @@ def parse_cli_inputs(
     tickers = regular_tickers + global_tickers
     use_global = bool(global_tickers)
     
+    # Create ticker to market mapping
+    ticker_markets = {}
+    for ticker in regular_tickers:
+        ticker_markets[ticker] = "Nordic"
+    for ticker in global_tickers:
+        ticker_markets[ticker] = "Global"
+    
     # Validate that at least one ticker is provided if required
     if require_tickers and not tickers:
         parser.error("At least one of --tickers or --tickers-global must be provided.")
@@ -296,6 +304,7 @@ def parse_cli_inputs(
         initial_cash=getattr(args, "initial_cash", 100000.0),
         margin_requirement=getattr(args, "margin_requirement", 0.0),
         use_global=use_global,
+        ticker_markets=ticker_markets,
         show_reasoning=getattr(args, "show_reasoning", False),
         show_agent_graph=getattr(args, "show_agent_graph", False),
         raw_args=args,

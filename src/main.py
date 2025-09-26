@@ -12,6 +12,7 @@ from src.utils.display import print_trading_output
 from src.utils.analysts import ANALYST_ORDER, get_analyst_nodes
 from src.utils.progress import progress
 from src.utils.visualize import save_graph_as_png
+from src.tools.api import set_ticker_markets
 from src.cli.input import (
     parse_cli_inputs,
 )
@@ -142,6 +143,9 @@ if __name__ == "__main__":
     tickers = inputs.tickers
     selected_analysts = inputs.selected_analysts
     
+    # Set ticker market mappings for proper API endpoint selection
+    if inputs.ticker_markets:
+        set_ticker_markets(inputs.ticker_markets)
 
     # Construct portfolio here
     portfolio = {
