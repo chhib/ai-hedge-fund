@@ -1,0 +1,42 @@
+{
+  "title": "Börsdata KPI Screener History List",
+  "source": "https://github.com/Borsdata-Sweden/API/wiki/Screener-history-kpi-list",
+  "description": "Historical KPI data available for various time periods including quarterly and yearly data",
+  "kpis": [
+    {
+      "id": 6,
+      "name": "Earnings/share",
+      "periods": ["Year1", "Year2", "Year3", "Year4", "Year5", "Year6", "Year7", "Year8", "Year9", "Year10", "RQ1", "RQ2", "RQ3", "RQ4", "RQ5", "RQ6", "RQ7", "RQ8", "RQ9", "RQ10", "Q1", "Q2", "Q3", "Q4", "Q5", "Q6", "Q7", "Q8", "Q9", "Q10"]
+    },
+    {
+      "id": 5,
+      "name": "Revenue/share",
+      "periods": ["Year1", "Year2", "Year3", "Year4", "Year5", "Year6", "Year7", "Year8", "Year9", "Year10", "RQ1", "RQ2", "RQ3", "RQ4", "RQ5", "RQ6", "RQ7", "RQ8", "RQ9", "RQ10", "Q1", "Q2", "Q3", "Q4", "Q5", "Q6", "Q7", "Q8", "Q9", "Q10"]
+    },
+    {
+      "id": 8,
+      "name": "Book value/share",
+      "periods": ["Year1", "Year2", "Year3", "Year4", "Year5", "Year6", "Year7", "Year8", "Year9", "Year10", "Q1", "Q2", "Q3", "Q4", "Q5", "Q6", "Q7", "Q8", "Q9", "Q10"]
+    },
+    {
+      "id": 7,
+      "name": "Dividend",
+      "periods": ["Year1", "Year2", "Year3", "Year4", "Year5", "Year6", "Year7", "Year8", "Year9", "Year10", "Q1", "Q2", "Q3", "Q4", "Q5", "Q6", "Q7", "Q8", "Q9", "Q10"]
+    },
+    {
+      "id": 9,
+      "name": "Number of shares",
+      "periods": ["Year1", "Year2", "Year3", "Year4", "Year5", "Year6", "Year7", "Year8", "Year9", "Year10", "Q1", "Q2", "Q3", "Q4", "Q5", "Q6", "Q7", "Q8", "Q9", "Q10"]
+    },
+    {
+      "id": 28,
+      "name": "Free Cash Flow/share",
+      "periods": ["Year1", "Year2", "Year3", "Year4", "Year5", "Year6", "Year7", "Year8", "Year9", "Year10", "RQ1", "RQ2", "RQ3", "RQ4", "RQ5", "RQ6", "RQ7", "RQ8", "RQ9", "RQ10", "Q1", "Q2", "Q3", "Q4", "Q5", "Q6", "Q7", "Q8", "Q9", "Q10"]
+    },
+    {
+      "id": 29,
+      "name": "Cash Flow from Operations/share",
+      "periods": ["Year1", "Year2", "Year3", "Year4", "Year5", "Year6", "Year7", "Year8", "Year9", "Year10", "RQ1", "RQ2", "RQ3", "RQ4", "RQ5", "RQ6", "RQ7", "RQ8", "RQ9", "RQ10", "Q1", "Q2", "Q3", "Q4", "Q5", "Q6", "Q7", "Q8", "Q9", "Q10"]
+    }
+  ]
+}

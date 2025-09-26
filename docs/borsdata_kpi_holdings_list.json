@@ -1,0 +1,47 @@
+{
+  "title": "Börsdata KPI Holdings List",
+  "source": "https://github.com/Borsdata-Sweden/API/wiki/Kpi-Holdings-List",
+  "description": "KPI Holdings metrics for analyzing institutional and insider trading activity",
+  "kpi_holdings": [
+    {
+      "kpiId": 110,
+      "name": "Holdings Activity",
+      "calcGroups": [
+        "Buyers", "Sellers", "BuyersDiffSellers", "Buys", "Sells", 
+        "BuyesDiffSells", "SharesBuy", "SharesSell", "SharesNet", 
+        "ValueBuy", "ValueSell", "ValueNet"
+      ],
+      "periods": ["1week", "2week", "1month", "3month", "6month", "1year", "2year"],
+      "description": "Institutional holdings activity including number of buyers/sellers and transaction volumes"
+    },
+    {
+      "kpiId": 144,
+      "name": "Holdings Amount",
+      "calcGroups": ["Amount"],
+      "periods": ["1week", "1month", "3month", "6month", "1year", "2year"],
+      "description": "Total amount of holdings"
+    },
+    {
+      "kpiId": 145,
+      "name": "Demographics",
+      "calcGroups": [
+        "MembersCount", "AverageAge", "MalesPct", "FemalesPct", 
+        "EngagementPct", "MembersPctSe", "MembersPctFi", 
+        "MembersPctDe", "MembersPctNo"
+      ],
+      "periods": ["Today"],
+      "description": "Demographic information about retail shareholders"
+    },
+    {
+      "kpiId": 146,
+      "name": "Short Interest",
+      "calcGroups": [
+        "ShortsRatio", "Holders", "SumDtc", "AvgDtc", 
+        "SumCapital", "AvgCapital", "SumValue", "AvgValue", 
+        "LastTranDate"
+      ],
+      "periods": ["1week", "1month", "3month", "6month", "last"],
+      "description": "Short selling activity and statistics including days to cover and capital values"
+    }
+  ]
+}

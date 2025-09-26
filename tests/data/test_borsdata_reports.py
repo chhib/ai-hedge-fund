@@ -75,7 +75,7 @@ class StubBorsdataClient:
             ]
         }
 
-    def get_instrument(self, ticker: str, *, api_key=None, force_refresh: bool = False):
+    def get_instrument(self, ticker: str, *, api_key=None, force_refresh: bool = False, use_global: bool = False):
         return self.instrument
 
     def get_kpi_metadata(self, *, api_key=None, force_refresh: bool = False):

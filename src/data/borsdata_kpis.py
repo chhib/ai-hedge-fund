@@ -6,13 +6,13 @@ from typing import Any, Dict, Iterable, Optional, Tuple
 
 from .borsdata_client import BorsdataAPIError, BorsdataClient
 from .borsdata_common import (
-    SUMMARY_LIMIT_MULTIPLIER,
-    PeriodRecord,
     build_period_records,
     map_period_to_report_type,
     normalise_name,
     parse_iso_date,
+    PeriodRecord,
     safe_float,
+    SUMMARY_LIMIT_MULTIPLIER,
 )
 from .borsdata_metrics_mapping import FINANCIAL_METRICS_MAPPING
 from .models import FinancialMetrics
@@ -170,11 +170,17 @@ class FinancialMetricsAssembler:
         metric_to_kpi: Dict[str, Optional[int]] = {}
         for metric_name, config in FINANCIAL_METRICS_MAPPING.items():
             kpi_id: Optional[int] = None
-            for candidate in config.get("metadata_match", []) or []:
-                candidate_id = lookup.get(normalise_name(candidate))
-                if candidate_id is not None:
-                    kpi_id = candidate_id
-                    break
+            # First check for explicit kpi_id in config
+            explicit_kpi_id = config.get("kpi_id")
+            if explicit_kpi_id is not None:
+                kpi_id = explicit_kpi_id
+            else:
+                # Fall back to metadata matching
+                for candidate in config.get("metadata_match", []) or []:
+                    candidate_id = lookup.get(normalise_name(candidate))
+                    if candidate_id is not None:
+                        kpi_id = candidate_id
+                        break
             metric_to_kpi[metric_name] = kpi_id
         return metric_to_kpi
 
@@ -328,7 +334,7 @@ class FinancialMetricsAssembler:
             if not report:
                 return None
             shares = safe_float(report.get("number_Of_Shares") or report.get("shares_outstanding") or report.get("sharesOutstanding"))
-            
+
             if shares is None:
                 return None
 

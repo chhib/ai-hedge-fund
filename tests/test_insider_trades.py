@@ -96,7 +96,7 @@ def test_get_insider_trades_transforms_and_filters(mock_get_client: Mock, mock_c
     assert second.title == "Chief Financial Officer"
 
     mock_get_client.assert_called_once_with("token")
-    stub_client.get_instrument.assert_called_once_with("LUG", api_key="token")
+    stub_client.get_instrument.assert_called_once_with("LUG", api_key="token", use_global=False)
     stub_client.get_insider_holdings.assert_called_once_with([99], api_key="token")
     mock_cache.get_insider_trades.assert_called_once_with("LUG_2024-03-01_2024-03-10_2")
     mock_cache.set_insider_trades.assert_called_once()

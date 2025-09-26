@@ -1,0 +1,121 @@
+{
+  "title": "Börsdata KPI Screener List",
+  "source": "https://github.com/Borsdata-Sweden/API/wiki/Kpi-Screener-List",
+  "description": "Key Performance Indicators available for stock screening with calculation periods and types",
+  "kpis": [
+    {
+      "id": 1,
+      "name": "Dividend Yield",
+      "calcGroups": ["15year", "5year", "7year", "10year", "3year", "1year", "last"],
+      "calculations": ["high", "low", "mean", "sum", "cagr", "latest"]
+    },
+    {
+      "id": 10,
+      "name": "EV/EBIT",
+      "calcGroups": ["15year", "5year", "7year", "10year", "3year", "1year", "last"],
+      "calculations": ["high", "low", "mean", "cagr", "latest"]
+    },
+    {
+      "id": 11,
+      "name": "EV/EBITDA",
+      "calcGroups": ["15year", "5year", "7year", "10year", "3year", "1year", "last"],
+      "calculations": ["high", "low", "mean", "cagr", "latest"]
+    },
+    {
+      "id": 12,
+      "name": "EV/FCF",
+      "calcGroups": ["15year", "5year", "7year", "10year", "3year", "1year", "last"],
+      "calculations": ["high", "low", "mean", "cagr", "latest"]
+    },
+    {
+      "id": 13,
+      "name": "EV/S",
+      "calcGroups": ["15year", "5year", "7year", "10year", "3year", "1year", "last"],
+      "calculations": ["high", "low", "mean", "cagr", "latest"]
+    },
+    {
+      "id": 14,
+      "name": "Price/Book",
+      "calcGroups": ["15year", "5year", "7year", "10year", "3year", "1year", "last"],
+      "calculations": ["high", "low", "mean", "cagr", "latest"]
+    },
+    {
+      "id": 15,
+      "name": "Price/Earnings",
+      "calcGroups": ["15year", "5year", "7year", "10year", "3year", "1year", "last"],
+      "calculations": ["high", "low", "mean", "cagr", "latest"]
+    },
+    {
+      "id": 16,
+      "name": "Price/FCF",
+      "calcGroups": ["15year", "5year", "7year", "10year", "3year", "1year", "last"],
+      "calculations": ["high", "low", "mean", "cagr", "latest"]
+    },
+    {
+      "id": 17,
+      "name": "Price/Sales",
+      "calcGroups": ["15year", "5year", "7year", "10year", "3year", "1year", "last"],
+      "calculations": ["high", "low", "mean", "cagr", "latest"]
+    },
+    {
+      "id": 18,
+      "name": "Debt/Equity",
+      "calcGroups": ["15year", "5year", "7year", "10year", "3year", "1year", "last"],
+      "calculations": ["high", "low", "mean", "cagr", "latest"]
+    },
+    {
+      "id": 19,
+      "name": "Operating Margin %",
+      "calcGroups": ["15year", "5year", "7year", "10year", "3year", "1year", "last"],
+      "calculations": ["high", "low", "mean", "cagr", "latest"]
+    },
+    {
+      "id": 20,
+      "name": "Profit Margin %",
+      "calcGroups": ["15year", "5year", "7year", "10year", "3year", "1year", "last"],
+      "calculations": ["high", "low", "mean", "cagr", "latest"]
+    },
+    {
+      "id": 21,
+      "name": "Return on Assets %",
+      "calcGroups": ["15year", "5year", "7year", "10year", "3year", "1year", "last"],
+      "calculations": ["high", "low", "mean", "cagr", "latest"]
+    },
+    {
+      "id": 22,
+      "name": "Return on Equity %",
+      "calcGroups": ["15year", "5year", "7year", "10year", "3year", "1year", "last"],
+      "calculations": ["high", "low", "mean", "cagr", "latest"]
+    },
+    {
+      "id": 23,
+      "name": "Return on Invested Capital %",
+      "calcGroups": ["15year", "5year", "7year", "10year", "3year", "1year", "last"],
+      "calculations": ["high", "low", "mean", "cagr", "latest"]
+    },
+    {
+      "id": 24,
+      "name": "Gross Margin %",
+      "calcGroups": ["15year", "5year", "7year", "10year", "3year", "1year", "last"],
+      "calculations": ["high", "low", "mean", "cagr", "latest"]
+    },
+    {
+      "id": 25,
+      "name": "Cash/Price",
+      "calcGroups": ["15year", "5year", "7year", "10year", "3year", "1year", "last"],
+      "calculations": ["high", "low", "mean", "cagr", "latest"]
+    },
+    {
+      "id": 26,
+      "name": "Sales Growth %",
+      "calcGroups": ["15year", "5year", "7year", "10year", "3year", "1year"],
+      "calculations": ["high", "low", "mean", "cagr"]
+    },
+    {
+      "id": 27,
+      "name": "EPS Growth %",
+      "calcGroups": ["15year", "5year", "7year", "10year", "3year", "1year"],
+      "calculations": ["high", "low", "mean", "cagr"]
+    }
+  ]
+}
