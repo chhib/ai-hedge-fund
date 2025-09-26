@@ -124,12 +124,17 @@ The system supports both Nordic/European and global company analysis:
 
 **Nordic/European companies** (via Börsdata Nordic instruments):
 ```bash
-poetry run python src/main.py --tickers ERIC.ST,VOLV-B.ST,ADVT
+poetry run python src/main.py --tickers TELIA,VOLV-B,ADVT
 ```
 
 **Global companies** (via Börsdata Global instruments):
 ```bash
 poetry run python src/main.py --tickers-global AAPL,MSFT,NVDA
+```
+
+**Mixed analysis** (both Nordic and global companies in one command):
+```bash
+poetry run python src/main.py --tickers TELIA,ADVT --tickers-global AAPL,META
 ```
 
 **Quick test mode** (uses gpt-5 with fundamentals, technical, and sentiment analysts):
@@ -139,6 +144,9 @@ poetry run python src/main.py --tickers ADVT --test
 
 # Test with global company
 poetry run python src/main.py --tickers-global AAPL --test
+
+# Test with mixed tickers
+poetry run python src/main.py --tickers TELIA,ADVT --tickers-global META,AAPL --test
 ```
 
 You can also specify a `--ollama` flag to run the AI hedge fund using local LLMs.
@@ -157,12 +165,17 @@ poetry run python src/main.py --tickers-global AAPL,MSFT,NVDA --start-date 2024-
 
 **Nordic/European companies:**
 ```bash
-poetry run python src/backtester.py --tickers ERIC.ST,VOLV-B.ST,ADVT
+poetry run python src/backtester.py --tickers TELIA,VOLV-B,ADVT
 ```
 
 **Global companies:**
 ```bash
 poetry run python src/backtester.py --tickers-global AAPL,MSFT,NVDA
+```
+
+**Mixed analysis:**
+```bash
+poetry run python src/backtester.py --tickers TELIA,ADVT --tickers-global AAPL,META
 ```
 
 **Example Output:**

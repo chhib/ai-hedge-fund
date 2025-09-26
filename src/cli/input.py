@@ -20,14 +20,13 @@ def add_common_args(
     include_analyst_flags: bool = True,
     include_ollama: bool = True,
 ) -> argparse.ArgumentParser:
-    # Create mutually exclusive group for tickers
-    ticker_group = parser.add_mutually_exclusive_group(required=require_tickers)
-    ticker_group.add_argument(
+    # Add ticker arguments (both can be used together)
+    parser.add_argument(
         "--tickers",
         type=str,
-        help="Comma-separated list of Nordic/European stock ticker symbols (e.g., ERIC.ST,VOLV-B.ST)",
+        help="Comma-separated list of Nordic/European stock ticker symbols (e.g., TELIA,VOLV-B,ADVT)",
     )
-    ticker_group.add_argument(
+    parser.add_argument(
         "--tickers-global",
         type=str,
         help="Comma-separated list of global stock ticker symbols (e.g., AAPL,MSFT,GOOGL)",
@@ -266,6 +265,10 @@ def parse_cli_inputs(
     global_tickers = parse_tickers(getattr(args, "tickers_global", None))
     tickers = regular_tickers + global_tickers
     use_global = bool(global_tickers)
+    
+    # Validate that at least one ticker is provided if required
+    if require_tickers and not tickers:
+        parser.error("At least one of --tickers or --tickers-global must be provided.")
     
     # Handle test mode
     if getattr(args, "test", False):
