@@ -40,6 +40,16 @@ class FinancialMetricsAssembler:
         instrument = self._client.get_instrument(ticker, api_key=api_key, use_global=use_global)
         instrument_id = int(instrument["insId"])
         base_currency = instrument.get("reportCurrency") or instrument.get("stockPriceCurrency") or ""
+        stock_currency = instrument.get("stockPriceCurrency") or base_currency
+
+        # Get current stock price for ratio calculations
+        current_price = None
+        try:
+            prices = self._client.get_stock_prices(instrument_id, api_key=api_key)
+            if prices:
+                current_price = safe_float(prices[-1].get("c"))  # Latest close price
+        except Exception:
+            current_price = None
 
         report_type = map_period_to_report_type(period)
         summary_max = max(limit * SUMMARY_LIMIT_MULTIPLIER, limit)
@@ -131,12 +141,13 @@ class FinancialMetricsAssembler:
 
         # Derived metrics computed from previously resolved data
         for payload, ctx in zip(records, contexts):
+            report_currency = payload.get("currency") or base_currency
             for metric_name, config in FINANCIAL_METRICS_MAPPING.items():
                 if config.get("source") != "derived":
                     continue
                 if payload.get(metric_name) is not None:
                     continue
-                derived_value = self._compute_derived_metric(metric_name, payload, ctx)
+                derived_value = self._compute_derived_metric(metric_name, payload, ctx, current_price, stock_currency=stock_currency, report_currency=report_currency, instrument_id=instrument_id, api_key=api_key)
                 if derived_value is not None:
                     payload[metric_name] = derived_value
 
@@ -242,11 +253,72 @@ class FinancialMetricsAssembler:
             deduped.append(normalised)
         return deduped
 
+    def _get_exchange_rate(
+        self,
+        from_currency: str,
+        to_currency: str,
+        instrument_id: int,
+        api_key: Optional[str] = None,
+    ) -> float:
+        """Get exchange rate from one currency to another.
+
+        For now, returns hardcoded common rates. In production, this should
+        fetch real-time exchange rates from a financial data provider.
+        """
+        if from_currency == to_currency:
+            return 1.0
+
+        # Common exchange rates (approximate - should be real-time in production)
+        rates = {
+            ("USD", "SEK"): 10.8,
+            ("SEK", "USD"): 1 / 10.8,
+            ("USD", "EUR"): 0.85,
+            ("EUR", "USD"): 1 / 0.85,
+            ("SEK", "EUR"): 0.085,
+            ("EUR", "SEK"): 1 / 0.085,
+            ("USD", "CAD"): 1.35,
+            ("CAD", "USD"): 1 / 1.35,
+            ("CAD", "SEK"): 8.0,
+            ("SEK", "CAD"): 1 / 8.0,
+        }
+
+        rate = rates.get((from_currency, to_currency))
+        if rate is not None:
+            return rate
+
+        # Try inverse rate
+        inverse_rate = rates.get((to_currency, from_currency))
+        if inverse_rate is not None:
+            return 1.0 / inverse_rate
+
+        # Default to 1.0 if conversion not available
+        return 1.0
+
+    def _convert_price_to_report_currency(
+        self,
+        price: float,
+        stock_currency: str,
+        report_currency: str,
+        instrument_id: int,
+        api_key: Optional[str] = None,
+    ) -> float:
+        """Convert stock price from trading currency to report currency."""
+        if stock_currency == report_currency:
+            return price
+
+        rate = self._get_exchange_rate(stock_currency, report_currency, instrument_id, api_key)
+        return price * rate
+
     def _compute_derived_metric(
         self,
         metric_name: str,
         payload: Dict[str, Any],
         ctx: PeriodRecord,
+        current_price: Optional[float] = None,
+        stock_currency: Optional[str] = None,
+        report_currency: Optional[str] = None,
+        instrument_id: Optional[int] = None,
+        api_key: Optional[str] = None,
     ) -> Optional[float]:
         report = ctx.report
         if metric_name == "market_cap":
@@ -255,16 +327,8 @@ class FinancialMetricsAssembler:
                 return safe_float(kpi_value)
             if not report:
                 return None
-            shares = safe_float(
-                report.get("number_Of_Shares")
-                or report.get("shares_outstanding")
-                or report.get("sharesOutstanding")
-            )
-            price = safe_float(
-                report.get("stock_Price_Average")
-                or report.get("stockPriceAverage")
-                or report.get("stock_Price_Close")
-            )
+            shares = safe_float(report.get("number_Of_Shares") or report.get("shares_outstanding") or report.get("sharesOutstanding"))
+            price = safe_float(report.get("stock_Price_Average") or report.get("stockPriceAverage") or report.get("stock_Price_Close"))
             if shares is None or price is None:
                 return None
             return shares * price
@@ -272,14 +336,8 @@ class FinancialMetricsAssembler:
         if metric_name == "operating_cash_flow_ratio":
             if not report:
                 return None
-            operating_cf = safe_float(
-                report.get("cash_Flow_From_Operating_Activities")
-                or report.get("cashFlowFromOperatingActivities")
-            )
-            current_liabilities = safe_float(
-                report.get("current_Liabilities")
-                or report.get("currentLiabilities")
-            )
+            operating_cf = safe_float(report.get("cash_Flow_From_Operating_Activities") or report.get("cashFlowFromOperatingActivities"))
+            current_liabilities = safe_float(report.get("current_Liabilities") or report.get("currentLiabilities"))
             if operating_cf is None or current_liabilities in (None, 0):
                 return None
             return operating_cf / current_liabilities
@@ -295,6 +353,32 @@ class FinancialMetricsAssembler:
             if days_inventory_outstanding is None:
                 return None
             return dso + days_inventory_outstanding
+
+        # Price ratio calculations using current stock price and per-share KPIs
+        if current_price is not None and current_price > 0:
+            # Convert stock price to report currency for accurate ratio calculations
+            converted_price = current_price
+            if stock_currency and report_currency and stock_currency != report_currency and instrument_id:
+                converted_price = self._convert_price_to_report_currency(current_price, stock_currency, report_currency, instrument_id, api_key)
+
+            if metric_name == "price_to_earnings_ratio":
+                eps = safe_float(ctx.kpis.get(6))  # KPI ID 6: Earnings/share
+                if eps is not None and eps != 0:
+                    return converted_price / eps
+
+            elif metric_name == "price_to_book_ratio":
+                bvps = safe_float(ctx.kpis.get(8))  # KPI ID 8: Book value/share
+                if bvps is not None and bvps != 0:
+                    return converted_price / bvps
+
+            elif metric_name == "price_to_sales_ratio":
+                rps = safe_float(ctx.kpis.get(5))  # KPI ID 5: Revenue/share
+                if rps is not None and rps != 0:
+                    return converted_price / rps
+
+        # Populate revenue_per_share from KPI data
+        if metric_name == "revenue_per_share":
+            return safe_float(ctx.kpis.get(5))  # KPI ID 5: Revenue/share
 
         return None
 
