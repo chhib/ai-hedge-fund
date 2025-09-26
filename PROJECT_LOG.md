@@ -174,6 +174,14 @@ Rebuild the data ingestion and processing pipeline so the application relies on 
 - Confirmed complete metric coverage: all 21 original metrics plus 21 additional metrics now properly mapped to Börsdata equivalents.
 - **Börsdata migration is now 100% complete** - all analyst functionality maintains full compatibility with original financialmetricsapi behavior.
 
+### Session 24 (EV/EBIT Data Availability Fix)
+- Investigated "EV/EBIT unavailable" issue affecting Michael Burry agent analysis, causing degraded investment decisions.
+- Confirmed EV/EBIT data is available in Börsdata API via direct testing: LUG shows EV/EBIT 16.42 (KPI ID 10), ADVT shows -0.38.
+- Identified root cause: period mismatch where Michael Burry agent requests `period="ttm"` but EV/EBIT data only available in `period="year"`.
+- Applied two-part fix: (1) Updated EV/EBIT mapping `default_report_type` from "r12" to "year" in `src/data/borsdata_metrics_mapping.py`, (2) Changed Michael Burry agent to use `period="year"` in `src/agents/michael_burry.py:50`.
+- Verified fix: LUG now shows "EV/EBIT 9.7" with BULLISH signal→BUY decision; ADVT shows "EV/EBIT -1.3" with BEARISH signal→SHORT decision.
+- **EV/EBIT data availability issue completely resolved** - agents can now make fully informed investment decisions with complete financial metrics.
+
 ## Phase 1 Status: ✅ COMPLETE
 **CLI backtest experience with Börsdata data flows is production-ready.** The system successfully:
 - Ingests price, financial metrics, corporate events, and insider trades from Börsdata fixtures
