@@ -328,10 +328,40 @@ class FinancialMetricsAssembler:
             if not report:
                 return None
             shares = safe_float(report.get("number_Of_Shares") or report.get("shares_outstanding") or report.get("sharesOutstanding"))
-            price = safe_float(report.get("stock_Price_Average") or report.get("stockPriceAverage") or report.get("stock_Price_Close"))
-            if shares is None or price is None:
+            
+            if shares is None:
                 return None
-            return shares * price
+
+            price_to_use = None
+            if current_price is not None:
+                price_to_use = current_price
+                if stock_currency and report_currency and stock_currency != report_currency and instrument_id:
+                    price_to_use = self._convert_price_to_report_currency(current_price, stock_currency, report_currency, instrument_id, api_key)
+            else:
+                price_to_use = safe_float(report.get("stock_Price_Average") or report.get("stockPriceAverage") or report.get("stock_Price_Close"))
+
+            if price_to_use is None:
+                return None
+
+            return shares * price_to_use
+
+        if metric_name in ("enterprise_value_to_ebit_ratio", "ev_to_ebit"):
+            market_cap = payload.get("market_cap")
+
+            if not report:
+                return None
+
+            net_debt = safe_float(report.get("net_Debt") or report.get("netDebt"))
+            if net_debt is None:
+                net_debt = 0.0
+
+            operating_income = safe_float(report.get("operating_Income") or report.get("operatingIncome"))
+
+            if market_cap is None or operating_income in (None, 0):
+                return None
+
+            enterprise_value = market_cap + net_debt
+            return enterprise_value / operating_income
 
         if metric_name == "operating_cash_flow_ratio":
             if not report:

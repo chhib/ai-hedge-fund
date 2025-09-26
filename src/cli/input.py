@@ -280,11 +280,23 @@ def parse_cli_inputs(
     
     # Handle test mode
     if getattr(args, "test", False):
-        selected_analysts = ["fundamentals_analyst", "technical_analyst", "sentiment_analyst"]
         model_name, model_provider = "gpt-5", "OpenAI"
-        print(f"\n{Fore.YELLOW}Test mode enabled:{Style.RESET_ALL}")
-        print(f"  Model: {Fore.GREEN}gpt-5{Style.RESET_ALL}")
-        print(f"  Analysts: {Fore.GREEN}fundamentals_analyst, technical_analyst, sentiment_analyst{Style.RESET_ALL}\n")
+        
+        # Check if analysts were explicitly specified via --analysts
+        if getattr(args, "analysts", None) or getattr(args, "analysts_all", False):
+            selected_analysts = select_analysts({
+                "analysts_all": getattr(args, "analysts_all", False),
+                "analysts": getattr(args, "analysts", None),
+            })
+            print(f"\n{Fore.YELLOW}Test mode enabled:{Style.RESET_ALL}")
+            print(f"  Model: {Fore.GREEN}gpt-5{Style.RESET_ALL}")
+            print(f"  Analysts: {Fore.GREEN}{', '.join(selected_analysts)}{Style.RESET_ALL}\n")
+        else:
+            # Use default test analysts when no explicit analysts specified
+            selected_analysts = ["fundamentals_analyst", "technical_analyst", "sentiment_analyst"]
+            print(f"\n{Fore.YELLOW}Test mode enabled:{Style.RESET_ALL}")
+            print(f"  Model: {Fore.GREEN}gpt-5{Style.RESET_ALL}")
+            print(f"  Analysts: {Fore.GREEN}fundamentals_analyst, technical_analyst, sentiment_analyst{Style.RESET_ALL}\n")
     else:
         selected_analysts = select_analysts({
             "analysts_all": getattr(args, "analysts_all", False),

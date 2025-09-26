@@ -28,6 +28,7 @@ class FinancialMetrics(BaseModel):
     price_to_book_ratio: float | None
     price_to_sales_ratio: float | None
     enterprise_value_to_ebitda_ratio: float | None
+    enterprise_value_to_ebit_ratio: float | None
     enterprise_value_to_revenue_ratio: float | None
     free_cash_flow_yield: float | None
     peg_ratio: float | None
@@ -61,6 +62,7 @@ class FinancialMetrics(BaseModel):
     earnings_per_share: float | None
     book_value_per_share: float | None
     free_cash_flow_per_share: float | None
+    revenue_per_share: float | None
 
 
 class FinancialMetricsResponse(BaseModel):

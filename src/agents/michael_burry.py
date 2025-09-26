@@ -198,7 +198,7 @@ def _analyze_value(metrics, line_items, market_cap):
 
     # EV/EBIT (from financial metrics)
     if metrics:
-        ev_ebit = getattr(metrics[0], "ev_to_ebit", None)
+        ev_ebit = getattr(metrics[0], "enterprise_value_to_ebit_ratio", None)
         if ev_ebit is not None:
             if ev_ebit < 6:
                 score += 2

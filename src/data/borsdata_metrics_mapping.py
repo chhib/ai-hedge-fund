@@ -74,9 +74,11 @@ FINANCIAL_METRICS_MAPPING: dict[str, MetricMapping] = {
         "default_report_type": "r12",
     },
     "enterprise_value_to_ebit_ratio": {
-        "source": "kpi",
+        "source": "derived",
         "metadata_match": ["EV/EBIT"],
         "default_report_type": "r12",
+        "dependencies": ["market_cap", "net_debt", "operating_income"],
+        "notes": "Derived as (Market Cap + Net Debt) / EBIT. Falls back to KPI if available.",
     },
     "enterprise_value_to_revenue_ratio": {
         "source": "kpi",
@@ -84,10 +86,21 @@ FINANCIAL_METRICS_MAPPING: dict[str, MetricMapping] = {
         "default_report_type": "r12",
     },
     "ev_to_ebit": {
-        "source": "kpi",
+        "source": "derived",
         "metadata_match": ["EV/EBIT"],
         "default_report_type": "r12",
-        "notes": "Alias for enterprise_value_to_ebit_ratio, used by Michael Burry agent",
+        "dependencies": ["market_cap", "net_debt", "operating_income"],
+        "notes": "Alias for enterprise_value_to_ebit_ratio. Derived as (Market Cap + Net Debt) / EBIT. Falls back to KPI if available.",
+    },
+    "net_debt": {
+        "source": "kpi",
+        "metadata_match": ["Net Debt"],
+        "default_report_type": "r12",
+    },
+    "operating_income": {
+        "source": "kpi",
+        "metadata_match": ["Operating Income", "EBIT"],
+        "default_report_type": "r12",
     },
     "free_cash_flow_yield": {
         "source": "kpi",
