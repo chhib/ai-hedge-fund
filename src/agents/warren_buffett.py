@@ -3,6 +3,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel, Field
 import json
+from typing import Any, Optional
 from typing_extensions import Literal
 from src.tools.api import get_financial_metrics, get_market_cap, search_line_items
 from src.utils.llm import call_llm
@@ -14,6 +15,90 @@ class WarrenBuffettSignal(BaseModel):
     signal: Literal["bullish", "bearish", "neutral"]
     confidence: int = Field(description="Confidence 0-100")
     reasoning: str = Field(description="Reasoning for the decision")
+
+
+class WarrenBuffettAgent:
+    """Heuristic wrapper retained for legacy tests that expect a class interface."""
+
+    def __init__(self, *, thresholds: Optional[dict[str, float]] = None) -> None:
+        self.thresholds = thresholds or {
+            "roe": 0.15,
+            "de_ratio": 0.5,
+            "operating_margin": 0.15,
+            "fcf_margin": 0.05,
+        }
+
+    def analyze(self, context: dict[str, Any]) -> WarrenBuffettSignal:
+        metrics = context.get("financial_data")
+        if metrics is None:
+            return WarrenBuffettSignal(
+                signal="neutral",
+                confidence=0,
+                reasoning="Missing financial metrics",
+            )
+
+        positives: list[str] = []
+        negatives: list[str] = []
+        neutrals: list[str] = []
+
+        roe = getattr(metrics, "return_on_equity", None)
+        if roe is not None:
+            if roe >= self.thresholds["roe"]:
+                positives.append(f"ROE {roe:.1%} exceeds {self.thresholds['roe']:.0%}")
+            else:
+                negatives.append(f"ROE {roe:.1%} below target")
+        else:
+            neutrals.append("ROE unavailable")
+
+        debt_to_equity = getattr(metrics, "debt_to_equity", None)
+        if debt_to_equity is not None:
+            if debt_to_equity <= self.thresholds["de_ratio"]:
+                positives.append(f"Debt/Equity {debt_to_equity:.2f} is conservative")
+            else:
+                negatives.append(f"Debt/Equity {debt_to_equity:.2f} elevated")
+        else:
+            neutrals.append("Debt/Equity unavailable")
+
+        operating_margin = getattr(metrics, "operating_margin", None)
+        if operating_margin is not None:
+            if operating_margin >= self.thresholds["operating_margin"]:
+                positives.append(f"Operating margin {operating_margin:.1%} shows pricing power")
+            else:
+                negatives.append(f"Operating margin {operating_margin:.1%} leaves little cushion")
+        else:
+            neutrals.append("Operating margin unavailable")
+
+        free_cash_flow = getattr(metrics, "free_cash_flow", None)
+        revenue = getattr(metrics, "revenue", None)
+        if free_cash_flow is not None and revenue:
+            fcf_margin = free_cash_flow / revenue if revenue else None
+            if fcf_margin is not None:
+                if fcf_margin >= self.thresholds["fcf_margin"]:
+                    positives.append(f"FCF margin {fcf_margin:.1%} supports intrinsic value")
+                else:
+                    negatives.append(f"FCF margin {fcf_margin:.1%} thin for Buffett standards")
+        else:
+            neutrals.append("FCF information incomplete")
+
+        total_checks = len(positives) + len(negatives)
+        if total_checks == 0:
+            signal = "neutral"
+            confidence = 0
+        else:
+            if len(positives) > len(negatives):
+                signal = "bullish"
+            elif len(negatives) > len(positives):
+                signal = "bearish"
+            else:
+                signal = "neutral"
+
+            spread = abs(len(positives) - len(negatives))
+            confidence = int((spread / total_checks) * 100) if total_checks else 0
+
+        reasoning_parts = positives + negatives + neutrals
+        reasoning = "; ".join(reasoning_parts) if reasoning_parts else "No decisive Buffett metrics available"
+
+        return WarrenBuffettSignal(signal=signal, confidence=confidence, reasoning=reasoning)
 
 
 def warren_buffett_agent(state: AgentState, agent_id: str = "warren_buffett_agent"):

@@ -6,8 +6,8 @@ def test_short_only_strategy_shorts_and_covers():
     """Short, hold, then partial cover. Validate positions, realized gains, and summary consistency."""
 
     tickers = ["TTWO", "LUG", "FDEV"]
-    start_date = "2025-09-15"
-    end_date = "2025-09-23"
+    start_date = "2023-09-01"
+    end_date = "2023-09-30"
     initial_capital = 100000.0
     margin_requirement = 0.5
 
@@ -82,8 +82,8 @@ def test_short_only_strategy_full_cover_cycle():
     """Open shorts, then fully cover all to return to flat and mostly cash."""
 
     tickers = ["TTWO", "LUG", "FDEV"]
-    start_date = "2025-09-15"
-    end_date = "2025-09-23"
+    start_date = "2023-09-01"
+    end_date = "2023-09-30"
     initial_capital = 100000.0
     margin_requirement = 0.5
 
@@ -167,8 +167,8 @@ def test_short_only_strategy_multiple_short_cover_cycles():
     """Perform two complete short-cover cycles to test realized gains aggregation and resets."""
 
     tickers = ["TTWO", "LUG", "FDEV"]
-    start_date = "2025-09-15"
-    end_date = "2025-09-23"
+    start_date = "2023-09-01"
+    end_date = "2023-09-30"
     initial_capital = 100000.0
     margin_requirement = 0.5
 
@@ -241,8 +241,8 @@ def test_short_only_strategy_portfolio_rebalancing():
     """Rebalance across shorts: reduce TTWO short, add FDEV, then close TTWO and add to LUG."""
 
     tickers = ["TTWO", "LUG", "FDEV"]
-    start_date = "2025-09-15"
-    end_date = "2025-09-23"
+    start_date = "2023-09-01"
+    end_date = "2023-09-30"
     initial_capital = 100000.0
     margin_requirement = 0.5
 
@@ -331,8 +331,8 @@ def test_short_only_strategy_dollar_cost_averaging_on_short():
     """Add to an existing short (averaging entry), then partially cover and validate cost basis and PnL."""
 
     tickers = ["TTWO", "LUG", "FDEV"]
-    start_date = "2025-09-15"
-    end_date = "2025-09-23"
+    start_date = "2023-09-01"
+    end_date = "2023-09-30"
     initial_capital = 100000.0
     margin_requirement = 0.5
 

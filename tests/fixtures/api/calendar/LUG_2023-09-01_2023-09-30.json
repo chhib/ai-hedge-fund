@@ -1,0 +1,18 @@
+{
+  "events": [
+    {
+      "ticker": "LUG",
+      "date": "2023-09-08",
+      "category": "dividend",
+      "title": "Dividend 0.10 USD",
+      "description": "B\u00f6rsdata dividend calendar entry",
+      "source": "B\u00f6rsdata Calendar",
+      "report_type": null,
+      "amount": 0.1,
+      "currency": "USD",
+      "distribution_frequency": 4,
+      "dividend_type": 0,
+      "event_id": "dividend:595:2023-09-08:0.1:USD"
+    }
+  ]
+}

@@ -74,7 +74,7 @@ class StubBorsdataClient:
     def get_kpi_metadata(self, *, api_key=None, force_refresh: bool = False):
         return self.metadata
 
-    def get_kpi_summary(self, instrument_id: int, report_type: str, *, max_count=None, api_key=None):
+    def get_kpi_summary(self, instrument_id: int, report_type: str, *, max_count=None, original_currency=None, api_key=None):
         return self.summary
 
     def get_reports(self, instrument_id: int, report_type: str, *, max_count=None, original_currency=None, api_key=None):
@@ -107,7 +107,7 @@ def test_financial_metrics_assembler_builds_metrics_from_summary_and_reports():
     assert latest.market_cap == 1100.0
     assert latest.enterprise_value == 950.0
     assert latest.price_to_earnings_ratio == 18.5
-    assert latest.return_on_equity == 1.2
+    assert latest.return_on_equity == 0.012
     assert math.isclose(latest.operating_cash_flow_ratio, 4.0)
     expected_operating_cycle = 30.0 + (365.0 / 10.0)
     assert math.isclose(latest.operating_cycle, expected_operating_cycle)
@@ -140,4 +140,4 @@ def test_financial_metrics_assembler_uses_period_specific_screener_group_when_av
     )
 
     assert len(metrics) == 1
-    assert math.isclose(metrics[0].revenue_growth, 3.5)
+    assert math.isclose(metrics[0].revenue_growth, 0.035)

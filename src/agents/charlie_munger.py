@@ -4,6 +4,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel
 import json
+from typing import Any, Optional
 from typing_extensions import Literal
 from src.utils.progress import progress
 from src.utils.llm import call_llm
@@ -13,6 +14,85 @@ class CharlieMungerSignal(BaseModel):
     signal: Literal["bullish", "bearish", "neutral"]
     confidence: int
     reasoning: str
+
+
+class CharlieMungerAgent:
+    """Simplified decision model exposed for backward compatibility with tests."""
+
+    def __init__(self, *, thresholds: Optional[dict[str, float]] = None) -> None:
+        self.thresholds = thresholds or {
+            "roe": 0.18,
+            "operating_margin": 0.18,
+            "de_ratio": 0.6,
+            "revenue_growth": 0.10,
+        }
+
+    def analyze(self, context: dict[str, Any]) -> CharlieMungerSignal:
+        metrics = context.get("financial_data")
+        if metrics is None:
+            return CharlieMungerSignal(signal="neutral", confidence=0, reasoning="Missing financial metrics")
+
+        positives: list[str] = []
+        negatives: list[str] = []
+        neutrals: list[str] = []
+
+        roe = getattr(metrics, "return_on_equity", None)
+        if roe is not None:
+            if roe >= self.thresholds["roe"]:
+                positives.append(f"ROE {roe:.1%} reflects durable moat")
+            else:
+                negatives.append(f"ROE {roe:.1%} below Munger bar")
+        else:
+            neutrals.append("ROE unavailable")
+
+        operating_margin = getattr(metrics, "operating_margin", None)
+        if operating_margin is not None:
+            if operating_margin >= self.thresholds["operating_margin"]:
+                positives.append(f"Operating margin {operating_margin:.1%} shows pricing power")
+            else:
+                negatives.append(f"Operating margin {operating_margin:.1%} lacks quality signal")
+        else:
+            neutrals.append("Operating margin unavailable")
+
+        debt_to_equity = getattr(metrics, "debt_to_equity", None)
+        if debt_to_equity is not None:
+            if debt_to_equity <= self.thresholds["de_ratio"]:
+                positives.append(f"Debt/Equity {debt_to_equity:.2f} keeps balance sheet optionality")
+            else:
+                negatives.append(f"Debt/Equity {debt_to_equity:.2f} risky for compounding")
+        else:
+            neutrals.append("Debt/Equity unavailable")
+
+        revenue_growth = getattr(metrics, "revenue_growth", None)
+        if revenue_growth is not None:
+            if revenue_growth >= self.thresholds["revenue_growth"]:
+                positives.append(f"Revenue growth {revenue_growth:.1%} consistent with predictability")
+            elif revenue_growth < 0:
+                negatives.append(f"Revenue contraction {revenue_growth:.1%} erodes thesis")
+            else:
+                neutrals.append(f"Revenue growth {revenue_growth:.1%} modest")
+        else:
+            neutrals.append("Revenue growth unavailable")
+
+        total_checks = len(positives) + len(negatives)
+        if total_checks == 0:
+            signal = "neutral"
+            confidence = 0
+        else:
+            if len(positives) > len(negatives):
+                signal = "bullish"
+            elif len(negatives) > len(positives):
+                signal = "bearish"
+            else:
+                signal = "neutral"
+
+            spread = abs(len(positives) - len(negatives))
+            confidence = int((spread / total_checks) * 100)
+
+        reasoning_parts = positives + negatives + neutrals
+        reasoning = "; ".join(reasoning_parts) if reasoning_parts else "No Munger factors available"
+
+        return CharlieMungerSignal(signal=signal, confidence=confidence, reasoning=reasoning)
 
 
 def charlie_munger_agent(state: AgentState, agent_id: str = "charlie_munger_agent"):

@@ -6,8 +6,8 @@ def test_long_short_strategy_partial_exits():
     """Simultaneous long and short with partial exits on both sides."""
 
     tickers = ["TTWO", "LUG", "FDEV"]
-    start_date = "2025-09-15"
-    end_date = "2025-09-23"
+    start_date = "2023-09-01"
+    end_date = "2023-09-30"
     initial_capital = 100000.0
     margin_requirement = 0.5
 
@@ -84,8 +84,8 @@ def test_long_short_strategy_full_liquidation_to_cash():
     """Start with mixed longs and shorts, then fully exit to all cash."""
 
     tickers = ["TTWO", "LUG", "FDEV"]
-    start_date = "2025-09-15"
-    end_date = "2025-09-23"
+    start_date = "2023-09-01"
+    end_date = "2023-09-30"
     initial_capital = 100000.0
     margin_requirement = 0.5
 
@@ -160,8 +160,8 @@ def test_long_short_strategy_directional_flip_on_ticker():
     """Exit long fully, then open short on same ticker later (and vice versa on another)."""
 
     tickers = ["TTWO", "LUG", "FDEV"]
-    start_date = "2025-09-15"
-    end_date = "2025-09-23"
+    start_date = "2023-09-01"
+    end_date = "2023-09-30"
     initial_capital = 100000.0
     margin_requirement = 0.5
 
@@ -237,8 +237,8 @@ def test_long_short_strategy_dca_both_sides():
     """Add to existing long and short (averaging), then partially exit both."""
 
     tickers = ["TTWO", "LUG", "FDEV"]
-    start_date = "2025-09-15"
-    end_date = "2025-09-23"
+    start_date = "2023-09-01"
+    end_date = "2023-09-30"
     initial_capital = 100000.0
     margin_requirement = 0.5
 

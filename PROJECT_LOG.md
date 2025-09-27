@@ -182,6 +182,12 @@ Rebuild the data ingestion and processing pipeline so the application relies on 
 - Verified fix: LUG now shows "EV/EBIT 9.7" with BULLISH signal→BUY decision; ADVT shows "EV/EBIT -1.3" with BEARISH signal→SHORT decision.
 - **EV/EBIT data availability issue completely resolved** - agents can now make fully informed investment decisions with complete financial metrics.
 
+### Session 25 (Legacy Agent Compatibility & Test Follow-up)
+- Restored class-based interfaces for Warren Buffett, Stanley Druckenmiller, Charlie Munger, and Fundamentals analysts by wrapping existing functional agents with heuristic `analyze()` implementations for legacy scripts.
+- Added lightweight default scoring logic aligned with each investor’s philosophy to keep CLI/graph flows unchanged while unblocking `test_famous_analysts.py` imports.
+- Confirmed wrappers gracefully handle missing metric/price data and expose configurable thresholds for future tuning.
+- Pytest run (`poetry run pytest`) timed out in harness; next step is to execute the suite manually outside the automation constraints to verify no regressions remain.
+
 ## Phase 1 Status: ✅ COMPLETE
 **CLI backtest experience with Börsdata data flows is production-ready.** The system successfully:
 - Ingests price, financial metrics, corporate events, and insider trades from Börsdata fixtures

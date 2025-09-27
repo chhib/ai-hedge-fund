@@ -612,7 +612,6 @@ FINANCIAL_METRICS_MAPPING: dict[str, MetricMapping] = {
     "cash_ratio": {
         "source": "kpi",
         "metadata_match": ["Cash Ratio", "Kassalikviditet"],
-        "kpi_id": 49,
         "default_report_type": "year",
         "screener_calc_group": "last",
         "screener_calc": "latest",
@@ -628,7 +627,6 @@ FINANCIAL_METRICS_MAPPING: dict[str, MetricMapping] = {
     "days_sales_outstanding": {
         "source": "kpi",
         "metadata_match": ["Days Sales Outstanding", "Kundfordringars omsättningstid"],
-        "kpi_id": 44,
         "default_report_type": "r12",
         "screener_calc_group": "last",
         "screener_calc": "latest",
@@ -642,14 +640,7 @@ FINANCIAL_METRICS_MAPPING: dict[str, MetricMapping] = {
         "screener_calc": "latest",
         "is_percentage": True,
     },
-    "enterprise_value": {
-        "source": "kpi",
-        "metadata_match": ["Enterprise Value", "Företagsvärde"],
-        "kpi_id": 79,
-        "default_report_type": "r12",
-        "screener_calc_group": "last",
-        "screener_calc": "latest",
-    },
+
     "free_cash_flow": {
         "source": "kpi",
         "metadata_match": ["Free Cash Flow", "Fritt kassaflöde"],

@@ -1,0 +1,34 @@
+{
+  "insider_trades": [
+    {
+      "ticker": "LUG",
+      "issuer": "Lundin Gold",
+      "name": "ROJAFI",
+      "title": null,
+      "is_board_director": null,
+      "transaction_date": "2023-09-25",
+      "transaction_shares": -41383.0,
+      "transaction_price_per_share": 16.25,
+      "transaction_value": 672473.75,
+      "shares_owned_before_transaction": null,
+      "shares_owned_after_transaction": null,
+      "security_title": null,
+      "filing_date": "2023-09-25"
+    },
+    {
+      "ticker": "LUG",
+      "issuer": "Lundin Gold",
+      "name": "C. Ashley Heppenstall",
+      "title": null,
+      "is_board_director": null,
+      "transaction_date": "2023-09-25",
+      "transaction_shares": -41383.0,
+      "transaction_price_per_share": 16.25,
+      "transaction_value": -672473.75,
+      "shares_owned_before_transaction": null,
+      "shares_owned_after_transaction": null,
+      "security_title": null,
+      "filing_date": "2023-09-25"
+    }
+  ]
+}

@@ -1,10 +1,127 @@
+from typing import Any
+
 from langchain_core.messages import HumanMessage
+from pydantic import BaseModel
+from typing_extensions import Literal
+
 from src.graph.state import AgentState, show_agent_reasoning
 from src.utils.api_key import get_api_key_from_state
 from src.utils.progress import progress
 import json
 
 from src.tools.api import get_financial_metrics
+
+
+class FundamentalsAnalystSignal(BaseModel):
+    signal: Literal["bullish", "bearish", "neutral"]
+    confidence: int
+    reasoning: str
+
+
+class FundamentalsAnalyst:
+    """Simplified class wrapper for compatibility with legacy interfaces."""
+
+    def analyze(self, context: dict[str, Any]) -> FundamentalsAnalystSignal:
+        metrics = context.get("financial_data")
+        if metrics is None:
+            return FundamentalsAnalystSignal(signal="neutral", confidence=0, reasoning="Missing financial metrics")
+
+        positives: list[str] = []
+        negatives: list[str] = []
+        neutrals: list[str] = []
+
+        profitability_checks = [
+            (getattr(metrics, "return_on_equity", None), 0.15, "Return on equity"),
+            (getattr(metrics, "net_margin", None), 0.20, "Net margin"),
+            (getattr(metrics, "operating_margin", None), 0.15, "Operating margin"),
+        ]
+        for value, threshold, label in profitability_checks:
+            if value is None:
+                neutrals.append(f"{label} unavailable")
+            elif value >= threshold:
+                positives.append(f"{label} {value:.1%} above threshold")
+            elif value <= 0:
+                negatives.append(f"{label} {value:.1%} negative")
+            else:
+                negatives.append(f"{label} {value:.1%} below threshold")
+
+        growth_checks = [
+            (getattr(metrics, "revenue_growth", None), 0.10, "Revenue growth"),
+            (getattr(metrics, "earnings_growth", None), 0.10, "Earnings growth"),
+            (getattr(metrics, "book_value_growth", None), 0.08, "Book value growth"),
+        ]
+        for value, threshold, label in growth_checks:
+            if value is None:
+                neutrals.append(f"{label} unavailable")
+            elif value >= threshold:
+                positives.append(f"{label} {value:.1%} strong")
+            elif value <= 0:
+                negatives.append(f"{label} {value:.1%} contracting")
+            else:
+                negatives.append(f"{label} {value:.1%} modest")
+
+        current_ratio = getattr(metrics, "current_ratio", None)
+        if current_ratio is not None:
+            if current_ratio >= 1.5:
+                positives.append(f"Current ratio {current_ratio:.2f} shows liquidity")
+            else:
+                negatives.append(f"Current ratio {current_ratio:.2f} tight")
+        else:
+            neutrals.append("Current ratio unavailable")
+
+        debt_to_equity = getattr(metrics, "debt_to_equity", None)
+        if debt_to_equity is not None:
+            if debt_to_equity <= 0.5:
+                positives.append(f"Debt/Equity {debt_to_equity:.2f} conservative")
+            else:
+                negatives.append(f"Debt/Equity {debt_to_equity:.2f} elevated")
+        else:
+            neutrals.append("Debt/Equity unavailable")
+
+        fcf_per_share = getattr(metrics, "free_cash_flow_per_share", None)
+        eps = getattr(metrics, "earnings_per_share", None)
+        if fcf_per_share is not None and eps is not None and eps != 0:
+            if fcf_per_share >= eps * 0.8:
+                positives.append("FCF conversion supports earnings quality")
+            else:
+                negatives.append("FCF conversion weak versus EPS")
+        else:
+            neutrals.append("FCF conversion unavailable")
+
+        valuation_checks = [
+            (getattr(metrics, "price_to_earnings_ratio", None), 25, "P/E"),
+            (getattr(metrics, "price_to_book_ratio", None), 3, "P/B"),
+            (getattr(metrics, "price_to_sales_ratio", None), 5, "P/S"),
+        ]
+        for value, threshold, label in valuation_checks:
+            if value is None:
+                neutrals.append(f"{label} unavailable")
+            elif value <= threshold:
+                positives.append(f"{label} {value:.2f} reasonable")
+            else:
+                negatives.append(f"{label} {value:.2f} expensive")
+
+        total_checks = len(positives) + len(negatives)
+        if total_checks == 0:
+            signal = "neutral"
+            confidence = 0
+        else:
+            if len(positives) > len(negatives):
+                signal = "bullish"
+            elif len(negatives) > len(positives):
+                signal = "bearish"
+            else:
+                signal = "neutral"
+
+            spread = abs(len(positives) - len(negatives))
+            confidence = int((spread / total_checks) * 100)
+
+        reasoning_parts = positives + negatives + neutrals
+        reasoning = "; ".join(reasoning_parts) if reasoning_parts else "No fundamental factors available"
+
+        return FundamentalsAnalystSignal(signal=signal, confidence=confidence, reasoning=reasoning)
+
+
 
 
 ##### Fundamental Agent #####

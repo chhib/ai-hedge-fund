@@ -55,6 +55,7 @@ class BacktestEngine:
         self._model_provider = model_provider
         self._selected_analysts = selected_analysts
         self._start_date_obj = datetime.strptime(self._start_date, "%Y-%m-%d").date()
+        self._benchmark_ticker = "OMXS30"  # Default benchmark
 
         self._portfolio = Portfolio(
             tickers=tickers,
@@ -106,8 +107,8 @@ class BacktestEngine:
             self._prefetched_insider_trades[ticker] = insider_trades
             self._prefetched_company_events[ticker] = company_events
         
-        # Preload data for SPY for benchmark comparison
-        get_prices("SPY", self._start_date, self._end_date)
+        # Preload data for benchmark comparison
+        get_prices(self._benchmark_ticker, self._start_date, self._end_date)
 
     def _build_context_for_date(self, *, current_date: date) -> dict[str, Any]:
         context_events: dict[str, list[dict[str, Any]]] = {}
@@ -242,7 +243,7 @@ class BacktestEngine:
                 portfolio=self._portfolio,
                 performance_metrics=self._performance_metrics,
                 total_value=total_value,
-                benchmark_return_pct=self._benchmark.get_return_pct("SPY", self._start_date, current_date_str),
+                benchmark_return_pct=self._benchmark.get_return_pct(self._benchmark_ticker, self._start_date, current_date_str),
             )
             # Prepend today's rows to historical rows so latest day is on top
             self._table_rows = rows + self._table_rows

@@ -11,6 +11,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel
 import json
+from typing import Any, Optional
 from typing_extensions import Literal
 from src.utils.progress import progress
 from src.utils.llm import call_llm
@@ -21,6 +22,92 @@ class StanleyDruckenmillerSignal(BaseModel):
     signal: Literal["bullish", "bearish", "neutral"]
     confidence: float
     reasoning: str
+
+
+class StanleyDruckenMillerAgent:
+    """Heuristic compatibility layer for legacy class-based integrations."""
+
+    def __init__(self, *, thresholds: Optional[dict[str, float]] = None) -> None:
+        self.thresholds = thresholds or {
+            "revenue_growth": 0.15,
+            "earnings_growth": 0.12,
+            "price_momentum": 0.05,
+        }
+
+    def analyze(self, context: dict[str, Any]) -> StanleyDruckenmillerSignal:
+        metrics = context.get("financial_data")
+        price_data = context.get("price_data") or []
+        if metrics is None:
+            return StanleyDruckenmillerSignal(signal="neutral", confidence=0.0, reasoning="Missing financial metrics")
+
+        positives: list[str] = []
+        negatives: list[str] = []
+        neutrals: list[str] = []
+
+        revenue_growth = getattr(metrics, "revenue_growth", None)
+        if revenue_growth is not None:
+            if revenue_growth >= self.thresholds["revenue_growth"]:
+                positives.append(f"Revenue growth {revenue_growth:.1%} supports momentum")
+            elif revenue_growth <= 0:
+                negatives.append(f"Revenue contraction of {revenue_growth:.1%}")
+            else:
+                neutrals.append(f"Revenue growth {revenue_growth:.1%} is modest")
+        else:
+            neutrals.append("Revenue growth unavailable")
+
+        earnings_growth = getattr(metrics, "earnings_growth", None)
+        if earnings_growth is not None:
+            if earnings_growth >= self.thresholds["earnings_growth"]:
+                positives.append(f"Earnings growth {earnings_growth:.1%} indicates upside capture")
+            elif earnings_growth <= 0:
+                negatives.append(f"Earnings contraction of {earnings_growth:.1%}")
+            else:
+                neutrals.append(f"Earnings growth {earnings_growth:.1%} lacks punch")
+        else:
+            neutrals.append("Earnings growth unavailable")
+
+        closes: list[float] = []
+        for item in price_data:
+            if isinstance(item, dict):
+                close = item.get("c")
+            else:
+                close = getattr(item, "close", None)
+            if close is not None:
+                try:
+                    closes.append(float(close))
+                except (TypeError, ValueError):  # Defensive; skip malformed entries
+                    continue
+
+        if len(closes) >= 2 and closes[0] != 0:
+            momentum = (closes[-1] - closes[0]) / closes[0]
+            if momentum >= self.thresholds["price_momentum"]:
+                positives.append(f"Price momentum {momentum:.1%} confirms trend")
+            elif momentum <= -self.thresholds["price_momentum"]:
+                negatives.append(f"Price momentum {momentum:.1%} signals downside pressure")
+            else:
+                neutrals.append(f"Price momentum {momentum:.1%} is indecisive")
+        else:
+            neutrals.append("Insufficient price history for momentum read")
+
+        total_checks = len(positives) + len(negatives)
+        if total_checks == 0:
+            signal = "neutral"
+            confidence = 0.0
+        else:
+            if len(positives) > len(negatives):
+                signal = "bullish"
+            elif len(negatives) > len(positives):
+                signal = "bearish"
+            else:
+                signal = "neutral"
+
+            spread = abs(len(positives) - len(negatives))
+            confidence = float((spread / total_checks) * 100) if total_checks else 0.0
+
+        reasoning_parts = positives + negatives + neutrals
+        reasoning = "; ".join(reasoning_parts) if reasoning_parts else "No Druckenmiller factors available"
+
+        return StanleyDruckenmillerSignal(signal=signal, confidence=confidence, reasoning=reasoning)
 
 
 def stanley_druckenmiller_agent(state: AgentState, agent_id: str = "stanley_druckenmiller_agent"):

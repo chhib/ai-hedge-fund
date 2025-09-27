@@ -144,8 +144,8 @@ def test_cli_regression_full_backtest_workflow(monkeypatch, capsys):
     engine = BacktestEngine(
         agent=agent,
         tickers=tickers,
-        start_date="2025-09-15",
-        end_date="2025-09-23",
+        start_date="2023-09-01",
+        end_date="2023-09-30",
         initial_capital=100_000.0,
         model_name="fixture-model",
         model_provider="fixture-provider",
@@ -195,41 +195,39 @@ def test_cli_regression_full_backtest_workflow(monkeypatch, capsys):
     assert context_history is not None
     assert len(context_history) > 0
     latest_context = context_history[-1]
-    assert latest_context["date"] == "2025-09-23"
+    assert latest_context["date"] == "2023-09-29"
     assert "company_events" in latest_context
     assert "insider_trades" in latest_context
     
-    # Validate SPY benchmark data can be loaded
-    spy_df = _load_price_df("SPY", "2025-09-15", "2025-09-23")
-    assert spy_df is not None
-    assert len(spy_df) > 0
-    benchmark_return = (spy_df.iloc[-1]["close"] / spy_df.iloc[0]["close"] - 1) * 100
-    assert -10.0 <= benchmark_return <= 10.0, f"SPY benchmark return {benchmark_return}% seems unreasonable"
+    benchmark_df = _load_price_df("OMXS30", "2023-09-01", "2023-09-30")
+    assert benchmark_df is not None
+    assert len(benchmark_df) > 0
+    benchmark_return = (benchmark_df.iloc[-1]["close"] / benchmark_df.iloc[0]["close"] - 1) * 100
+    assert -10.0 <= benchmark_return <= 10.0, f"OMXS30 benchmark return {benchmark_return}% seems unreasonable"
 
 
 def test_cli_regression_benchmark_calculation():
     """Test that benchmark calculations are consistent across test runs."""
     
-    # Load SPY fixture data for benchmark calculation
-    spy_df = _load_price_df("SPY", "2025-09-15", "2025-09-23")
+    benchmark_df = _load_price_df("OMXS30", "2023-09-01", "2023-09-30")
     
     # Calculate benchmark return
-    initial_price = spy_df.iloc[0]["close"]
-    final_price = spy_df.iloc[-1]["close"]
+    initial_price = benchmark_df.iloc[0]["close"]
+    final_price = benchmark_df.iloc[-1]["close"]
     benchmark_return = (final_price / initial_price - 1) * 100
     
     # Validate benchmark return is consistent
     # This serves as a regression test to catch fixture data changes
-    expected_return = 1.48  # This should match the output from run_fixture_backtest.py
+    expected_return = -1.41  # This should match the output from run_fixture_backtest.py
     assert abs(benchmark_return - expected_return) < 0.01, \
-        f"SPY benchmark return {benchmark_return:.2f}% differs from expected {expected_return}%"
+        f"OMXS30 benchmark return {benchmark_return:.2f}% differs from expected {expected_return}%"
 
 
 def test_cli_regression_market_context_content():
     """Test that market context data contains expected content structure."""
     
     tickers = ["TTWO", "LUG", "FDEV"]
-    end_date = "2025-09-23"
+    end_date = "2023-09-30"
     
     # Load context data directly from fixtures
     for ticker in tickers:
@@ -267,8 +265,8 @@ def test_cli_regression_performance_metrics_consistency():
     engine = BacktestEngine(
         agent=agent,
         tickers=tickers,
-        start_date="2025-09-15",
-        end_date="2025-09-23",
+        start_date="2023-09-01",
+        end_date="2023-09-30",
         initial_capital=50_000.0,
         model_name="test-model",
         model_provider="test-provider",

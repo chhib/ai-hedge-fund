@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from dotenv import load_dotenv
-from src.tools.api import get_financial_metrics, get_insider_trades, get_company_events, get_prices
+from src.tools.api import get_financial_metrics, get_insider_trades, get_company_events, get_prices, set_ticker_markets
 
 
 def ensure_api_key() -> str:
@@ -28,13 +28,11 @@ def regenerate_financial_metrics_fixtures() -> None:
     """Regenerate financial metrics fixtures for test tickers."""
     print("Regenerating financial metrics fixtures...")
     
-    # Test tickers - LUG is Nordic, let's add more Nordic tickers
-    tickers = ["LUG", "VOLV-B", "TELIA"]  # Lundin Gold, Volvo B shares, Telia
+    tickers = ["LUG", "VOLV B", "TTWO", "FDEV"]
     api_key = ensure_api_key()
     
-    # Date range for fixtures
-    start_date = "2025-09-15"
-    end_date = "2025-09-23"
+    start_date = "2023-09-01"
+    end_date = "2023-09-30"
     
     for ticker in tickers:
         print(f"  Fetching financial metrics for {ticker}...")
@@ -79,11 +77,11 @@ def regenerate_insider_trades_fixtures() -> None:
     """Regenerate insider trades fixtures for test tickers."""
     print("Regenerating insider trades fixtures...")
     
-    tickers = ["LUG", "VOLV-B", "TELIA"]
+    tickers = ["LUG", "VOLV B", "TTWO", "FDEV"]
     api_key = ensure_api_key()
     
-    start_date = "2025-09-15"
-    end_date = "2025-09-23"
+    start_date = "2023-09-01"
+    end_date = "2023-09-30"
     
     for ticker in tickers:
         print(f"  Fetching insider trades for {ticker}...")
@@ -128,11 +126,11 @@ def regenerate_calendar_fixtures() -> None:
     """Regenerate company events fixtures for test tickers."""
     print("Regenerating company calendar fixtures...")
     
-    tickers = ["LUG", "VOLV-B", "TELIA"]
+    tickers = ["LUG", "VOLV B", "TTWO", "FDEV"]
     api_key = ensure_api_key()
     
-    start_date = "2025-09-15"
-    end_date = "2025-09-23"
+    start_date = "2023-09-01"
+    end_date = "2023-09-30"
     
     for ticker in tickers:
         print(f"  Fetching company events for {ticker}...")
@@ -146,9 +144,12 @@ def regenerate_calendar_fixtures() -> None:
                 api_key=api_key
             )
             
+            # Convert CompanyEvent objects to dicts for JSON serialization
+            events_dicts = [event.model_dump() for event in events]
+
             # Create the fixture structure
             fixture_data = {
-                "events": events
+                "events": events_dicts
             }
             
             # Save to fixture file
@@ -169,11 +170,11 @@ def regenerate_price_fixtures() -> None:
     """Regenerate price data fixtures for test tickers."""
     print("Regenerating price data fixtures...")
     
-    tickers = ["LUG", "VOLV-B", "TELIA", "OMXS30"]  # Include OMXS30 for Nordic benchmark
+    tickers = ["LUG", "VOLV B", "TTWO", "FDEV", "SPY", "OMXS30"]
     api_key = ensure_api_key()
     
-    start_date = "2025-09-15"
-    end_date = "2025-09-23"
+    start_date = "2023-09-01"
+    end_date = "2023-09-30"
     
     for ticker in tickers:
         print(f"  Fetching price data for {ticker}...")
@@ -226,6 +227,18 @@ def main() -> None:
         # Check API key first
         ensure_api_key()
         print("✓ Börsdata API key found")
+        print()
+
+        # Set ticker markets before regenerating data
+        set_ticker_markets({
+            "LUG": "Nordic",
+            "VOLV B": "Nordic",
+            "OMXS30": "Nordic",
+            "TTWO": "Global",
+            "FDEV": "Global",
+            "SPY": "Global",
+        })
+        print("✓ Ticker markets configured (Nordic/Global)")
         print()
         
         # Regenerate all fixture types
