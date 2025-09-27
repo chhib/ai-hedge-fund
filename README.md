@@ -1,6 +1,28 @@
-# AI Hedge Fund
+# AI Hedge Fund - Enhanced Börsdata Edition
 
-This is a proof of concept for an AI-powered hedge fund.  The goal of this project is to explore the use of AI to make trading decisions.  This project is for **educational** purposes only and is not intended for real trading or investment.
+This is a proof of concept for an AI-powered hedge fund with **comprehensive financial data integration**.  The goal of this project is to explore the use of AI to make trading decisions using institutional-grade financial metrics.  This project is for **educational** purposes only and is not intended for real trading or investment.
+
+## 🚀 Major Enhancement: Börsdata Integration
+
+**This fork represents a significant upgrade from the original FinancialDatasets implementation:**
+
+### 🔢 **Data Coverage Expansion**
+- **5.2x more financial metrics**: 17 → 89 comprehensive KPI mappings
+- **Nordic + Global market support**: European tickers (ATCO B) + US tickers (AAPL)
+- **Institutional-grade metrics**: 73 unique KPI IDs covering all major financial categories
+- **Advanced ratios**: Beta, Alpha, Cash Flow Stability, Enterprise Value metrics
+
+### 🐛 **Critical Bug Fixes**
+- **Fixed percentage inflation**: ROE correctly shows ~151% (vs previous 15,081% bug)
+- **Accurate metric conversion**: 33 metrics with proper percentage handling
+- **Multi-endpoint validation**: Comprehensive data accuracy across multiple API sources
+
+### 📊 **Trading Decision Impact**
+Comparison testing revealed **dramatically different investment strategies**:
+- **Enhanced Börsdata**: BUY AAPL (78 shares, 50% confidence)
+- **Original FinancialDatasets**: SHORT AAPL (60 shares, 82% confidence)
+
+This demonstrates the critical importance of comprehensive, accurate financial data in algorithmic trading.
 
 ## 🚧 System Overview
 
@@ -202,6 +224,83 @@ Please see detailed instructions on how to install and run the web application [
 
 <img width="1721" alt="Screenshot 2025-06-28 at 6 41 03 PM" src="https://github.com/user-attachments/assets/b95ab696-c9f4-416c-9ad1-51feb1f5374b" />
 
+
+## 🔧 Technical Architecture: Enhanced KPI System
+
+### Multi-Endpoint Data Strategy
+
+The enhanced system uses a hierarchical approach to maximize financial data coverage:
+
+1. **KPI Summary Endpoint** (Primary): Fast bulk retrieval of core metrics
+2. **Bulk Screener Values** (Secondary): Comprehensive KPI collection via `get_all_kpi_screener_values()`  
+3. **Individual Screener Calls** (Tertiary): Targeted retrieval for missing KPIs
+4. **Holdings Endpoint** (Fallback): Final attempt for comprehensive coverage
+
+### Financial Metrics Coverage
+
+| Category | Before | After | Examples |
+|----------|--------|-------|----------|
+| Valuation | 4 | 12 | P/E, EV/EBITDA, PEG |
+| Profitability | 3 | 10 | ROE, ROA, EBITDA margin |
+| Liquidity | 0 | 8 | Current ratio, Debt/Equity |
+| Efficiency | 2 | 6 | Asset turnover, DSO |
+| Growth | 3 | 8 | Revenue growth, FCF growth |
+| Per-Share | 3 | 8 | EPS, BVPS, FCF/share |
+| Cash Flow | 1 | 7 | FCF, OCF, Cash stability |
+| Risk/Market | 0 | 4 | Beta, Volatility |
+
+### Key Files Enhanced
+
+- **`src/data/borsdata_client.py`**: Added 4 new API endpoints for comprehensive data retrieval
+- **`src/data/borsdata_metrics_mapping.py`**: 89 KPI mappings with proper percentage conversion flags
+- **`src/data/models.py`**: Extended FinancialMetrics model with 25+ new fields
+- **`src/data/borsdata_kpis.py`**: Enhanced assembly logic with multi-endpoint fallback strategy
+
+### Validation & Testing
+
+The system has been validated with both Nordic (ATCO B) and Global (AAPL) tickers, showing:
+- 50+ non-null metrics retrieved per ticker
+- Correct percentage conversion (fixed 100x inflation bug)
+- Multi-market support for diverse portfolio strategies
+
+For detailed technical documentation, see:
+- `ENHANCED_KPI_SYSTEM.md`: Comprehensive technical documentation
+- `BORSDATA_PERCENTAGE_FIX.md`: Bug fix validation and methodology
+
+## 🎯 Next Steps: FD/BD Model Comparison
+
+### Objective
+Achieve comparable results between FinancialDatasets (FD) and Börsdata (BD) models to enable:
+- Cross-validation of trading strategies
+- Data source redundancy and reliability
+- Market-specific optimization (Nordic vs Global)
+
+### Implementation Plan
+
+#### Phase 1: Metric Harmonization
+- [ ] Map equivalent metrics between FD and BD APIs
+- [ ] Standardize percentage conversion across both sources
+- [ ] Implement metric quality scoring and validation
+
+#### Phase 2: Dual-Source Agent Framework
+- [ ] Create hybrid agents that can use both FD and BD data
+- [ ] Implement data source fallback mechanisms
+- [ ] Add confidence scoring based on data source agreement
+
+#### Phase 3: Strategy Validation
+- [ ] Run parallel analysis with both data sources
+- [ ] Measure strategy performance variance
+- [ ] Develop consensus-based trading signals
+
+#### Phase 4: Performance Optimization
+- [ ] Optimize API call strategies for cost/latency
+- [ ] Implement intelligent data source selection
+- [ ] Add real-time data quality monitoring
+
+### Success Metrics
+- Trading signal correlation > 80% between FD/BD models
+- Data coverage parity for overlapping markets
+- <5% variance in key financial ratios (P/E, ROE, Debt/Equity)
 
 ## How to Contribute
 

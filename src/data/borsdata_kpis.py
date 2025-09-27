@@ -45,7 +45,7 @@ class FinancialMetricsAssembler:
         # Get current stock price for ratio calculations
         current_price = None
         try:
-            prices = self._client.get_stock_prices(instrument_id, api_key=api_key)
+            prices = self._client.get_stock_prices(instrument_id, original_currency=True, api_key=api_key)  # Use original currency for consistency
             if prices:
                 current_price = safe_float(prices[-1].get("c"))  # Latest close price
         except Exception:
@@ -57,12 +57,14 @@ class FinancialMetricsAssembler:
             instrument_id,
             report_type,
             max_count=summary_max,
+            original_currency=True,  # Use original currency for consistency
             api_key=api_key,
         )
         reports_payload = self._client.get_reports(
             instrument_id,
             report_type,
             max_count=summary_max,
+            original_currency=True,  # Use original currency for consistency
             api_key=api_key,
         )
 
@@ -103,9 +105,83 @@ class FinancialMetricsAssembler:
                     continue
                 value = ctx.kpis.get(kpi_id)
                 if value is not None:
+                    # Apply percentage conversion for metrics flagged as percentages
+                    config = FINANCIAL_METRICS_MAPPING.get(metric_name, {})
+                    if config.get("is_percentage", False):
+                        value = value / 100.0
                     payload[metric_name] = value
 
-        # Screener-derived fields fall back to calc endpoints when missing
+        # Bulk KPI retrieval for comprehensive coverage
+        bulk_cache: Dict[int, Optional[float]] = {}
+        missing_kpi_ids = []
+        for metric_name, config in FINANCIAL_METRICS_MAPPING.items():
+            if config.get("source") == "kpi":
+                kpi_id = metric_to_kpi.get(metric_name)
+                if kpi_id is not None:
+                    # Check if any record is missing this metric
+                    for payload in records:
+                        if payload.get(metric_name) is None:
+                            if kpi_id not in missing_kpi_ids:
+                                missing_kpi_ids.append(kpi_id)
+                            break
+        
+        # Fetch missing KPIs in bulk using multiple endpoints
+        if missing_kpi_ids:
+            try:
+                # Try bulk screener values first (most comprehensive)
+                bulk_data = self._client.get_all_kpi_screener_values(instrument_id, api_key=api_key)
+                screener_values = bulk_data.get("values", []) if bulk_data else []
+                for value_entry in screener_values:
+                    kpi_id = value_entry.get("kpiId")
+                    if kpi_id in missing_kpi_ids:
+                        numeric_value = safe_float(value_entry.get("n"))
+                        if numeric_value is not None:
+                            bulk_cache[kpi_id] = numeric_value
+            except Exception:
+                pass  # Continue with individual fetches
+
+            # Fill remaining gaps with individual screener calls
+            for kpi_id in missing_kpi_ids:
+                if kpi_id not in bulk_cache:
+                    try:
+                        screener_response = self._client.get_kpi_screener_value(
+                            instrument_id, kpi_id, "last", "latest", api_key=api_key
+                        )
+                        value = ((screener_response or {}).get("value") or {}).get("n")
+                        numeric_value = safe_float(value)
+                        if numeric_value is not None:
+                            bulk_cache[kpi_id] = numeric_value
+                    except Exception:
+                        pass  # Continue to next KPI
+
+            # Fill remaining gaps with holdings endpoint
+            for kpi_id in missing_kpi_ids:
+                if kpi_id not in bulk_cache:
+                    try:
+                        holdings_response = self._client.get_kpi_holdings(instrument_id, kpi_id, api_key=api_key)
+                        if holdings_response and "value" in holdings_response:
+                            numeric_value = safe_float(holdings_response["value"])
+                            if numeric_value is not None:
+                                bulk_cache[kpi_id] = numeric_value
+                    except Exception:
+                        pass  # Continue to next KPI
+
+        # Apply bulk-fetched values to records
+        for metric_name, config in FINANCIAL_METRICS_MAPPING.items():
+            if config.get("source") == "kpi":
+                kpi_id = metric_to_kpi.get(metric_name)
+                if kpi_id in bulk_cache:
+                    bulk_value = bulk_cache[kpi_id]
+                    if bulk_value is not None:
+                        for payload in records:
+                            if payload.get(metric_name) is None:
+                                # Apply percentage conversion for metrics flagged as percentages
+                                final_value = bulk_value
+                                if config.get("is_percentage", False):
+                                    final_value = bulk_value / 100.0
+                                payload[metric_name] = final_value
+
+        # Screener-derived fields for specialized calculations
         screener_cache: Dict[Tuple[int, str, str], Optional[float]] = {}
         for metric_name, config in FINANCIAL_METRICS_MAPPING.items():
             if config.get("source") != "screener":
@@ -137,7 +213,14 @@ class FinancialMetricsAssembler:
                 continue
             for payload in records:
                 if payload.get(metric_name) is None:
-                    payload[metric_name] = screener_value
+                    # Apply percentage conversion for metrics flagged as percentages
+                    # Note: screener values with calc="percent" are already converted in _fetch_screener_value
+                    final_value = screener_value
+                    if (screener_value is not None and 
+                        config.get("is_percentage", False) and 
+                        calc.lower() not in ["percent"]):
+                        final_value = screener_value / 100.0
+                    payload[metric_name] = final_value
 
         # Derived metrics computed from previously resolved data
         for payload, ctx in zip(records, contexts):
@@ -259,62 +342,6 @@ class FinancialMetricsAssembler:
             deduped.append(normalised)
         return deduped
 
-    def _get_exchange_rate(
-        self,
-        from_currency: str,
-        to_currency: str,
-        instrument_id: int,
-        api_key: Optional[str] = None,
-    ) -> float:
-        """Get exchange rate from one currency to another.
-
-        For now, returns hardcoded common rates. In production, this should
-        fetch real-time exchange rates from a financial data provider.
-        """
-        if from_currency == to_currency:
-            return 1.0
-
-        # Common exchange rates (approximate - should be real-time in production)
-        rates = {
-            ("USD", "SEK"): 10.8,
-            ("SEK", "USD"): 1 / 10.8,
-            ("USD", "EUR"): 0.85,
-            ("EUR", "USD"): 1 / 0.85,
-            ("SEK", "EUR"): 0.085,
-            ("EUR", "SEK"): 1 / 0.085,
-            ("USD", "CAD"): 1.35,
-            ("CAD", "USD"): 1 / 1.35,
-            ("CAD", "SEK"): 8.0,
-            ("SEK", "CAD"): 1 / 8.0,
-        }
-
-        rate = rates.get((from_currency, to_currency))
-        if rate is not None:
-            return rate
-
-        # Try inverse rate
-        inverse_rate = rates.get((to_currency, from_currency))
-        if inverse_rate is not None:
-            return 1.0 / inverse_rate
-
-        # Default to 1.0 if conversion not available
-        return 1.0
-
-    def _convert_price_to_report_currency(
-        self,
-        price: float,
-        stock_currency: str,
-        report_currency: str,
-        instrument_id: int,
-        api_key: Optional[str] = None,
-    ) -> float:
-        """Convert stock price from trading currency to report currency."""
-        if stock_currency == report_currency:
-            return price
-
-        rate = self._get_exchange_rate(stock_currency, report_currency, instrument_id, api_key)
-        return price * rate
-
     def _compute_derived_metric(
         self,
         metric_name: str,
@@ -341,8 +368,8 @@ class FinancialMetricsAssembler:
             price_to_use = None
             if current_price is not None:
                 price_to_use = current_price
-                if stock_currency and report_currency and stock_currency != report_currency and instrument_id:
-                    price_to_use = self._convert_price_to_report_currency(current_price, stock_currency, report_currency, instrument_id, api_key)
+                # Note: Börsdata API handles currency conversion via original=0/1 parameter
+                # We rely on the API to provide data in consistent currency context
             else:
                 price_to_use = safe_float(report.get("stock_Price_Average") or report.get("stockPriceAverage") or report.get("stock_Price_Close"))
 
@@ -391,26 +418,28 @@ class FinancialMetricsAssembler:
             return dso + days_inventory_outstanding
 
         # Price ratio calculations using current stock price and per-share KPIs
+        # Note: Börsdata API ensures currency consistency when original=0/1 is used properly
         if current_price is not None and current_price > 0:
-            # Convert stock price to report currency for accurate ratio calculations
-            converted_price = current_price
-            if stock_currency and report_currency and stock_currency != report_currency and instrument_id:
-                converted_price = self._convert_price_to_report_currency(current_price, stock_currency, report_currency, instrument_id, api_key)
-
             if metric_name == "price_to_earnings_ratio":
+                # First try to get P/E directly from Börsdata (KPI ID 2)
+                pe_ratio = safe_float(ctx.kpis.get(2))  # KPI ID 2: P/E
+                if pe_ratio is not None:
+                    return pe_ratio
+
+                # Fall back to calculation using EPS
                 eps = safe_float(ctx.kpis.get(6))  # KPI ID 6: Earnings/share
                 if eps is not None and eps != 0:
-                    return converted_price / eps
+                    return current_price / eps
 
             elif metric_name == "price_to_book_ratio":
                 bvps = safe_float(ctx.kpis.get(8))  # KPI ID 8: Book value/share
                 if bvps is not None and bvps != 0:
-                    return converted_price / bvps
+                    return current_price / bvps
 
             elif metric_name == "price_to_sales_ratio":
                 rps = safe_float(ctx.kpis.get(5))  # KPI ID 5: Revenue/share
                 if rps is not None and rps != 0:
-                    return converted_price / rps
+                    return current_price / rps
 
         # Populate revenue_per_share from KPI data
         if metric_name == "revenue_per_share":

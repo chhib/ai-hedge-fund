@@ -1,75 +1,60 @@
 {
-  "ticker": "LUG",
   "prices": [
     {
-      "ticker": "LUG",
+      "time": "2025-09-15T00:00:00Z",
       "open": 597.5,
       "close": 595.0,
       "high": 597.5,
       "low": 578.5,
-      "volume": 379849,
-      "time": "2025-09-15T00:00:00Z",
-      "time_milliseconds": 1757894400000
+      "volume": 379849
     },
     {
-      "ticker": "LUG",
+      "time": "2025-09-16T00:00:00Z",
       "open": 591.0,
       "close": 575.5,
       "high": 598.5,
       "low": 569.0,
-      "volume": 307085,
-      "time": "2025-09-16T00:00:00Z",
-      "time_milliseconds": 1757980800000
+      "volume": 307085
     },
     {
-      "ticker": "LUG",
+      "time": "2025-09-17T00:00:00Z",
       "open": 560.0,
       "close": 569.0,
       "high": 571.0,
       "low": 550.5,
-      "volume": 410570,
-      "time": "2025-09-17T00:00:00Z",
-      "time_milliseconds": 1758067200000
+      "volume": 410570
     },
     {
-      "ticker": "LUG",
+      "time": "2025-09-18T00:00:00Z",
       "open": 560.0,
       "close": 571.5,
       "high": 573.0,
       "low": 552.5,
-      "volume": 264497,
-      "time": "2025-09-18T00:00:00Z",
-      "time_milliseconds": 1758153600000
+      "volume": 264497
     },
     {
-      "ticker": "LUG",
+      "time": "2025-09-19T00:00:00Z",
       "open": 572.0,
       "close": 580.0,
       "high": 586.5,
       "low": 572.0,
-      "volume": 242565,
-      "time": "2025-09-19T00:00:00Z",
-      "time_milliseconds": 1758240000000
+      "volume": 242565
     },
     {
-      "ticker": "LUG",
+      "time": "2025-09-22T00:00:00Z",
       "open": 598.5,
       "close": 611.5,
       "high": 615.0,
       "low": 590.0,
-      "volume": 390595,
-      "time": "2025-09-22T00:00:00Z",
-      "time_milliseconds": 1758499200000
+      "volume": 390595
     },
     {
-      "ticker": "LUG",
+      "time": "2025-09-23T00:00:00Z",
       "open": 617.0,
       "close": 615.0,
       "high": 620.0,
       "low": 610.0,
-      "volume": 241698,
-      "time": "2025-09-23T00:00:00Z",
-      "time_milliseconds": 1758585600000
+      "volume": 241698
     }
   ]
 }

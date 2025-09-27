@@ -3,47 +3,32 @@
     {
       "ticker": "LUG",
       "issuer": "Lundin Gold",
-      "name": "Ron Hochstein",
-      "title": "Chief Executive Officer",
-      "is_board_director": true,
-      "transaction_date": "2025-09-23",
-      "transaction_shares": -12000.0,
-      "transaction_price_per_share": 10.85,
-      "transaction_value": -130200.0,
-      "shares_owned_before_transaction": null,
-      "shares_owned_after_transaction": null,
-      "security_title": null,
-      "filing_date": "2025-09-23"
-    },
-    {
-      "ticker": "LUG",
-      "issuer": "Lundin Gold",
-      "name": "Pablo Mir",
-      "title": "Director",
-      "is_board_director": true,
-      "transaction_date": "2025-09-20",
-      "transaction_shares": 5000.0,
+      "name": "Pablo J. Mir",
+      "title": null,
+      "is_board_director": null,
+      "transaction_date": "2025-09-17",
+      "transaction_shares": -16900.0,
       "transaction_price_per_share": 10.42,
-      "transaction_value": 52100.0,
+      "transaction_value": -176098.0,
       "shares_owned_before_transaction": null,
       "shares_owned_after_transaction": null,
       "security_title": null,
-      "filing_date": "2025-09-21"
+      "filing_date": "2025-09-17"
     },
     {
       "ticker": "LUG",
       "issuer": "Lundin Gold",
-      "name": "Ilene Gold",
-      "title": "Vice President, Sustainability",
-      "is_board_director": false,
-      "transaction_date": "2025-09-18",
-      "transaction_shares": 2750.0,
-      "transaction_price_per_share": 10.15,
-      "transaction_value": 27912.5,
+      "name": "Pablo J. Mir",
+      "title": null,
+      "is_board_director": null,
+      "transaction_date": "2025-09-17",
+      "transaction_shares": -16900.0,
+      "transaction_price_per_share": 10.42,
+      "transaction_value": 176098.0,
       "shares_owned_before_transaction": null,
       "shares_owned_after_transaction": null,
       "security_title": null,
-      "filing_date": "2025-09-19"
+      "filing_date": "2025-09-17"
     }
   ]
 }

@@ -234,7 +234,7 @@ class BorsdataClient:
                 # Some tickers may only be available after a fresh sync
                 self._ensure_global_instrument_cache(api_key=api_key, force_refresh=True)
                 instrument = self._global_instrument_by_ticker.get(normalised)
-            
+
             if instrument is None:
                 raise BorsdataAPIError(f"Ticker '{ticker}' not found in Börsdata global instruments")
         else:
@@ -247,7 +247,7 @@ class BorsdataClient:
 
             if instrument is None:
                 raise BorsdataAPIError(f"Ticker '{ticker}' not found in Börsdata instruments")
-        
+
         return instrument
 
     def get_kpi_metadata(self, *, api_key: Optional[str] = None, force_refresh: bool = False) -> list[Dict[str, Any]]:
@@ -261,11 +261,14 @@ class BorsdataClient:
         report_type: str,
         *,
         max_count: Optional[int] = None,
+        original_currency: Optional[bool] = None,
         api_key: Optional[str] = None,
     ) -> Dict[str, Any]:
         params: Dict[str, Any] = {}
         if max_count is not None:
             params["maxCount"] = max_count
+        if original_currency is not None:
+            params["original"] = 1 if original_currency else 0
         return self._request(
             "GET",
             f"/v1/instruments/{int(instrument_id)}/kpis/{report_type}/summary",
@@ -336,6 +339,7 @@ class BorsdataClient:
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
         max_count: Optional[int] = None,
+        original_currency: Optional[bool] = None,
         api_key: Optional[str] = None,
     ) -> list[Dict[str, Any]]:
         params: Dict[str, Any] = {}
@@ -345,6 +349,8 @@ class BorsdataClient:
             params["to"] = end_date
         if max_count:
             params["maxCount"] = max_count
+        if original_currency is not None:
+            params["original"] = 1 if original_currency else 0
 
         payload = self._request(
             "GET",
@@ -441,6 +447,68 @@ class BorsdataClient:
                     enriched.setdefault("insId", company.get("insId"))
                     results.append(enriched)
         return results
+
+    def get_kpi_holdings(
+        self,
+        instrument_id: int,
+        kpi_id: int,
+        *,
+        api_key: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Return KPI holdings data for an instrument."""
+        return self._request(
+            "GET",
+            f"/v1/instruments/{instrument_id}/kpis/{kpi_id}/holdings",
+            api_key=api_key,
+        )
+
+    def get_kpi_screener_history(
+        self,
+        instrument_id: int,
+        kpi_id: int,
+        *,
+        api_key: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Return historical screener data for a KPI."""
+        return self._request(
+            "GET",
+            f"/v1/instruments/{instrument_id}/kpis/{kpi_id}/screener/history",
+            api_key=api_key,
+        )
+
+    def get_all_kpi_screener_values(
+        self,
+        instrument_id: int,
+        *,
+        api_key: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Return all screener values for an instrument."""
+        return self._request(
+            "GET",
+            f"/v1/instruments/{instrument_id}/kpis/screener",
+            api_key=api_key,
+        )
+
+    def get_kpi_bulk_values(
+        self,
+        instrument_id: int,
+        kpi_ids: Iterable[int],
+        calc_group: str = "last",
+        calc: str = "latest",
+        *,
+        api_key: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Return bulk KPI values for multiple KPIs at once."""
+        return self._request(
+            "POST",
+            f"/v1/instruments/{instrument_id}/kpis/screener/bulk",
+            json={
+                "kpiIds": list(kpi_ids),
+                "calcGroup": calc_group,
+                "calc": calc
+            },
+            api_key=api_key,
+        )
 
     @property
     def api_key(self) -> Optional[str]:

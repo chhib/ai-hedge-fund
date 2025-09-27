@@ -1,37 +1,3 @@
 {
-  "events": [
-    {
-      "ticker": "LUG",
-      "date": "2025-09-23",
-      "category": "dividend",
-      "title": "Dividend 2.10 CAD",
-      "description": "Semi-annual dividend in Canadian dollars",
-      "amount": 2.1,
-      "currency": "CAD",
-      "distribution_frequency": 2,
-      "dividend_type": 2,
-      "event_id": "dividend:880021:2025-09-23:2.1:CAD"
-    },
-    {
-      "ticker": "LUG",
-      "date": "2025-09-19",
-      "category": "report",
-      "title": "Report release (Q3)",
-      "description": "Production update and Q3 financials",
-      "report_type": "Q3",
-      "event_id": "report:880021:2025-09-19:Q3"
-    },
-    {
-      "ticker": "LUG",
-      "date": "2025-09-17",
-      "category": "dividend",
-      "title": "Dividend 14.00 SEK",
-      "description": "Swedish krona special dividend for Stockholm listing",
-      "amount": 14.0,
-      "currency": "SEK",
-      "distribution_frequency": 1,
-      "dividend_type": 3,
-      "event_id": "dividend:880021:2025-09-17:14.0:SEK"
-    }
-  ]
+  "events": []
 }

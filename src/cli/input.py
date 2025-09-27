@@ -232,7 +232,7 @@ def parse_cli_inputs(
 
     # Common/interactive flags
     # Test mode flag - must come before other args
-    parser.add_argument("--test", action="store_true", help="Use test configuration (gpt-5, fundamentals+technicals+sentiment)")
+    parser.add_argument("--test", action="store_true", help="Use test configuration (gpt-5-mini, fundamentals+technicals+sentiment)")
     
     add_common_args(parser, require_tickers=require_tickers, include_analyst_flags=True, include_ollama=True)
     add_date_args(parser, default_months_back=default_months_back)
@@ -280,7 +280,7 @@ def parse_cli_inputs(
     
     # Handle test mode
     if getattr(args, "test", False):
-        model_name, model_provider = "gpt-5", "OpenAI"
+        model_name, model_provider = "gpt-5-mini", "OpenAI"
         
         # Check if analysts were explicitly specified via --analysts
         if getattr(args, "analysts", None) or getattr(args, "analysts_all", False):
@@ -289,13 +289,13 @@ def parse_cli_inputs(
                 "analysts": getattr(args, "analysts", None),
             })
             print(f"\n{Fore.YELLOW}Test mode enabled:{Style.RESET_ALL}")
-            print(f"  Model: {Fore.GREEN}gpt-5{Style.RESET_ALL}")
+            print(f"  Model: {Fore.GREEN}gpt-5-mini{Style.RESET_ALL}")
             print(f"  Analysts: {Fore.GREEN}{', '.join(selected_analysts)}{Style.RESET_ALL}\n")
         else:
             # Use default test analysts when no explicit analysts specified
             selected_analysts = ["fundamentals_analyst", "technical_analyst", "sentiment_analyst"]
             print(f"\n{Fore.YELLOW}Test mode enabled:{Style.RESET_ALL}")
-            print(f"  Model: {Fore.GREEN}gpt-5{Style.RESET_ALL}")
+            print(f"  Model: {Fore.GREEN}gpt-5-mini{Style.RESET_ALL}")
             print(f"  Analysts: {Fore.GREEN}fundamentals_analyst, technical_analyst, sentiment_analyst{Style.RESET_ALL}\n")
     else:
         selected_analysts = select_analysts({

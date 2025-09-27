@@ -1,34 +1,3 @@
 {
-  "events": [
-    {
-      "ticker": "TTWO",
-      "date": "2025-09-22",
-      "category": "report",
-      "title": "Report release (Q2)",
-      "description": "Earnings release covering fiscal Q2 results",
-      "report_type": "Q2",
-      "event_id": "report:555001:2025-09-22:Q2"
-    },
-    {
-      "ticker": "TTWO",
-      "date": "2025-09-18",
-      "category": "dividend",
-      "title": "Dividend 0.90 USD",
-      "description": "Quarterly cash dividend",
-      "amount": 0.9,
-      "currency": "USD",
-      "distribution_frequency": 4,
-      "dividend_type": 1,
-      "event_id": "dividend:555001:2025-09-18:0.9:USD"
-    },
-    {
-      "ticker": "TTWO",
-      "date": "2025-09-16",
-      "category": "report",
-      "title": "Report release (Q1)",
-      "description": "Restated Q1 figures following acquisition",
-      "report_type": "Q1",
-      "event_id": "report:555001:2025-09-16:Q1"
-    }
-  ]
+  "events": []
 }

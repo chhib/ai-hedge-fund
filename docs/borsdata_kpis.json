@@ -1,0 +1,1640 @@
+[
+  {
+    "kpiId": 1,
+    "nameSv": "Direktavkastning",
+    "nameEn": "Dividend Yield",
+    "format": "%",
+    "isString": false
+  },
+  {
+    "kpiId": 2,
+    "nameSv": "P/E",
+    "nameEn": "P/E",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 3,
+    "nameSv": "P/S",
+    "nameEn": "P/S",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 4,
+    "nameSv": "P/B",
+    "nameEn": "P/B",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 5,
+    "nameSv": "Oms\u00e4ttning/Aktie",
+    "nameEn": "Revenue/share",
+    "format": "CURR",
+    "isString": false
+  },
+  {
+    "kpiId": 6,
+    "nameSv": "Vinst/Aktie",
+    "nameEn": "Earnings/share",
+    "format": "CURR",
+    "isString": false
+  },
+  {
+    "kpiId": 7,
+    "nameSv": "Utdelning",
+    "nameEn": "Dividend",
+    "format": "CURR",
+    "isString": false
+  },
+  {
+    "kpiId": 8,
+    "nameSv": "Eget Kapital/Aktie",
+    "nameEn": "Book value/share",
+    "format": "CURR",
+    "isString": false
+  },
+  {
+    "kpiId": 9,
+    "nameSv": "P/(E)x",
+    "nameEn": "P/(E)x",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 10,
+    "nameSv": "EV/EBIT",
+    "nameEn": "EV/EBIT",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 11,
+    "nameSv": "EV/EBITDA",
+    "nameEn": "EV/EBITDA",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 12,
+    "nameSv": "EV/E",
+    "nameEn": "EV/E",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 13,
+    "nameSv": "EV/FCF",
+    "nameEn": "EV/FCF",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 15,
+    "nameSv": "EV/S",
+    "nameEn": "EV/S",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 16,
+    "nameSv": "E/EV (%)",
+    "nameEn": "E/EV (%)",
+    "format": "%",
+    "isString": false
+  },
+  {
+    "kpiId": 17,
+    "nameSv": "EBIT/EV (%)",
+    "nameEn": "EBIT/EV (%)",
+    "format": "%",
+    "isString": false
+  },
+  {
+    "kpiId": 18,
+    "nameSv": "P/B-tang",
+    "nameEn": "P/B-tang",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 19,
+    "nameSv": "PEG",
+    "nameEn": "PEG",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 20,
+    "nameSv": "Utdelningsandel",
+    "nameEn": "Dividend Payout",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 21,
+    "nameSv": "YieldOnCost",
+    "nameEn": "YieldOnCost",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 22,
+    "nameSv": "Total Direktavkastning",
+    "nameEn": "Total dividend yield",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 23,
+    "nameSv": "FCF / Aktie",
+    "nameEn": "FCF growth",
+    "format": "CURR",
+    "isString": false
+  },
+  {
+    "kpiId": 24,
+    "nameSv": "FCF Marginal%",
+    "nameEn": "FCF margin%",
+    "format": "%",
+    "isString": false
+  },
+  {
+    "kpiId": 25,
+    "nameSv": "Capex %",
+    "nameEn": "Capex %",
+    "format": "%",
+    "isString": false
+  },
+  {
+    "kpiId": 26,
+    "nameSv": "Utdelning/FCF",
+    "nameEn": "Dividend/FCF",
+    "format": "%",
+    "isString": false
+  },
+  {
+    "kpiId": 27,
+    "nameSv": "Vinst/FCF",
+    "nameEn": "Earnings/FCF",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 28,
+    "nameSv": "Bruttomarginal",
+    "nameEn": "Gross margin",
+    "format": "%",
+    "isString": false
+  },
+  {
+    "kpiId": 29,
+    "nameSv": "R\u00f6relsemarginal",
+    "nameEn": "Operating margin",
+    "format": "%",
+    "isString": false
+  },
+  {
+    "kpiId": 30,
+    "nameSv": "Vinstmarginal",
+    "nameEn": "Profit margin",
+    "format": "%",
+    "isString": false
+  },
+  {
+    "kpiId": 31,
+    "nameSv": "FCF-marginal",
+    "nameEn": "FCF margin",
+    "format": "%",
+    "isString": false
+  },
+  {
+    "kpiId": 32,
+    "nameSv": "EBITDA-marginal",
+    "nameEn": "EBITDA margin",
+    "format": "%",
+    "isString": false
+  },
+  {
+    "kpiId": 33,
+    "nameSv": "Avkastning P\u00e5 EK",
+    "nameEn": "Return on Equity",
+    "format": "%",
+    "isString": false
+  },
+  {
+    "kpiId": 34,
+    "nameSv": "Avkastning p\u00e5 T",
+    "nameEn": "Return on Assets",
+    "format": "%",
+    "isString": false
+  },
+  {
+    "kpiId": 35,
+    "nameSv": "Avkastning p\u00e5 T-G",
+    "nameEn": "Return on tangible assets",
+    "format": "%",
+    "isString": false
+  },
+  {
+    "kpiId": 36,
+    "nameSv": "ROC",
+    "nameEn": "Return on Capital",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 37,
+    "nameSv": "ROIC",
+    "nameEn": "Return on Invested capital",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 38,
+    "nameSv": "Oms\u00e4ttningshastighet",
+    "nameEn": "Assets Turnover",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 39,
+    "nameSv": "Soliditet",
+    "nameEn": "Equity ratio",
+    "format": "%",
+    "isString": false
+  },
+  {
+    "kpiId": 40,
+    "nameSv": "Skulds\u00e4ttningsgrad",
+    "nameEn": "Debt to Equity",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 41,
+    "nameSv": "Nettoskuld",
+    "nameEn": "Net Debt",
+    "format": "%",
+    "isString": false
+  },
+  {
+    "kpiId": 42,
+    "nameSv": "Nettoskuld/EBITDA",
+    "nameEn": "Net Debt / EBITDA",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 44,
+    "nameSv": "Balanslikviditet",
+    "nameEn": "Current ratio",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 45,
+    "nameSv": "R\u00f6r.kap/L.f.skulder",
+    "nameEn": "W.Cap/N.C.liab.",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 46,
+    "nameSv": "Kassa-%",
+    "nameEn": "Cash-%",
+    "format": "%",
+    "isString": false
+  },
+  {
+    "kpiId": 49,
+    "nameSv": "Enterprise Value",
+    "nameEn": "Enterprise Value",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 50,
+    "nameSv": "B\u00f6rsv\u00e4rde",
+    "nameEn": "Market Cap",
+    "format": "MCURR",
+    "isString": false
+  },
+  {
+    "kpiId": 51,
+    "nameSv": "OP-marginal",
+    "nameEn": "OCF margin",
+    "format": "%",
+    "isString": false
+  },
+  {
+    "kpiId": 53,
+    "nameSv": "Oms\u00e4ttning",
+    "nameEn": "Revenue",
+    "format": "MCURR",
+    "isString": false
+  },
+  {
+    "kpiId": 54,
+    "nameSv": "EBITDA",
+    "nameEn": "EBITDA",
+    "format": "MCURR",
+    "isString": false
+  },
+  {
+    "kpiId": 55,
+    "nameSv": "R\u00f6relseresultat",
+    "nameEn": "Operating income",
+    "format": "MCURR",
+    "isString": false
+  },
+  {
+    "kpiId": 56,
+    "nameSv": "Vinst",
+    "nameEn": "Earnings",
+    "format": "MCURR",
+    "isString": false
+  },
+  {
+    "kpiId": 57,
+    "nameSv": "Totala Tillg\u00e5ngar",
+    "nameEn": "Total Assets",
+    "format": "MCURR",
+    "isString": false
+  },
+  {
+    "kpiId": 58,
+    "nameSv": "Eget Kapital",
+    "nameEn": "Total Equity",
+    "format": "MCURR",
+    "isString": false
+  },
+  {
+    "kpiId": 60,
+    "nameSv": "Nettoskuld",
+    "nameEn": "Net Debt",
+    "format": "MCURR",
+    "isString": false
+  },
+  {
+    "kpiId": 61,
+    "nameSv": "Antal Aktier",
+    "nameEn": "Number of Shares",
+    "format": "M",
+    "isString": false
+  },
+  {
+    "kpiId": 62,
+    "nameSv": "Operativ Kassafl\u00f6de",
+    "nameEn": "Operating Cash Flow",
+    "format": "MCURR",
+    "isString": false
+  },
+  {
+    "kpiId": 63,
+    "nameSv": "Fritt Kassafl\u00f6de",
+    "nameEn": "Free Cash Flow",
+    "format": "MCURR",
+    "isString": false
+  },
+  {
+    "kpiId": 64,
+    "nameSv": "Capex",
+    "nameEn": "Capex",
+    "format": "MCURR",
+    "isString": false
+  },
+  {
+    "kpiId": 65,
+    "nameSv": "\u00c5ret Kassafl\u00f6de",
+    "nameEn": "Cash flow for the year",
+    "format": "MCURR",
+    "isString": false
+  },
+  {
+    "kpiId": 66,
+    "nameSv": "Ordinarie Utdelning",
+    "nameEn": "Ordinary Dividend",
+    "format": "CURR",
+    "isString": false
+  },
+  {
+    "kpiId": 68,
+    "nameSv": "Operativ kassafl\u00f6de/Aktie",
+    "nameEn": "Operating Cash Flow/share",
+    "format": "CURR",
+    "isString": false
+  },
+  {
+    "kpiId": 69,
+    "nameSv": "\u00c5rets kassafl\u00f6de/Aktie",
+    "nameEn": "Cash flow - year/share",
+    "format": "CURR",
+    "isString": false
+  },
+  {
+    "kpiId": 70,
+    "nameSv": "EBIT / Aktie",
+    "nameEn": "EBIT / Share",
+    "format": "CURR",
+    "isString": false
+  },
+  {
+    "kpiId": 71,
+    "nameSv": "EBITDA/Aktie",
+    "nameEn": "EBITA/share",
+    "format": "CURR",
+    "isString": false
+  },
+  {
+    "kpiId": 73,
+    "nameSv": "Nettoskuld/Aktie",
+    "nameEn": "Net Debt/share",
+    "format": "CURR",
+    "isString": false
+  },
+  {
+    "kpiId": 74,
+    "nameSv": "P/EBITDA",
+    "nameEn": "P/EBITDA",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 75,
+    "nameSv": "P/EBIT",
+    "nameEn": "P/EBIT",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 76,
+    "nameSv": "P/FCF",
+    "nameEn": "P/FCF",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 78,
+    "nameSv": "EV/OP",
+    "nameEn": "EV/OCF",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 92,
+    "nameSv": "Immat.tillg\u00e5ng.-%",
+    "nameEn": "Intang.assets-%",
+    "format": "%",
+    "isString": false
+  },
+  {
+    "kpiId": 93,
+    "nameSv": "R\u00f6relsekapital-%",
+    "nameEn": "Workingcapital-%",
+    "format": "%",
+    "isString": false
+  },
+  {
+    "kpiId": 94,
+    "nameSv": "Oms\u00e4ttningstillv\u00e4xt",
+    "nameEn": "Revenue growth",
+    "format": "%",
+    "isString": false
+  },
+  {
+    "kpiId": 96,
+    "nameSv": "EBIT Tillv\u00e4xt",
+    "nameEn": "EBIT Growth",
+    "format": "%",
+    "isString": false
+  },
+  {
+    "kpiId": 97,
+    "nameSv": "Vinsttillv\u00e4xt",
+    "nameEn": "Earnings growth",
+    "format": "%",
+    "isString": false
+  },
+  {
+    "kpiId": 98,
+    "nameSv": "Utdelningstillv\u00e4xt",
+    "nameEn": "Dividend growth",
+    "format": "%",
+    "isString": false
+  },
+  {
+    "kpiId": 99,
+    "nameSv": "Tillv\u00e4xt Eget Kapital",
+    "nameEn": "Book Value growth",
+    "format": "%",
+    "isString": false
+  },
+  {
+    "kpiId": 100,
+    "nameSv": "Tillv\u00e4xt Totala Tillg\u00e5ngar",
+    "nameEn": "Assets growth",
+    "format": "%",
+    "isString": false
+  },
+  {
+    "kpiId": 125,
+    "nameSv": "Vinst f\u00f6re skatt",
+    "nameEn": "Profit  before tax",
+    "format": "MCURR",
+    "isString": false
+  },
+  {
+    "kpiId": 126,
+    "nameSv": "Immateriella tillg\u00e5ngar",
+    "nameEn": "Intangible assets",
+    "format": "MCURR",
+    "isString": false
+  },
+  {
+    "kpiId": 127,
+    "nameSv": "Materiella tillg\u00e5ngar",
+    "nameEn": "Tangible assets",
+    "format": "MCURR",
+    "isString": false
+  },
+  {
+    "kpiId": 128,
+    "nameSv": "Finansiella tillg\u00e5ngar",
+    "nameEn": "Financial assets",
+    "format": "MCURR",
+    "isString": false
+  },
+  {
+    "kpiId": 129,
+    "nameSv": "Anl\u00e4ggningstillg\u00e5ngar",
+    "nameEn": "Non-current assets",
+    "format": "MCURR",
+    "isString": false
+  },
+  {
+    "kpiId": 130,
+    "nameSv": "Kassa",
+    "nameEn": "Cash",
+    "format": "MCURR",
+    "isString": false
+  },
+  {
+    "kpiId": 131,
+    "nameSv": "Oms\u00e4ttningstillg\u00e5ngar",
+    "nameEn": "Current assets",
+    "format": "MCURR",
+    "isString": false
+  },
+  {
+    "kpiId": 132,
+    "nameSv": "L\u00e5ngfristiga skulder",
+    "nameEn": "Non-current liabilities",
+    "format": "MCURR",
+    "isString": false
+  },
+  {
+    "kpiId": 133,
+    "nameSv": "Kortfristiga skulder",
+    "nameEn": "Current liabilities",
+    "format": "MCURR",
+    "isString": false
+  },
+  {
+    "kpiId": 134,
+    "nameSv": "Totala Skulder och Eget kapital",
+    "nameEn": "Total Equity and Liabilities",
+    "format": "MCURR",
+    "isString": false
+  },
+  {
+    "kpiId": 135,
+    "nameSv": "Bruttoresultat",
+    "nameEn": "Gross profit",
+    "format": "MCURR",
+    "isString": false
+  },
+  {
+    "kpiId": 137,
+    "nameSv": "Totala Skulder",
+    "nameEn": "Total liabilities",
+    "format": "MCURR",
+    "isString": false
+  },
+  {
+    "kpiId": 138,
+    "nameSv": "Kassafl\u00f6de-Finansiering",
+    "nameEn": "Cash flow - Financing",
+    "format": "MCURR",
+    "isString": false
+  },
+  {
+    "kpiId": 140,
+    "nameSv": "\u00c5rets kassafl\u00f6de marginal",
+    "nameEn": "Cash flow - year marginal",
+    "format": "%",
+    "isString": false
+  },
+  {
+    "kpiId": 141,
+    "nameSv": "ADR",
+    "nameEn": "ADR",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 148,
+    "nameSv": "Ordinarie Direktavkastning",
+    "nameEn": "Ordinary Dividend Yield",
+    "format": "CURR",
+    "isString": false
+  },
+  {
+    "kpiId": 151,
+    "nameSv": "Kursutveckling",
+    "nameEn": "Performance",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 152,
+    "nameSv": "Total avkastning",
+    "nameEn": "Total return",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 153,
+    "nameSv": "Senaste Kurs / H\u00f6gsta-L\u00e4gsta",
+    "nameEn": "Latest Price / High-Low",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 155,
+    "nameSv": "Volym MA-Trend",
+    "nameEn": "Volume MA-Trend",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 157,
+    "nameSv": "MA200 Rank",
+    "nameEn": "MA200 Rank",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 158,
+    "nameSv": "MA(50) / MA(200)",
+    "nameEn": "MA(50) / MA(200)",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 159,
+    "nameSv": "RSI",
+    "nameEn": "RSI",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 160,
+    "nameSv": "RSI - Trend",
+    "nameEn": "RSI - Trend",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 161,
+    "nameSv": "Bollinger band",
+    "nameEn": "Bollinger band",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 163,
+    "nameSv": "Magic Formula",
+    "nameEn": "Magic Formula",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 164,
+    "nameSv": "Graham Strategi",
+    "nameEn": "Graham Strategy",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 165,
+    "nameSv": "Utdelningsstrategin",
+    "nameEn": "Dividend Strategy",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 167,
+    "nameSv": "F-Score",
+    "nameEn": "F-Score",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 168,
+    "nameSv": "Noteringshistorik",
+    "nameEn": "Listing history",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 169,
+    "nameSv": "Relativ Kursutveckling",
+    "nameEn": "Relative Performance",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 170,
+    "nameSv": "Tradingvolym",
+    "nameEn": "Tradingvolume",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 171,
+    "nameSv": "F-Score & Graham",
+    "nameEn": "F-Score & Graham",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 172,
+    "nameSv": "F-Score & Utdelning",
+    "nameEn": "F-Score & Dividend",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 173,
+    "nameSv": "F-Score & Graham Utdelning",
+    "nameEn": "F-Score & Graham Dividend",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 174,
+    "nameSv": "Vinstsstabilitet",
+    "nameEn": "Earnings Stability",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 175,
+    "nameSv": "EBIT Stabil",
+    "nameEn": "EBIT Stabil",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 176,
+    "nameSv": "EBITDA Stabil",
+    "nameEn": "EBITDA Stabil",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 177,
+    "nameSv": "Utdelningsstabilitet",
+    "nameEn": "Dividend Stability",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 178,
+    "nameSv": "Kassafl\u00f6desstabilitet",
+    "nameEn": "Cash Flow Stability",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 179,
+    "nameSv": "Fritt Kassafl\u00f6de",
+    "nameEn": "Free Cash Flow",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 180,
+    "nameSv": "Antal dagar till n\u00e4sta rapport",
+    "nameEn": "Number of days to next report",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 181,
+    "nameSv": "Antal dagar efter uppdatering",
+    "nameEn": "Number of days after update",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 190,
+    "nameSv": "Net-Nets",
+    "nameEn": "Net-Nets",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 192,
+    "nameSv": "RS Rank",
+    "nameEn": "RS Rank",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 193,
+    "nameSv": "Volym Rank",
+    "nameEn": "Volume Rank",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 194,
+    "nameSv": "Value Composite",
+    "nameEn": "Value Composite ",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 195,
+    "nameSv": "Canslim",
+    "nameEn": "Canslim",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 201,
+    "nameSv": "N\u00e4sta Rapportdatum",
+    "nameEn": "Next Reportdate",
+    "format": null,
+    "isString": true
+  },
+  {
+    "kpiId": 202,
+    "nameSv": "Uppdaterade Rapportdatum",
+    "nameEn": "Updated Reportdate",
+    "format": null,
+    "isString": true
+  },
+  {
+    "kpiId": 203,
+    "nameSv": "OMXS30",
+    "nameEn": "OMXS30",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 204,
+    "nameSv": "OMXH25",
+    "nameEn": "OMXH25",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 205,
+    "nameSv": "OMXC20",
+    "nameEn": "OMXC20",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 206,
+    "nameSv": "OSEBX25",
+    "nameEn": "OSEBX25",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 207,
+    "nameSv": "Genomsnittlig Blankning Blankning 1 vecka",
+    "nameEn": "Average Short-Selling Short-Selling 1 week",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 208,
+    "nameSv": "Genomsnittlig Blankning 1 m\u00e5nad",
+    "nameEn": "Average Short-Selling 1 month",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 209,
+    "nameSv": "Genomsnittlig Blankning 3 m\u00e5nader",
+    "nameEn": "Average Short-Selling 3 months",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 210,
+    "nameSv": "Genomsnittlig Blankning 1 \u00e5r",
+    "nameEn": "Average Short-Selling 1 year",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 211,
+    "nameSv": "Blankningsf\u00f6r\u00e4ndring Blankning 1 vecka",
+    "nameEn": "Short-Selling Change Short-Selling 1 week",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 212,
+    "nameSv": "Blankningsf\u00f6r\u00e4ndring 1 m\u00e5nad",
+    "nameEn": "Short-Selling Change 1 month",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 213,
+    "nameSv": "\u00c5terk\u00f6p Mkr 1 m\u00e5nad",
+    "nameEn": "Buyback Million 1 month",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 214,
+    "nameSv": "\u00c5terk\u00f6p Mkr 3 m\u00e5nader",
+    "nameEn": "Buyback Million 3 months",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 215,
+    "nameSv": "\u00c5terk\u00f6p Mkr 1 \u00e5r",
+    "nameEn": "Buyback Million 1 year",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 216,
+    "nameSv": "Investor",
+    "nameEn": "Investor",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 217,
+    "nameSv": "Industriv\u00e4rden",
+    "nameEn": "Industriv\u00e4rden",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 218,
+    "nameSv": "Lundbergs",
+    "nameEn": "Lundbergs",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 219,
+    "nameSv": "Kinnevik",
+    "nameEn": "Kinnevik",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 220,
+    "nameSv": "Latour",
+    "nameEn": "Latour",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 221,
+    "nameSv": "Svolder",
+    "nameEn": "Svolder",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 223,
+    "nameSv": "Creades",
+    "nameEn": "Creades",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 224,
+    "nameSv": "\u00d6resund",
+    "nameEn": "\u00d6resund",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 225,
+    "nameSv": "Traction",
+    "nameEn": "Traction",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 226,
+    "nameSv": "AllBright Index F\u00f6reg\u00e5ende \u00e5rs Index",
+    "nameEn": "AllBright Index Previous years Index",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 227,
+    "nameSv": "AllBright Index Senaste Index",
+    "nameEn": "AllBright Index Latest Index",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 228,
+    "nameSv": "AllBright F\u00f6r\u00e4ndring F\u00f6r\u00e4ndring",
+    "nameEn": "AllBright Change Change",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 229,
+    "nameSv": "Insider K\u00f6p 1 Vecka",
+    "nameEn": "Insider Buy 1 Week",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 230,
+    "nameSv": "Insider K\u00f6p 1 m\u00e5nad",
+    "nameEn": "Insider Buy 1 month",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 231,
+    "nameSv": "Insider K\u00f6p 3 m\u00e5nader",
+    "nameEn": "Insider Buy 3 months",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 232,
+    "nameSv": "Insider K\u00f6p 12 m\u00e5nader",
+    "nameEn": "Insider Buy 12 months",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 233,
+    "nameSv": "Insider S\u00e4lj 1 Vecka",
+    "nameEn": "Insider Sell 1 Week",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 234,
+    "nameSv": "Insider S\u00e4lj 1 m\u00e5nad",
+    "nameEn": "Insider Sell 1 month",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 235,
+    "nameSv": "Insider S\u00e4lj 3 m\u00e5nader",
+    "nameEn": "Insider Sell 3 months",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 236,
+    "nameSv": "Insider S\u00e4lj 12 m\u00e5nader",
+    "nameEn": "Insider Sell 12 months",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 237,
+    "nameSv": "Insider Netto 1 Vecka",
+    "nameEn": "Insider Net 1 Week",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 238,
+    "nameSv": "Insider Netto 1 m\u00e5nad",
+    "nameEn": "Insider Net 1 month",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 239,
+    "nameSv": "Insider Netto 3 m\u00e5nader",
+    "nameEn": "Insider Net 3 months",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 240,
+    "nameSv": "Insider Netto 12 m\u00e5nader",
+    "nameEn": "Insider Net 12 months",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 241,
+    "nameSv": "St\u00f6rsta \u00e4garens kapital",
+    "nameEn": "Largest shareholders capital",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 242,
+    "nameSv": "Andra st\u00f6rsta \u00e4garens kapital",
+    "nameEn": "Second largest shareholders capital",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 243,
+    "nameSv": "Tredje st\u00f6rsta \u00e4garens kapital",
+    "nameEn": "Third largest shareholders capital",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 244,
+    "nameSv": "St\u00f6rsta \u00e4garens r\u00f6ster",
+    "nameEn": "Largest shareholders votes",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 245,
+    "nameSv": "Andra st\u00f6rsta \u00e4garens r\u00f6ster",
+    "nameEn": "Second largest shareholders votes",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 246,
+    "nameSv": "Tredje st\u00f6rsta \u00e4garens r\u00f6ster",
+    "nameEn": "Third largest shareholders votes",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 247,
+    "nameSv": "Namnet p\u00e5 st\u00f6rsta \u00e4gare",
+    "nameEn": "The name of the largest shareholder",
+    "format": null,
+    "isString": true
+  },
+  {
+    "kpiId": 248,
+    "nameSv": "Namnet p\u00e5 andra st\u00f6rsta \u00e4gare",
+    "nameEn": "The name of the second largest shareholder",
+    "format": null,
+    "isString": true
+  },
+  {
+    "kpiId": 249,
+    "nameSv": "Namnet p\u00e5 tredje st\u00f6rsta \u00e4gare",
+    "nameEn": "The name of the third largest shareholders",
+    "format": null,
+    "isString": true
+  },
+  {
+    "kpiId": 250,
+    "nameSv": "Lannebo Sverige Innehav-%",
+    "nameEn": "Lannebo Sweden Holdings-%",
+    "format": "%",
+    "isString": false
+  },
+  {
+    "kpiId": 251,
+    "nameSv": "Lannebo Sverige F\u00f6r\u00e4ndring",
+    "nameEn": "Lannebo Sweden Change",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 252,
+    "nameSv": "Lannebo Sm\u00e5bolag Innehav-%",
+    "nameEn": "Lannebo SmallCap Holdings-%",
+    "format": "%",
+    "isString": false
+  },
+  {
+    "kpiId": 253,
+    "nameSv": "Lannebo Sm\u00e5bolag F\u00f6r\u00e4ndring",
+    "nameEn": "Lannebo SmallCap Change",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 254,
+    "nameSv": "Carnegie Sverige Innehav-%",
+    "nameEn": "Carnegie Sweden Holdings-%",
+    "format": "%",
+    "isString": false
+  },
+  {
+    "kpiId": 255,
+    "nameSv": "Carnegie Sverige F\u00f6r\u00e4ndring",
+    "nameEn": "Carnegie Sweden Change",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 256,
+    "nameSv": "Carnegie Sm\u00e5bolag Innehav-%",
+    "nameEn": "Carnegie SmallCap Holdings-%",
+    "format": "%",
+    "isString": false
+  },
+  {
+    "kpiId": 257,
+    "nameSv": "Carnegie Sm\u00e5bolag F\u00f6r\u00e4ndring",
+    "nameEn": "Carnegie SmallCap Change",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 258,
+    "nameSv": "Didner & Gerge Aktiefond Innehav-%",
+    "nameEn": "Didner & Gerge Equity Fund Holdings-%",
+    "format": "%",
+    "isString": false
+  },
+  {
+    "kpiId": 259,
+    "nameSv": "Didner & Gerge Aktiefond F\u00f6r\u00e4ndring",
+    "nameEn": "Didner & Gerge Equity Fund Change",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 260,
+    "nameSv": "Didner & Gerge Sm\u00e5bolag Innehav-%",
+    "nameEn": "Didner & Gerge SmallCap Holdings-%",
+    "format": "%",
+    "isString": false
+  },
+  {
+    "kpiId": 261,
+    "nameSv": "Didner & Gerge Sm\u00e5bolag F\u00f6r\u00e4ndring",
+    "nameEn": "Didner & Gerge SmallCap Change",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 262,
+    "nameSv": "Didner & Gerge MicroCap Innehav-%",
+    "nameEn": "Didner & Gerge MicroCap Holdings-%",
+    "format": "%",
+    "isString": false
+  },
+  {
+    "kpiId": 263,
+    "nameSv": "Didner & Gerge MicroCap F\u00f6r\u00e4ndring",
+    "nameEn": "Didner & Gerge MicroCap Change",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 264,
+    "nameSv": "Spiltan Sverigefond Innehav-%",
+    "nameEn": "Spiltan Sweden fund Holdings-%",
+    "format": "%",
+    "isString": false
+  },
+  {
+    "kpiId": 265,
+    "nameSv": "Spiltan Sverigefond F\u00f6r\u00e4ndring",
+    "nameEn": "Spiltan Sweden fund Change",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 266,
+    "nameSv": "Spiltan Dalarna Innehav-%",
+    "nameEn": "Spiltan Dalarna Holdings-%",
+    "format": "%",
+    "isString": false
+  },
+  {
+    "kpiId": 267,
+    "nameSv": "Spiltan Dalarna F\u00f6r\u00e4ndring",
+    "nameEn": "Spiltan Dalarna Change",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 268,
+    "nameSv": "Spiltan Sm\u00e5land Innehav-%",
+    "nameEn": "Spiltan Sm\u00e5land Holdings-%",
+    "format": "%",
+    "isString": false
+  },
+  {
+    "kpiId": 269,
+    "nameSv": "Spiltan Sm\u00e5land F\u00f6r\u00e4ndring",
+    "nameEn": "Spiltan Sm\u00e5land Change",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 270,
+    "nameSv": "Avanza Zero Innehav-%",
+    "nameEn": "Avanza Zero Holdings-%",
+    "format": "%",
+    "isString": false
+  },
+  {
+    "kpiId": 271,
+    "nameSv": "Avanza Zero F\u00f6r\u00e4ndring",
+    "nameEn": "Avanza Zero Change",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 272,
+    "nameSv": "Nordnet Superfonden Innehav-%",
+    "nameEn": "Nordnet Superfund Holdings-%",
+    "format": "%",
+    "isString": false
+  },
+  {
+    "kpiId": 273,
+    "nameSv": "Nordnet Superfonden F\u00f6r\u00e4ndring",
+    "nameEn": "Nordnet Superfund Change",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 274,
+    "nameSv": "Investmentbolag Substansv\u00e4rde",
+    "nameEn": "Holding Companies Net Assests Value",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 275,
+    "nameSv": "Investmentbolag Substansrabatt",
+    "nameEn": "Holding Companies NAV Discount",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 276,
+    "nameSv": "Investmentbolag Tillv\u00e4xt 3 m\u00e5n",
+    "nameEn": "Holding Companies Growth 3 m",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 277,
+    "nameSv": "Fastigheter Substansv\u00e4rde",
+    "nameEn": "Real Estate Net Assests Value",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 278,
+    "nameSv": "Fastigheter R\u00e4ntet\u00e4ckningsgrad",
+    "nameEn": "Real Estate Interest Cover Ratio",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 279,
+    "nameSv": "Fastigheter Bel\u00e5ningsgrad",
+    "nameEn": "Real Estate Loan-to-value Ratio",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 280,
+    "nameSv": "Fastigheter Uthyrningsgrad",
+    "nameEn": "Real Estate Occupancy Rate",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 281,
+    "nameSv": "Drift\u00f6verskott Fastigheter Mkr",
+    "nameEn": "Net operating income Real Estate SEK M",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 282,
+    "nameSv": "Drift\u00f6verskott Fastigheter Per Aktie",
+    "nameEn": "Net operating income Real Estate Per Share",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 283,
+    "nameSv": "Drift\u00f6verskott Fastigheter Driftmarginal",
+    "nameEn": "Net operating income Real Estate Operating margin",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 284,
+    "nameSv": "F\u00f6rvaltningsresultat Fastigheter Mkr",
+    "nameEn": "Property income Real Estate SEK M",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 285,
+    "nameSv": "F\u00f6rvaltningsresultat Fastigheter Per Aktie",
+    "nameEn": "Property income Real Estate Per Share",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 286,
+    "nameSv": "F\u00f6rvaltningsresultat Fastigheter F\u00f6rvaltningsmarginal",
+    "nameEn": "Property income Real Estate Property margin",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 287,
+    "nameSv": "Fastigheter Substansrabatt",
+    "nameEn": "Real Estate NAV Discount",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 288,
+    "nameSv": "Drift\u00f6verskott Fastigheter P / Drift\u00f6verskott",
+    "nameEn": "Net operating income Real Estate P / Net Operating",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 289,
+    "nameSv": "F\u00f6rvaltningsresultat Fastigheter P / F\u00f6rvaltning",
+    "nameEn": "Property income Real Estate P / Property profit",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 290,
+    "nameSv": "Banker K/I-Tal",
+    "nameEn": "Banks C/I-Ratio",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 291,
+    "nameSv": "Banker Kreditf\u00f6rluster",
+    "nameEn": "Banks Credit losses",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 292,
+    "nameSv": "Banker K\u00e4rnprim\u00e4rkapital",
+    "nameEn": "Banks Common Equity Tier 1",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 293,
+    "nameSv": "Banker Prim\u00e4rkapital",
+    "nameEn": "Banks Tier 1 capital",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 294,
+    "nameSv": "Banker Total Kapitalrelation",
+    "nameEn": "Banks Capital adequacy",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 295,
+    "nameSv": "Banker Inl\u00e5ning / Utl\u00e5ning",
+    "nameEn": "Banks Deposits / Lendings",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 296,
+    "nameSv": "Banker Likviditetst\u00e4ckning (LCR)",
+    "nameEn": "Banks Liquidity Coverage Ratio (LCR)",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 307,
+    "nameSv": "Jus. NCAV / aktie",
+    "nameEn": "Adj. NCAV / share",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 308,
+    "nameSv": "NCAV/aktie",
+    "nameEn": "NCAV/share",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 309,
+    "nameSv": "Jus. Kurs / NCAV",
+    "nameEn": "Adj. Price / NCAV",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 310,
+    "nameSv": "Kurs/NCAV",
+    "nameEn": "Price/NCAV",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 311,
+    "nameSv": "Volatilitet H-L %",
+    "nameEn": "Volatility H-L %",
+    "format": "%",
+    "isString": false
+  },
+  {
+    "kpiId": 312,
+    "nameSv": "Volatilitet Standardavvikelse",
+    "nameEn": "Volatility Standard deviation",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 313,
+    "nameSv": "Volym",
+    "nameEn": "Volume",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 314,
+    "nameSv": "Volym Trend",
+    "nameEn": "Volume Trend",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 315,
+    "nameSv": "Gap Ned",
+    "nameEn": "Gap Down",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 316,
+    "nameSv": "Gap Upp",
+    "nameEn": "Gap Up",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 317,
+    "nameSv": "Medelv\u00e4rde",
+    "nameEn": "Moving Average",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 318,
+    "nameSv": "Senaste Kurs / MA",
+    "nameEn": "Latest Price / MA",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 321,
+    "nameSv": "Bollinger Avst\u00e5nd",
+    "nameEn": "Bollinger Distance",
+    "format": null,
+    "isString": false
+  },
+  {
+    "kpiId": 322,
+    "nameSv": "BB - Avst\u00e5nd",
+    "nameEn": "BB - Distance",
+    "format": null,
+    "isString": false
+  }
+]

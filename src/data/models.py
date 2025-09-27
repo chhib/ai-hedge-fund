@@ -63,6 +63,49 @@ class FinancialMetrics(BaseModel):
     book_value_per_share: float | None
     free_cash_flow_per_share: float | None
     revenue_per_share: float | None
+    
+    # Advanced financial metrics from comprehensive Börsdata KPI set
+    ebitda_margin: float | None
+    fcf_margin: float | None
+    equity_ratio: float | None
+    net_debt: float | None
+    net_debt_to_ebitda: float | None
+    ocf_margin: float | None
+    dividend_yield: float | None
+    dividend_payout_ratio: float | None
+    
+    # Enterprise value ratios
+    ev_to_fcf_ratio: float | None
+    ev_to_ocf_ratio: float | None
+    
+    # Price ratios
+    price_to_fcf_ratio: float | None
+    price_to_ebit_ratio: float | None
+    price_to_ebitda_ratio: float | None
+    
+    # Per-share metrics
+    ebit_per_share: float | None
+    ebitda_per_share: float | None
+    operating_cash_flow_per_share: float | None
+    net_debt_per_share: float | None
+    
+    # Financial stability metrics
+    return_on_tangible_assets: float | None
+    return_on_capital: float | None
+    
+    # Growth rates (additional)
+    dividend_growth: float | None
+    assets_growth: float | None
+    
+    # Cash metrics
+    cash_per_share: float | None
+    cash_to_price_ratio: float | None
+    
+    # Working capital metrics
+    working_capital_percentage: float | None
+    
+    # Additional ratios
+    intangible_assets_percentage: float | None
 
 
 class FinancialMetricsResponse(BaseModel):
