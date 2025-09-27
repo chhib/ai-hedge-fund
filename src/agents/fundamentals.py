@@ -10,6 +10,7 @@ from src.utils.progress import progress
 import json
 
 from src.tools.api import get_financial_metrics
+from src.utils.data_cache import get_cached_or_fetch_financial_metrics
 
 
 class FundamentalsAnalystSignal(BaseModel):
@@ -136,16 +137,10 @@ def fundamentals_analyst_agent(state: AgentState, agent_id: str = "fundamentals_
     any_ticker_succeeded = False
 
     for ticker in tickers:
-        progress.update_status(agent_id, ticker, "Fetching financial metrics")
+        progress.update_status(agent_id, ticker, "Using cached financial metrics")
 
-        # Get the financial metrics
-        financial_metrics = get_financial_metrics(
-            ticker=ticker,
-            end_date=end_date,
-            period="ttm",
-            limit=10,
-            api_key=api_key,
-        )
+        # Get the financial metrics from cache or API
+        financial_metrics = get_cached_or_fetch_financial_metrics(ticker, end_date, state, api_key)
 
         if not financial_metrics:
             progress.update_status(agent_id, ticker, "Error")

@@ -9,6 +9,7 @@ from src.tools.api import get_financial_metrics, get_market_cap, search_line_ite
 from src.utils.llm import call_llm
 from src.utils.progress import progress
 from src.utils.api_key import get_api_key_from_state
+from src.utils.data_cache import get_cached_or_fetch_financial_metrics, get_cached_or_fetch_line_items, get_cached_or_fetch_market_cap
 
 
 class WarrenBuffettSignal(BaseModel):
@@ -112,12 +113,12 @@ def warren_buffett_agent(state: AgentState, agent_id: str = "warren_buffett_agen
     buffett_analysis = {}
 
     for ticker in tickers:
-        progress.update_status(agent_id, ticker, "Fetching financial metrics")
-        # Fetch required data - request more periods for better trend analysis
-        metrics = get_financial_metrics(ticker, end_date, period="ttm", limit=10, api_key=api_key)
+        progress.update_status(agent_id, ticker, "Using cached financial metrics")
+        # Use cached data with fallback to API calls
+        metrics = get_cached_or_fetch_financial_metrics(ticker, end_date, state, api_key)
 
-        progress.update_status(agent_id, ticker, "Gathering financial line items")
-        financial_line_items = search_line_items(
+        progress.update_status(agent_id, ticker, "Using cached financial line items")
+        financial_line_items = get_cached_or_fetch_line_items(
             ticker,
             [
                 "capital_expenditure",
@@ -134,14 +135,13 @@ def warren_buffett_agent(state: AgentState, agent_id: str = "warren_buffett_agen
                 "free_cash_flow",
             ],
             end_date,
-            period="ttm",
-            limit=10,
-            api_key=api_key,
+            state,
+            api_key,
         )
 
-        progress.update_status(agent_id, ticker, "Getting market cap")
-        # Get current market cap
-        market_cap = get_market_cap(ticker, end_date, api_key=api_key)
+        progress.update_status(agent_id, ticker, "Using cached market cap")
+        # Get current market cap from cache
+        market_cap = get_cached_or_fetch_market_cap(ticker, end_date, state, api_key)
 
         progress.update_status(agent_id, ticker, "Analyzing fundamentals")
         # Analyze fundamentals

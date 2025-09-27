@@ -12,7 +12,8 @@ from src.utils.display import print_trading_output
 from src.utils.analysts import ANALYST_ORDER, get_analyst_nodes
 from src.utils.progress import progress
 from src.utils.visualize import save_graph_as_png
-from src.tools.api import set_ticker_markets
+from src.tools.api import set_ticker_markets, get_financial_metrics, get_market_cap, search_line_items
+from src.utils.api_key import get_api_key_from_state
 from src.cli.input import (
     parse_cli_inputs,
 )
@@ -93,6 +94,73 @@ def run_hedge_fund(
         progress.stop()
 
 
+def prefetch_financial_data(state: AgentState):
+    """Pre-fetch all financial data needed by analysts to avoid duplicate API calls."""
+    data = state["data"]
+    tickers = data["tickers"]
+    end_date = data["end_date"]
+
+    # Extract API key if available
+    api_key = None
+    try:
+        api_key = get_api_key_from_state(state, "BORSDATA_API_KEY")
+    except:
+        pass  # Continue without API key if not available
+
+    # Store pre-fetched data in state
+    prefetched_data = {}
+
+    for ticker in tickers:
+        progress.update_status("data_prefetch", ticker, "Fetching financial metrics")
+
+        # Fetch all the data that analysts typically need
+        financial_metrics = get_financial_metrics(ticker, end_date, period="ttm", limit=10, api_key=api_key)
+
+        progress.update_status("data_prefetch", ticker, "Fetching line items")
+        # Common line items used by multiple analysts
+        line_items = search_line_items(
+            ticker,
+            [
+                "capital_expenditure",
+                "depreciation_and_amortization",
+                "net_income",
+                "outstanding_shares",
+                "total_assets",
+                "total_liabilities",
+                "shareholders_equity",
+                "dividends_and_other_cash_distributions",
+                "issuance_or_purchase_of_equity_shares",
+                "gross_profit",
+                "revenue",
+                "free_cash_flow",
+                "current_assets",
+                "current_liabilities",
+            ],
+            end_date,
+            period="ttm",
+            limit=10,
+            api_key=api_key,
+        )
+
+        progress.update_status("data_prefetch", ticker, "Fetching market cap")
+        market_cap = get_market_cap(ticker, end_date, api_key=api_key)
+
+        # Store all data for this ticker
+        prefetched_data[ticker] = {
+            "financial_metrics": financial_metrics,
+            "line_items": line_items,
+            "market_cap": market_cap,
+        }
+
+        progress.update_status("data_prefetch", ticker, "Done")
+
+    # Add prefetched data to state
+    state["data"]["prefetched_financial_data"] = prefetched_data
+    progress.update_status("data_prefetch", None, "All data prefetched")
+
+    return state
+
+
 def start(state: AgentState):
     """Initialize the workflow with the input message."""
     return state
@@ -102,6 +170,7 @@ def create_workflow(selected_analysts=None):
     """Create the workflow with selected analysts."""
     workflow = StateGraph(AgentState)
     workflow.add_node("start_node", start)
+    workflow.add_node("prefetch_data", prefetch_financial_data)
 
     # Get analyst nodes from the configuration
     analyst_nodes = get_analyst_nodes()
@@ -113,11 +182,14 @@ def create_workflow(selected_analysts=None):
     for analyst_key in selected_analysts:
         node_name, node_func = analyst_nodes[analyst_key]
         workflow.add_node(node_name, node_func)
-        workflow.add_edge("start_node", node_name)
+        workflow.add_edge("prefetch_data", node_name)
 
     # Always add risk and portfolio management
     workflow.add_node("risk_management_agent", risk_management_agent)
     workflow.add_node("portfolio_manager", portfolio_management_agent)
+
+    # Connect start -> prefetch -> analysts -> risk management
+    workflow.add_edge("start_node", "prefetch_data")
 
     # Connect selected analysts to risk management
     for analyst_key in selected_analysts:
