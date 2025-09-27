@@ -34,6 +34,12 @@ REPORT_FIELD_MAP: dict[str, tuple[str, ...]] = {
     "net_debt": ("net_Debt", "netDebt"),
     "cash_flow_from_operating_activities": ("cash_Flow_From_Operating_Activities", "cashFlowFromOperatingActivities"),
     "cash_flow_from_financing_activities": ("cash_Flow_From_Financing_Activities", "cashFlowFromFinancingActivities"),
+    # Missing line items that original agents need
+    "book_value_per_share": ("book_Value_Per_Share", "bookValuePerShare"),
+    "total_debt": ("total_Debt", "totalDebt"),
+    "capital_expenditure": ("capital_Expenditure", "capitalExpenditure", "capex"),
+    "operating_expense": ("operating_Expenses", "operatingExpenses"),
+    "total_liabilities": ("total_Liabilities", "totalLiabilities"),
 }
 
 # KPI fallbacks for derived values (normalised names)
@@ -49,6 +55,13 @@ LINE_ITEM_KPI_MAPPING: dict[str, tuple[str, ...]] = {
     "return_on_invested_capital": ("return on invested capital", "roic"),
     "gross_margin": ("gross margin",),
     "operating_margin": ("operating margin",),
+    # KPI fallbacks for missing line items
+    "book_value_per_share": ("book value per share", "bvps"),
+    "total_debt": ("total debt", "debt"),
+    "capital_expenditure": ("capital expenditure", "capex", "cap ex"),
+    "debt_to_equity": ("debt to equity", "debt/equity", "d/e ratio"),
+    "operating_expense": ("operating expenses", "opex"),
+    "total_liabilities": ("total liabilities", "liabilities"),
 }
 
 
@@ -110,6 +123,14 @@ class LineItemAssembler:
         kpi_lookup = self._build_kpi_lookup(metadata)
         line_item_kpis = self._resolve_line_item_kpis(kpi_lookup)
 
+        # Get screener data as additional fallback
+        screener_data = None
+        try:
+            screener_data = self._client.get_all_kpi_screener_values(instrument_id, api_key=api_key)
+        except Exception:
+            # Screener data is optional - continue without it
+            pass
+
         period_label = period.strip().lower() if period else "ttm"
         results: list[Dict[str, Any]] = []
         for ctx in contexts:
@@ -123,7 +144,7 @@ class LineItemAssembler:
             }
             for item in requested:
                 normalised = normalise_name(item)
-                payload[item] = self._compute_value(normalised, report, ctx, line_item_kpis)
+                payload[item] = self._compute_value(normalised, report, ctx, line_item_kpis, screener_data, kpi_lookup)
             results.append(payload)
         return results
 
@@ -170,12 +191,38 @@ class LineItemAssembler:
                 return value
         return None
 
+    def _get_screener_value(self, item: str, screener_data: Optional[Dict[str, Any]], kpi_lookup: Optional[Dict[str, int]]) -> Optional[float]:
+        """Get value from screener data as final fallback."""
+        if not screener_data or not kpi_lookup:
+            return None
+
+        # Try to find KPI IDs for this line item
+        kpi_ids = []
+        if item in LINE_ITEM_KPI_MAPPING:
+            for candidate in LINE_ITEM_KPI_MAPPING[item]:
+                kpi_id = kpi_lookup.get(normalise_name(candidate))
+                if kpi_id is not None:
+                    kpi_ids.append(kpi_id)
+
+        # Look for values in screener data
+        screener_values = screener_data.get("values", [])
+        for entry in screener_values:
+            entry_kpi_id = entry.get("kpiId")
+            if entry_kpi_id in kpi_ids:
+                value = entry.get("n")  # 'n' is the numeric value field in screener data
+                if value is not None:
+                    return safe_float(value)
+
+        return None
+
     def _compute_value(
         self,
         item: str,
         report: Dict[str, Any],
         ctx,
         line_item_kpis: Dict[str, list[int]],
+        screener_data: Optional[Dict[str, Any]] = None,
+        kpi_lookup: Optional[Dict[str, int]] = None,
     ) -> Optional[float]:
         report_value = self._extract_report_value
 
@@ -330,4 +377,8 @@ class LineItemAssembler:
 
         # Fallback: try direct report match if we have a mapping
         raw = self._extract_report_value(report, REPORT_FIELD_MAP.get(item, ()))
-        return raw
+        if raw is not None:
+            return raw
+
+        # Final fallback: try screener data
+        return self._get_screener_value(item, screener_data, kpi_lookup)

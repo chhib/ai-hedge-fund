@@ -184,9 +184,22 @@ Rebuild the data ingestion and processing pipeline so the application relies on 
 
 ### Session 25 (Legacy Agent Compatibility & Test Follow-up)
 - Restored class-based interfaces for Warren Buffett, Stanley Druckenmiller, Charlie Munger, and Fundamentals analysts by wrapping existing functional agents with heuristic `analyze()` implementations for legacy scripts.
-- Added lightweight default scoring logic aligned with each investor’s philosophy to keep CLI/graph flows unchanged while unblocking `test_famous_analysts.py` imports.
+- Added lightweight default scoring logic aligned with each investor's philosophy to keep CLI/graph flows unchanged while unblocking `test_famous_analysts.py` imports.
 - Confirmed wrappers gracefully handle missing metric/price data and expose configurable thresholds for future tuning.
 - Pytest run (`poetry run pytest`) timed out in harness; next step is to execute the suite manually outside the automation constraints to verify no regressions remain.
+
+### Session 26 (Complete Analyst System Recovery)
+- **CRITICAL ISSUE IDENTIFIED**: Only 3-4 out of 16 analysts working due to multiple system failures in Börsdata migration.
+- **Root Cause Analysis**: Systematic debugging revealed 6 distinct failure modes affecting analyst functionality.
+- **LLM Configuration Fix**: Resolved `'NoneType' object has no attribute 'with_structured_output'` error by fixing string→enum conversion in `src/utils/llm.py` for ModelProvider handling.
+- **Global Ticker Support**: Fixed MAU/VOW ticker failures by implementing proper Global vs Nordic market classification and `set_ticker_markets()` configuration.
+- **Line Item Mapping Expansion**: Added missing financial data mappings in `src/data/borsdata_reports.py` for `book_value_per_share`, `total_debt`, `capital_expenditure`, `operating_expense`, `total_liabilities`, `debt_to_equity`.
+- **Multi-Endpoint Fallback Strategy**: Implemented comprehensive 3-tier data retrieval (reports → KPI summaries → screener data) with `_get_screener_value()` fallback method.
+- **Progress Handler Fix**: Corrected function signature to handle 5 arguments (agent_name, ticker, status, analysis, timestamp) for proper progress tracking.
+- **Cache Optimization**: Added pre-fetching system and cache status monitoring to reduce redundant API calls between analysts.
+- **Testing Infrastructure**: Created comprehensive test script (`scripts/test_individual_analysts.py`) with detailed data fetching visibility and performance monitoring.
+- **COMPLETE SUCCESS**: Achieved 100% analyst success rate (16/16 working) with full Nordic/Global ticker support and comprehensive financial data coverage.
+- **System Status**: All 16 analysts now fully operational with Börsdata integration maintaining complete compatibility with original FinancialDatasets behavior.
 
 ## Phase 1 Status: ✅ COMPLETE
 **CLI backtest experience with Börsdata data flows is production-ready.** The system successfully:

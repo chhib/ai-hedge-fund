@@ -45,8 +45,21 @@ def call_llm(
         if request and hasattr(request, 'api_keys'):
             api_keys = request.api_keys
 
+    # Import ModelProvider enum
+    from src.llm.models import ModelProvider
+
+    # Convert string to ModelProvider enum if needed
+    if isinstance(model_provider, str):
+        try:
+            model_provider_enum = ModelProvider(model_provider)
+        except ValueError:
+            print(f"Invalid model provider: {model_provider}, using OPENAI as fallback")
+            model_provider_enum = ModelProvider.OPENAI
+    else:
+        model_provider_enum = model_provider
+
     model_info = get_model_info(model_name, model_provider)
-    llm = get_model(model_name, model_provider, api_keys)
+    llm = get_model(model_name, model_provider_enum, api_keys)
 
     # For non-JSON support models, we can use structured output
     if not (model_info and not model_info.has_json_mode()):
