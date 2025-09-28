@@ -1,0 +1,164 @@
+{
+  "timestamp": "2025-09-28T18:48:00.671778",
+  "ticker": "MSFT",
+  "test_date": "2025-09-15",
+  "fd_result": {
+    "ticker": "MSFT",
+    "source": "FinancialDatasets",
+    "test_date": "2025-09-15",
+    "market_cap": 3697021643890.0,
+    "enterprise_value": 3677970643890.0,
+    "price_to_earnings_ratio": 36.305,
+    "price_to_book_ratio": 10.763,
+    "price_to_sales_ratio": 13.123,
+    "enterprise_value_to_ebitda_ratio": 22.964,
+    "return_on_equity": 0.324,
+    "return_on_assets": 0.182,
+    "gross_margin": 0.688,
+    "operating_margin": 0.44728883588192697,
+    "net_margin": 0.361,
+    "debt_to_equity": 0.802,
+    "current_ratio": 1.353,
+    "revenue_growth": 0.0433835783859857,
+    "earnings_growth": 0.053779686449009156,
+    "free_cash_flow_growth": 0.03237944208174151,
+    "available_metrics": 70
+  },
+  "bd_result": {
+    "ticker": "MSFT",
+    "source": "B\u00f6rsdata",
+    "test_date": "2025-09-15",
+    "market_cap": 3801682.1799999997,
+    "enterprise_value": 3767715.0,
+    "price_to_earnings_ratio": 37.33285140991211,
+    "price_to_book_ratio": 11.068160057067871,
+    "price_to_sales_ratio": 13.49435043334961,
+    "enterprise_value_to_ebitda_ratio": 23.160139083862305,
+    "return_on_equity": 0.2964699935913086,
+    "return_on_assets": 0.16451000213623046,
+    "gross_margin": 0.688239974975586,
+    "operating_margin": 0.4562200164794922,
+    "net_margin": 0.3614599990844727,
+    "debt_to_equity": 0.8021566867828369,
+    "current_ratio": 1.3534460067749023,
+    "revenue_growth": 0.33630001068115234,
+    "earnings_growth": 0.19514686584472657,
+    "free_cash_flow_growth": 0.09633999824523926,
+    "available_metrics": 81
+  },
+  "comparison": {
+    "status": "success",
+    "ticker": "MSFT",
+    "test_date": "2025-09-15",
+    "coverage": {
+      "fd_metrics": 70,
+      "bd_metrics": 81
+    },
+    "metric_comparison": {
+      "market_cap": {
+        "fd_value": 3697021643890.0,
+        "bd_value": 3801682.1799999997,
+        "percent_diff": -100.0,
+        "match_type": "significant"
+      },
+      "enterprise_value": {
+        "fd_value": 3677970643890.0,
+        "bd_value": 3767715.0,
+        "percent_diff": -100.0,
+        "match_type": "significant"
+      },
+      "price_to_earnings_ratio": {
+        "fd_value": 36.305,
+        "bd_value": 37.33285140991211,
+        "percent_diff": 2.83,
+        "match_type": "close"
+      },
+      "price_to_book_ratio": {
+        "fd_value": 10.763,
+        "bd_value": 11.068160057067871,
+        "percent_diff": 2.84,
+        "match_type": "close"
+      },
+      "price_to_sales_ratio": {
+        "fd_value": 13.123,
+        "bd_value": 13.49435043334961,
+        "percent_diff": 2.83,
+        "match_type": "close"
+      },
+      "enterprise_value_to_ebitda_ratio": {
+        "fd_value": 22.964,
+        "bd_value": 23.160139083862305,
+        "percent_diff": 0.85,
+        "match_type": "close"
+      },
+      "return_on_equity": {
+        "fd_value": 0.324,
+        "bd_value": 0.2964699935913086,
+        "percent_diff": -8.5,
+        "match_type": "moderate"
+      },
+      "return_on_assets": {
+        "fd_value": 0.182,
+        "bd_value": 0.16451000213623046,
+        "percent_diff": -9.61,
+        "match_type": "moderate"
+      },
+      "gross_margin": {
+        "fd_value": 0.688,
+        "bd_value": 0.688239974975586,
+        "percent_diff": 0.03,
+        "match_type": "exact"
+      },
+      "operating_margin": {
+        "fd_value": 0.44728883588192697,
+        "bd_value": 0.4562200164794922,
+        "percent_diff": 2.0,
+        "match_type": "close"
+      },
+      "net_margin": {
+        "fd_value": 0.361,
+        "bd_value": 0.3614599990844727,
+        "percent_diff": 0.13,
+        "match_type": "close"
+      },
+      "debt_to_equity": {
+        "fd_value": 0.802,
+        "bd_value": 0.8021566867828369,
+        "percent_diff": 0.02,
+        "match_type": "exact"
+      },
+      "current_ratio": {
+        "fd_value": 1.353,
+        "bd_value": 1.3534460067749023,
+        "percent_diff": 0.03,
+        "match_type": "exact"
+      },
+      "revenue_growth": {
+        "fd_value": 0.0433835783859857,
+        "bd_value": 0.33630001068115234,
+        "percent_diff": 675.18,
+        "match_type": "significant"
+      },
+      "earnings_growth": {
+        "fd_value": 0.053779686449009156,
+        "bd_value": 0.19514686584472657,
+        "percent_diff": 262.86,
+        "match_type": "significant"
+      },
+      "free_cash_flow_growth": {
+        "fd_value": 0.03237944208174151,
+        "bd_value": 0.09633999824523926,
+        "percent_diff": 197.53,
+        "match_type": "significant"
+      }
+    },
+    "summary": {
+      "total_compared": 16,
+      "exact_matches": 3,
+      "close_matches": 6,
+      "significant_differences": 5,
+      "missing_in_fd": 0,
+      "missing_in_bd": 0
+    }
+  }
+}

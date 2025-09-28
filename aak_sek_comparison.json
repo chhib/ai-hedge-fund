@@ -1,0 +1,36 @@
+{
+  "timestamp": "2025-09-28T18:52:28.312426",
+  "ticker": "AAK",
+  "test_date": "2025-09-15",
+  "fd_result": {
+    "error": "Invalid JSON: {'error': 'Error fetching data: AAK - 400 - {\"error\":\"Invalid TICKER\",\"message\":\"Please provide a valid TICKER.\"}'}\n"
+  },
+  "bd_result": {
+    "ticker": "AAK",
+    "source": "B\u00f6rsdata",
+    "test_date": "2025-09-15",
+    "currency": "SEK",
+    "market_cap": 62969.0134,
+    "enterprise_value": 66632.0234375,
+    "price_to_earnings_ratio": 18.690290451049805,
+    "price_to_book_ratio": 3.4324889183044434,
+    "price_to_sales_ratio": 1.3705600500106812,
+    "enterprise_value_to_ebitda_ratio": 12.007929801940918,
+    "return_on_equity": 0.18298999786376954,
+    "return_on_assets": 0.10404000282287598,
+    "gross_margin": 0.2788599967956543,
+    "operating_margin": 0.10222999572753906,
+    "net_margin": 0.07333000183105469,
+    "debt_to_equity": 0.7588940858840942,
+    "current_ratio": 1.8112770318984985,
+    "revenue_growth": -648.8975,
+    "earnings_growth": -1542.49921875,
+    "free_cash_flow_growth": -8.000000379979611e-05,
+    "available_metrics": 81
+  },
+  "comparison": {
+    "status": "fd_failed",
+    "error": "Invalid JSON: {'error': 'Error fetching data: AAK - 400 - {\"error\":\"Invalid TICKER\",\"message\":\"Please provide a valid TICKER.\"}'}\n",
+    "bd_metrics": 81
+  }
+}

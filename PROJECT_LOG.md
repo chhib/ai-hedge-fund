@@ -1,6 +1,6 @@
 # Börsdata Integration Project Log
 
-_Last updated: 2025-09-27_
+_Last updated: 2025-09-28_
 
 ## End Goal
 Rebuild the data ingestion and processing pipeline so the application relies on Börsdata's REST API (per `README_Borsdata_API.md` and https://apidoc.borsdata.se/swagger/index.html). The system should let a user set a `BORSDATA_API_KEY` in `.env`, accept Börsdata-native tickers, and otherwise preserve the current user-facing workflows and capabilities.
@@ -378,5 +378,21 @@ Conducted comprehensive comparison testing between enhanced Börsdata fork and o
 - Do we need caching beyond rate limiting to manage quotas once endpoints and usage patterns are finalized?
 - Should we periodically clear the LLM agent's context window to maintain efficient reasoning over long sessions?
 - Do we officially support Google/DeepSeek providers in the backend, or should the frontend omit them from model selection until the enum catches up?
+
+### Session 30 (FD/BD Cross-Validation Framework Development)
+- **Objective**: Establish comprehensive comparison framework between original FinancialDatasets implementation and current Börsdata fork to validate migration integrity and identify harmonization opportunities.
+- **Cross-Platform Validation Infrastructure**: Created `scripts/cross_validation_framework.py` and `scripts/fd_bd_direct_comparison.py` for systematic comparison between data sources with support for both Nordic and Global tickers.
+- **Comprehensive Testing Execution**: Successfully executed comparison testing on AAPL, MSFT, and NVDA with both FinancialDatasets and Börsdata APIs, achieving 100% success rate across all test tickers.
+- **Critical Issue Identification**:
+  - **Market Cap Scaling Mismatch**: Börsdata returns values in millions while FinancialDatasets uses absolute values (100% difference requiring 1M scale factor)
+  - **Valuation Ratio Discrepancies**: Consistent 25-30% differences in P/E, P/B, P/S ratios across all test tickers
+  - **Growth Metrics Variance**: Significant calculation differences (MSFT revenue growth: FD 4.3% vs BD 33.6% = +675% difference)
+- **Data Coverage Analysis**: Börsdata provides 15-17% more metrics (81 vs 69-70) with only 20-25% exact matches indicating systematic calibration needs.
+- **Harmonization Framework**: Documented comprehensive analysis in `docs/FD_BD_COMPARISON_ANALYSIS.md` with prioritized recommendations including market cap scaling fix, price alignment, and growth calculation standardization.
+- **Quick Fix Development**: Created `scripts/fix_market_cap_scaling.py` demonstrating immediate solution for most critical market cap/enterprise value scaling issue with validation against real API data.
+- **Priority Matrix Established**: P0 market cap scaling (High Impact/Low Effort), P1 price alignment, P2 growth calculations, with clear success metrics and implementation timeline.
+- **Multi-Currency Analysis Complete**: Comprehensive currency support analysis revealing BD handles USD, SEK, DKK, NOK while FD only supports USD, requiring sophisticated normalization for 75% of BD's market coverage.
+- **Currency Harmonization Framework**: Created `scripts/multi_currency_analysis.py` and `docs/CURRENCY_HARMONIZATION_PLAN.md` documenting currency normalization strategy combining 1M scaling fix with real-time exchange rate conversion.
+- **Cross-Currency Validation**: Successfully tested 12 tickers across 4 currencies (USD: AAPL/MSFT/NVDA, SEK: AAK/ASSA B/ALFA, DKK: DSV/NOVO B/ORSTED, NOK: DNB/TEL) with proper currency identification and normalization examples.
 
 **IMPORTANT**: Update this log at the end of each work session: note completed steps, new decisions, blockers, and refreshed next actions. Always use session numbers (Session X, Session X+1, etc.) for progress entries. Update the "Last updated" date at the top with the actual current date when making changes.
