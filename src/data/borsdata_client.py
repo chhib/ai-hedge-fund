@@ -219,6 +219,11 @@ class BorsdataClient:
         self._ensure_instrument_cache(api_key=api_key, force_refresh=force_refresh)
         return list(self._instrument_by_id.values())
 
+    def get_all_instruments(self, *, api_key: Optional[str] = None, force_refresh: bool = False) -> list[Dict[str, Any]]:
+        self._ensure_instrument_cache(api_key=api_key, force_refresh=force_refresh)
+        self._ensure_global_instrument_cache(api_key=api_key, force_refresh=force_refresh)
+        return list(self._instrument_by_id.values()) + list(self._global_instrument_by_id.values())
+
     def get_instrument(self, ticker: str, *, api_key: Optional[str] = None, force_refresh: bool = False, use_global: bool = False) -> Dict[str, Any]:
         if not ticker:
             raise BorsdataAPIError("Ticker symbol is required")

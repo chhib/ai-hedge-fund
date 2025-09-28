@@ -5,7 +5,7 @@ from tabulate import tabulate
 
 from .analysts import ANALYST_ORDER
 from src.data.borsdata_client import BorsdataClient, BorsdataAPIError
-from src.tools.api import get_use_global_for_ticker
+from src.tools.api import use_global_for_ticker
 import os
 import json
 
@@ -15,7 +15,7 @@ def get_company_name(ticker: str) -> str:
     try:
         client = BorsdataClient()
         api_key = os.environ.get("BORSDATA_API_KEY")
-        instrument = client.get_instrument(ticker, api_key=api_key, use_global=get_use_global_for_ticker(ticker))
+        instrument = client.get_instrument(ticker, api_key=api_key, use_global=use_global_for_ticker(ticker))
         
         # Try different possible field names for company name
         name = instrument.get("name") or instrument.get("companyName") or instrument.get("longName") or instrument.get("shortName")
@@ -251,7 +251,7 @@ def print_trading_output(result: dict) -> None:
         print(f"{Fore.CYAN}{wrapped_reasoning}{Style.RESET_ALL}")
 
 
-def print_backtest_results(table_rows: list, context: Mapping[str, Any] | None = None) -> None:
+def print_backtest_results(table_rows: list, context: Mapping[str, Any] | None = None, currency: str = "USD") -> None:
     """Print the backtest results in a nicely formatted table"""
     # Clear the screen
     os.system("cls" if os.name == "nt" else "clear")
@@ -272,14 +272,14 @@ def print_backtest_results(table_rows: list, context: Mapping[str, Any] | None =
         latest_summary = max(summary_rows, key=lambda r: r[0])
         print(f"\n{Fore.WHITE}{Style.BRIGHT}PORTFOLIO SUMMARY:{Style.RESET_ALL}")
 
-        # Adjusted indexes after adding Long/Short Shares
-        position_str = latest_summary[7].split("$")[1].split(Style.RESET_ALL)[0].replace(",", "")
-        cash_str     = latest_summary[8].split("$")[1].split(Style.RESET_ALL)[0].replace(",", "")
-        total_str    = latest_summary[9].split("$")[1].split(Style.RESET_ALL)[0].replace(",", "")
+        # Use the pre-formatted values from the summary row
+        position_str = latest_summary[7]
+        cash_str     = latest_summary[8]
+        total_str    = latest_summary[9]
 
-        print(f"Cash Balance: {Fore.CYAN}${float(cash_str):,.2f}{Style.RESET_ALL}")
-        print(f"Total Position Value: {Fore.YELLOW}${float(position_str):,.2f}{Style.RESET_ALL}")
-        print(f"Total Value: {Fore.WHITE}${float(total_str):,.2f}{Style.RESET_ALL}")
+        print(f"Cash Balance: {cash_str}")
+        print(f"Total Position Value: {position_str}")
+        print(f"Total Value: {total_str}")
         print(f"Portfolio Return: {latest_summary[10]}")
         if len(latest_summary) > 14 and latest_summary[14]:
             print(f"Benchmark Return: {latest_summary[14]}")
@@ -385,6 +385,7 @@ def format_backtest_row(
     sortino_ratio: float = None,
     max_drawdown: float = None,
     benchmark_return_pct: float | None = None,
+    currency: str = "USD",
 ) -> list[any]:
     """Format a row for the backtest results table"""
     # Color the action
@@ -410,9 +411,9 @@ def format_backtest_row(
             "",  # Price
             "",  # Long Shares
             "",  # Short Shares
-            f"{Fore.YELLOW}${total_position_value:,.2f}{Style.RESET_ALL}",  # Total Position Value
-            f"{Fore.CYAN}${cash_balance:,.2f}{Style.RESET_ALL}",  # Cash Balance
-            f"{Fore.WHITE}${total_value:,.2f}{Style.RESET_ALL}",  # Total Value
+            f"{Fore.YELLOW}{currency} {total_position_value:,.2f}{Style.RESET_ALL}",  # Total Position Value
+            f"{Fore.CYAN}{currency} {cash_balance:,.2f}{Style.RESET_ALL}",  # Cash Balance
+            f"{Fore.WHITE}{currency} {total_value:,.2f}{Style.RESET_ALL}",  # Total Value
             f"{return_color}{return_pct:+.2f}%{Style.RESET_ALL}",  # Return
             f"{Fore.YELLOW}{sharpe_ratio:.2f}{Style.RESET_ALL}" if sharpe_ratio is not None else "",  # Sharpe Ratio
             f"{Fore.YELLOW}{sortino_ratio:.2f}{Style.RESET_ALL}" if sortino_ratio is not None else "",  # Sortino Ratio
@@ -428,5 +429,5 @@ def format_backtest_row(
             f"{Fore.WHITE}{price:,.2f}{Style.RESET_ALL}",
             f"{Fore.GREEN}{long_shares:,.0f}{Style.RESET_ALL}",   # Long Shares
             f"{Fore.RED}{short_shares:,.0f}{Style.RESET_ALL}",    # Short Shares
-            f"{Fore.YELLOW}{position_value:,.2f}{Style.RESET_ALL}",
+            f"{Fore.YELLOW}{currency} {position_value:,.2f}{Style.RESET_ALL}",
         ]

@@ -17,7 +17,8 @@ from src.utils.ollama import ensure_ollama_and_model
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run backtesting engine (modular)")
-    parser.add_argument("--tickers", type=str, required=False, help="Comma-separated tickers")
+    parser.add_argument("--tickers", type=str, required=False, help="Comma-separated global tickers (e.g., MSFT, AAPL)")
+    parser.add_argument("--tickers-nordics", type=str, required=False, help="Comma-separated Nordic tickers (e.g., ERIC B)")
     parser.add_argument(
         "--end-date",
         type=str,
@@ -31,6 +32,7 @@ def main() -> int:
         help="Start date YYYY-MM-DD",
     )
     parser.add_argument("--initial-capital", type=float, default=100000)
+    parser.add_argument("--initial-currency", type=str, default="USD", help="The currency for the initial capital and backtest.")
     parser.add_argument("--margin-requirement", type=float, default=0.0)
     parser.add_argument("--analysts", type=str, required=False)
     parser.add_argument("--analysts-all", action="store_true")
@@ -41,7 +43,19 @@ def main() -> int:
     args = parser.parse_args()
     init(autoreset=True)
 
-    tickers = [t.strip() for t in args.tickers.split(",")] if args.tickers else []
+    from src.tools.api import set_ticker_markets
+
+    global_tickers = [t.strip() for t in args.tickers.split(",")] if args.tickers else []
+    nordic_tickers = [t.strip() for t in args.tickers_nordics.split(",")] if args.tickers_nordics else []
+    tickers = global_tickers + nordic_tickers
+
+    if not tickers:
+        print(f"{Fore.RED}Error: At least one ticker must be provided via --tickers-global or --tickers-nordics.{Style.RESET_ALL}")
+        return 1
+
+    ticker_markets = {ticker: "global" for ticker in global_tickers}
+    ticker_markets.update({ticker: "nordic" for ticker in nordic_tickers})
+    set_ticker_markets(ticker_markets)
 
     # Analysts selection is simplified; no interactive prompts here
     if args.analysts_all:
@@ -74,9 +88,15 @@ def main() -> int:
         )
 
     # Model selection
-    if args.model_name and args.model_provider:
+    if args.model_name:
         model_name = args.model_name
-        model_provider = args.model_provider
+        if args.model_provider:
+            model_provider = args.model_provider
+            if model_provider.upper() == 'OPENAI':
+                model_provider = 'OpenAI'
+        else:
+            # Default to OpenAI if no provider is specified
+            model_provider = 'OpenAI'
         print(
             f"\nUsing model: {Fore.GREEN + Style.BRIGHT}{model_name}{Style.RESET_ALL} from provider: {Fore.CYAN}{model_provider}{Style.RESET_ALL}\n"
         )
@@ -142,6 +162,7 @@ def main() -> int:
         start_date=args.start_date,
         end_date=args.end_date,
         initial_capital=args.initial_capital,
+        initial_currency=args.initial_currency,
         model_name=model_name,
         model_provider=model_provider,
         selected_analysts=selected_analysts,

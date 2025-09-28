@@ -14,8 +14,9 @@ class OutputBuilder:
     Stateless: callers provide inputs and receive rows back.
     """
 
-    def __init__(self, *, initial_capital: float | None = None) -> None:
+    def __init__(self, *, initial_capital: float | None = None, initial_currency: str = "USD") -> None:
         self._initial_capital = initial_capital
+        self._initial_currency = initial_currency
 
     def build_day_rows(
         self,
@@ -56,6 +57,7 @@ class OutputBuilder:
                     long_shares=pos["long"],
                     short_shares=pos["short"],
                     position_value=net_position_value,
+                    currency=self._initial_currency,
                 )
             )
 
@@ -87,10 +89,11 @@ class OutputBuilder:
                 sortino_ratio=summary["sortino_ratio"],
                 max_drawdown=summary["max_drawdown"],
                 benchmark_return_pct=benchmark_return_pct,
+                currency=self._initial_currency,
             )
         )
 
         return date_rows
 
     def print_rows(self, rows: List[list], context: Mapping[str, Any] | None = None) -> None:
-        print_backtest_results(rows, context=context)
+        print_backtest_results(rows, context=context, currency=self._initial_currency)

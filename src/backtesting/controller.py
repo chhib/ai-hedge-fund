@@ -20,6 +20,8 @@ class AgentController:
         model_name: str,
         model_provider: str,
         selected_analysts: Sequence[str] | None,
+        exchange_rate_service: "ExchangeRateService",
+        target_currency: str,
     ) -> AgentOutput:
         # Ensure we pass a plain snapshot dict to preserve legacy expectations
         if isinstance(portfolio, Portfolio):
@@ -35,6 +37,8 @@ class AgentController:
             model_name=model_name,
             model_provider=model_provider,
             selected_analysts=list(selected_analysts) if selected_analysts is not None else None,
+            exchange_rate_service=exchange_rate_service,
+            target_currency=target_currency,
         )
 
         # Normalize outputs to avoid None/missing keys

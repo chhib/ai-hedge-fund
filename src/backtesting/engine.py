@@ -25,6 +25,10 @@ from src.tools.api import (
 from src.data.models import CompanyEvent, InsiderTrade
 
 
+from src.data.borsdata_client import BorsdataClient
+from src.data.exchange_rate_service import ExchangeRateService
+
+
 class BacktestEngine:
     """Coordinates the backtest loop using the new components.
 
@@ -41,6 +45,7 @@ class BacktestEngine:
         start_date: str,
         end_date: str,
         initial_capital: float,
+        initial_currency: str,
         model_name: str,
         model_provider: str,
         selected_analysts: list[str] | None,
@@ -51,11 +56,21 @@ class BacktestEngine:
         self._start_date = start_date
         self._end_date = end_date
         self._initial_capital = float(initial_capital)
+        self._initial_currency = initial_currency
         self._model_name = model_name
         self._model_provider = model_provider
         self._selected_analysts = selected_analysts
         self._start_date_obj = datetime.strptime(self._start_date, "%Y-%m-%d").date()
         self._benchmark_ticker = "OMXS30"  # Default benchmark
+
+        # Initialize services
+        import os
+        api_key = os.getenv("BORSDATA_API_KEY")
+        if not api_key:
+            raise ValueError("BORSDATA_API_KEY not set")
+        self.borsdata_client = BorsdataClient(api_key=api_key)
+        self.exchange_rate_service = ExchangeRateService(self.borsdata_client)
+
 
         self._portfolio = Portfolio(
             tickers=tickers,
@@ -65,7 +80,7 @@ class BacktestEngine:
         self._executor = TradeExecutor()
         self._agent_controller = AgentController()
         self._perf = PerformanceMetricsCalculator()
-        self._results = OutputBuilder(initial_capital=self._initial_capital)
+        self._results = OutputBuilder(initial_capital=self._initial_capital, initial_currency=self._initial_currency)
 
         # Benchmark calculator
         self._benchmark = BenchmarkCalculator()
@@ -208,6 +223,8 @@ class BacktestEngine:
                 model_name=self._model_name,
                 model_provider=self._model_provider,
                 selected_analysts=self._selected_analysts,
+                exchange_rate_service=self.exchange_rate_service,
+                target_currency=self._initial_currency,
             )
             decisions = agent_output["decisions"]
 

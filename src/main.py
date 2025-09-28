@@ -54,6 +54,8 @@ def run_hedge_fund(
     selected_analysts: list[str] = [],
     model_name: str = "gpt-4.1",
     model_provider: str = "OpenAI",
+    exchange_rate_service: "ExchangeRateService" = None,
+    target_currency: str = "USD",
 ):
     # Start progress tracking
     progress.start()
@@ -76,6 +78,8 @@ def run_hedge_fund(
                     "start_date": start_date,
                     "end_date": end_date,
                     "analyst_signals": {},
+                    "exchange_rate_service": exchange_rate_service,
+                    "target_currency": target_currency,
                 },
                 "metadata": {
                     "show_reasoning": show_reasoning,
@@ -94,11 +98,47 @@ def run_hedge_fund(
         progress.stop()
 
 
+def _normalize_monetary_values(data, exchange_rate_service, target_currency):
+    if not data or not exchange_rate_service:
+        return data
+
+    if isinstance(data, list):
+        return [_normalize_monetary_values(item, exchange_rate_service, target_currency) for item in data]
+
+    if not hasattr(data, 'currency') or data.currency == target_currency:
+        return data
+
+    rate = exchange_rate_service.get_rate(data.currency, target_currency)
+    if rate is None:
+        return data
+
+    monetary_fields = [
+        "market_cap", "enterprise_value", "net_debt", "earnings_per_share",
+        "book_value_per_share", "free_cash_flow_per_share", "revenue_per_share",
+        "ebit_per_share", "ebitda_per_share", "operating_cash_flow_per_share",
+        "net_debt_per_share", "cash_per_share", "capital_expenditure",
+        "depreciation_and_amortization", "net_income", "total_assets",
+        "total_liabilities", "shareholders_equity",
+        "dividends_and_other_cash_distributions",
+        "issuance_or_purchase_of_equity_shares", "gross_profit", "revenue",
+        "free_cash_flow", "current_assets", "current_liabilities"
+    ]
+
+    for field in monetary_fields:
+        if hasattr(data, field) and getattr(data, field) is not None:
+            setattr(data, field, getattr(data, field) * rate)
+    
+    data.currency = target_currency
+    return data
+
+
 def prefetch_financial_data(state: AgentState):
     """Pre-fetch all financial data needed by analysts to avoid duplicate API calls."""
     data = state["data"]
     tickers = data["tickers"]
     end_date = data["end_date"]
+    exchange_rate_service = data.get("exchange_rate_service")
+    target_currency = data.get("target_currency", "USD")
 
     # Extract API key if available
     api_key = None
@@ -115,6 +155,8 @@ def prefetch_financial_data(state: AgentState):
 
         # Fetch all the data that analysts typically need
         financial_metrics = get_financial_metrics(ticker, end_date, period="ttm", limit=10, api_key=api_key)
+        financial_metrics = _normalize_monetary_values(financial_metrics, exchange_rate_service, target_currency)
+
 
         progress.update_status("data_prefetch", ticker, "Fetching line items")
         # Common line items used by multiple analysts
@@ -141,9 +183,19 @@ def prefetch_financial_data(state: AgentState):
             limit=10,
             api_key=api_key,
         )
+        line_items = _normalize_monetary_values(line_items, exchange_rate_service, target_currency)
 
         progress.update_status("data_prefetch", ticker, "Fetching market cap")
         market_cap = get_market_cap(ticker, end_date, api_key=api_key)
+        if market_cap and exchange_rate_service:
+            # Assuming market_cap is a simple float and we need to know its currency.
+            # The get_market_cap function does not return currency.
+            # We will assume the currency of the market cap is the same as the financial_metrics.
+            if financial_metrics:
+                mc_currency = financial_metrics[0].currency
+                rate = exchange_rate_service.get_rate(mc_currency, target_currency)
+                if rate:
+                    market_cap *= rate
 
         # Store all data for this ticker
         prefetched_data[ticker] = {

@@ -814,6 +814,22 @@ FINANCIAL_METRICS_MAPPING: dict[str, MetricMapping] = {
         "screener_calc_group": "last",
         "screener_calc": "latest",
     },
+    "rsi": {
+        "source": "kpi",
+        "metadata_match": ["RSI"],
+        "kpi_id": 159,
+        "default_report_type": "r12",
+        "screener_calc_group": "last",
+        "screener_calc": "latest",
+    },
+    "bollinger_bands": {
+        "source": "kpi",
+        "metadata_match": ["Bollinger band"],
+        "kpi_id": 161,
+        "default_report_type": "r12",
+        "screener_calc_group": "last",
+        "screener_calc": "latest",
+    },
 }
 
 

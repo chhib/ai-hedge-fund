@@ -17,6 +17,7 @@ from src.agents.valuation import valuation_analyst_agent
 from src.agents.warren_buffett import warren_buffett_agent
 from src.agents.rakesh_jhunjhunwala import rakesh_jhunjhunwala_agent
 from src.agents.mohnish_pabrai import mohnish_pabrai_agent
+from src.agents.jim_simons import jim_simons_agent
 
 # Define analyst configuration - single source of truth
 ANALYST_CONFIG = {
@@ -147,6 +148,14 @@ ANALYST_CONFIG = {
         "agent_func": valuation_analyst_agent,
         "type": "analyst",
         "order": 14,
+    },
+    "jim_simons": {
+        "display_name": "Jim Simons",
+        "description": "The Quant King",
+        "investing_style": "Employs quantitative models and statistical arbitrage to identify and exploit market inefficiencies through systematic trading.",
+        "agent_func": jim_simons_agent,
+        "type": "analyst",
+        "order": 15,
     },
 }
 

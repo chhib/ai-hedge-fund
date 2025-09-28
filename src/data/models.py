@@ -107,6 +107,10 @@ class FinancialMetrics(BaseModel):
     # Additional ratios
     intangible_assets_percentage: float | None
 
+    # Technical indicators
+    rsi: float | None
+    bollinger_bands: float | None
+
 
 class FinancialMetricsResponse(BaseModel):
     financial_metrics: list[FinancialMetrics]
