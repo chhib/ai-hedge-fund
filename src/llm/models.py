@@ -18,19 +18,19 @@ from pathlib import Path
 class ModelProvider(str, Enum):
     """Enum for supported LLM providers"""
 
-    ALIBABA = "Alibaba"
-    ANTHROPIC = "Anthropic"
-    DEEPSEEK = "DeepSeek"
-    GOOGLE = "Google"
-    GROQ = "Groq"
-    META = "Meta"
-    MISTRAL = "Mistral"
-    OPENAI = "OpenAI"
-    OLLAMA = "Ollama"
-    OPENROUTER = "OpenRouter"
-    GIGACHAT = "GigaChat"
-    AZURE_OPENAI = "Azure OpenAI"
-    XAI = "xAI"
+    ALIBABA = "ALIBABA"
+    ANTHROPIC = "ANTHROPIC"
+    DEEPSEEK = "DEEPSEEK"
+    GOOGLE = "GOOGLE"
+    GROQ = "GROQ"
+    META = "META"
+    MISTRAL = "MISTRAL"
+    OPENAI = "OPENAI"
+    OLLAMA = "OLLAMA"
+    OPENROUTER = "OPENROUTER"
+    GIGACHAT = "GIGACHAT"
+    AZURE_OPENAI = "AZURE OPENAI"
+    XAI = "XAI"
 
 
 class LLMModel(BaseModel):
@@ -82,7 +82,7 @@ def load_models_from_json(json_path: str) -> List[LLMModel]:
     models = []
     for model_data in models_data:
         # Convert string provider to ModelProvider enum
-        provider_enum = ModelProvider(model_data["provider"])
+        provider_enum = ModelProvider(model_data["provider"].upper())
         models.append(
             LLMModel(
                 display_name=model_data["display_name"],
@@ -114,7 +114,7 @@ OLLAMA_LLM_ORDER = [model.to_choice_tuple() for model in OLLAMA_MODELS]
 def get_model_info(model_name: str, model_provider: str) -> LLMModel | None:
     """Get model information by model_name"""
     all_models = AVAILABLE_MODELS + OLLAMA_MODELS
-    return next((model for model in all_models if model.model_name == model_name and model.provider == model_provider), None)
+    return next((model for model in all_models if model.model_name == model_name and model.provider.value.lower() == model_provider.lower()), None)
 
 
 def get_models_list():

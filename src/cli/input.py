@@ -22,12 +22,12 @@ def add_common_args(
 ) -> argparse.ArgumentParser:
     # Add ticker arguments (both can be used together)
     parser.add_argument(
-        "--tickers",
+        "--tickers-nordics",
         type=str,
         help="Comma-separated list of Nordic/European stock ticker symbols (e.g., TELIA,VOLV-B,ADVT)",
     )
     parser.add_argument(
-        "--tickers-global",
+        "--tickers",
         type=str,
         help="Comma-separated list of global stock ticker symbols (e.g., AAPL,MSFT,GOOGL)",
     )
@@ -259,24 +259,28 @@ def parse_cli_inputs(
     if include_graph_flag:
         parser.add_argument("--show-agent-graph", action="store_true", help="Show the agent graph")
 
+    # Model selection flags
+    parser.add_argument("--model-name", type=str, help="The name of the LLM model to use (e.g., gpt-4, claude-3-opus-20240229)")
+    parser.add_argument("--model-provider", type=str, help="The provider of the LLM model (e.g., OpenAI, Anthropic, Ollama)")
+
     args = parser.parse_args()
 
     # Normalize parsed values
-    regular_tickers = parse_tickers(getattr(args, "tickers", None))
-    global_tickers = parse_tickers(getattr(args, "tickers_global", None))
-    tickers = regular_tickers + global_tickers
+    nordic_tickers = parse_tickers(getattr(args, "tickers_nordics", None))
+    global_tickers = parse_tickers(getattr(args, "tickers", None))
+    tickers = nordic_tickers + global_tickers
     use_global = bool(global_tickers)
     
     # Create ticker to market mapping
     ticker_markets = {}
-    for ticker in regular_tickers:
+    for ticker in nordic_tickers:
         ticker_markets[ticker] = "Nordic"
     for ticker in global_tickers:
-        ticker_markets[ticker] = "Global"
+        ticker_markets[ticker] = "global"
     
     # Validate that at least one ticker is provided if required
     if require_tickers and not tickers:
-        parser.error("At least one of --tickers or --tickers-global must be provided.")
+        parser.error("At least one of --tickers or --tickers-nordics must be provided.")
     
     # Handle test mode
     if getattr(args, "test", False):
@@ -302,7 +306,13 @@ def parse_cli_inputs(
             "analysts_all": getattr(args, "analysts_all", False),
             "analysts": getattr(args, "analysts", None),
         })
-        model_name, model_provider = select_model(getattr(args, "ollama", False))
+        if args.model_name and args.model_provider:
+            model_name, model_provider = args.model_name, args.model_provider.title()
+            print(f"\nUsing provided model:{Style.RESET_ALL}")
+            print(f"  Provider: {Fore.CYAN}{model_provider}{Style.RESET_ALL}")
+            print(f"  Model: {Fore.GREEN}{model_name}{Style.RESET_ALL}\n")
+        else:
+            model_name, model_provider = select_model(getattr(args, "ollama", False))
     
     start_date, end_date = resolve_dates(getattr(args, "start_date", None), getattr(args, "end_date", None), default_months_back=default_months_back)
 

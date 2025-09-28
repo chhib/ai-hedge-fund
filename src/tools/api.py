@@ -23,7 +23,7 @@ def set_ticker_markets(ticker_markets: dict[str, str]) -> None:
     _ticker_markets = ticker_markets or {}
 
 def use_global_for_ticker(ticker: str) -> bool:
-    return _ticker_markets.get(ticker.upper()) == "global"
+    return _ticker_markets.get(ticker.upper(), "").lower() == "global"
 
 # Global cache instance
 _cache = get_cache()
