@@ -19,6 +19,7 @@ from src.tools.api import (
 from src.utils.llm import call_llm
 from src.utils.progress import progress
 from src.utils.api_key import get_api_key_from_state
+from src.utils.data_cache import get_cached_or_fetch_financial_metrics, get_cached_or_fetch_line_items, get_cached_or_fetch_market_cap
 
 
 class MichaelBurrySignal(BaseModel):
@@ -46,11 +47,11 @@ def michael_burry_agent(state: AgentState, agent_id: str = "michael_burry_agent"
         # ------------------------------------------------------------------
         # Fetch raw data
         # ------------------------------------------------------------------
-        progress.update_status(agent_id, ticker, "Fetching financial metrics")
-        metrics = get_financial_metrics(ticker, end_date, period="year", limit=5, api_key=api_key)
+        progress.update_status(agent_id, ticker, "Using cached financial metrics")
+        metrics = get_cached_or_fetch_financial_metrics(ticker, end_date, state, api_key, period="year", limit=5)
 
-        progress.update_status(agent_id, ticker, "Fetching line items")
-        line_items = search_line_items(
+        progress.update_status(agent_id, ticker, "Using cached line items")
+        line_items = get_cached_or_fetch_line_items(
             ticker,
             [
                 "free_cash_flow",
@@ -63,7 +64,8 @@ def michael_burry_agent(state: AgentState, agent_id: str = "michael_burry_agent"
                 "issuance_or_purchase_of_equity_shares",
             ],
             end_date,
-            api_key=api_key,
+            state,
+            api_key,
         )
 
         progress.update_status(agent_id, ticker, "Fetching insider trades")

@@ -13,6 +13,7 @@ from typing_extensions import Literal
 from src.utils.progress import progress
 from src.utils.llm import call_llm
 from src.utils.api_key import get_api_key_from_state
+from src.utils.data_cache import get_cached_or_fetch_line_items, get_cached_or_fetch_market_cap
 
 
 class PeterLynchSignal(BaseModel):
@@ -47,9 +48,9 @@ def peter_lynch_agent(state: AgentState, agent_id: str = "peter_lynch_agent"):
     lynch_analysis = {}
 
     for ticker in tickers:
-        progress.update_status(agent_id, ticker, "Gathering financial line items")
+        progress.update_status(agent_id, ticker, "Using cached financial line items")
         # Relevant line items for Peter Lynch's approach
-        financial_line_items = search_line_items(
+        financial_line_items = get_cached_or_fetch_line_items(
             ticker,
             [
                 "revenue",
@@ -66,13 +67,14 @@ def peter_lynch_agent(state: AgentState, agent_id: str = "peter_lynch_agent"):
                 "outstanding_shares",
             ],
             end_date,
+            state,
+            api_key,
             period="annual",
             limit=5,
-            api_key=api_key,
         )
 
-        progress.update_status(agent_id, ticker, "Getting market cap")
-        market_cap = get_market_cap(ticker, end_date, api_key=api_key)
+        progress.update_status(agent_id, ticker, "Using cached market cap")
+        market_cap = get_cached_or_fetch_market_cap(ticker, end_date, state, api_key)
 
         progress.update_status(agent_id, ticker, "Fetching insider trades")
         insider_trades = get_insider_trades(ticker, end_date, limit=50, api_key=api_key)
