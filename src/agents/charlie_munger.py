@@ -166,7 +166,7 @@ def charlie_munger_agent(state: AgentState, agent_id: str = "charlie_munger_agen
         management_analysis = analyze_management_quality(financial_line_items, insider_trades)
         
         progress.update_status(agent_id, ticker, "Analyzing business predictability")
-        predictability_analysis = analyze_predictability(financial_line_items)
+        predictability_analysis = analyze_predictability(metrics, financial_line_items)
         
         progress.update_status(agent_id, ticker, "Calculating Munger-style valuation")
         valuation_analysis = calculate_munger_valuation(financial_line_items, market_cap)
@@ -548,7 +548,7 @@ def analyze_management_quality(financial_line_items: list, insider_trades: list)
     }
 
 
-def analyze_predictability(financial_line_items: list) -> dict:
+def analyze_predictability(metrics: list, financial_line_items: list) -> dict:
     """
     Assess the predictability of the business - Munger strongly prefers businesses
     whose future operations and cashflows are relatively easy to predict.
