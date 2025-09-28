@@ -126,8 +126,7 @@ def analyze_disruptive_potential(metrics: list, financial_line_items: list) -> d
     if not metrics or not financial_line_items:
         return {"score": 0, "details": "Insufficient data to analyze disruptive potential"}
 
-    # 1. Revenue Growth Analysis - Check for accelerating growth
-    revenues = [item.revenue for item in financial_line_items if item.revenue]
+    revenues = [item.revenue for item in financial_line_items if hasattr(item, "revenue") and item.revenue]
     if len(revenues) >= 3:  # Need at least 3 periods to check acceleration
         growth_rates = []
         for i in range(len(revenues) - 1):
@@ -227,7 +226,7 @@ def analyze_innovation_growth(metrics: list, financial_line_items: list) -> dict
 
     # 1. R&D Investment Trends
     rd_expenses = [item.research_and_development for item in financial_line_items if hasattr(item, "research_and_development") and item.research_and_development]
-    revenues = [item.revenue for item in financial_line_items if item.revenue]
+    revenues = [item.revenue for item in financial_line_items if hasattr(item, "revenue") and item.revenue]
 
     if rd_expenses and revenues and len(rd_expenses) >= 2:
         rd_growth = (rd_expenses[0] - rd_expenses[-1]) / abs(rd_expenses[-1]) if rd_expenses[-1] != 0 else 0
@@ -248,7 +247,7 @@ def analyze_innovation_growth(metrics: list, financial_line_items: list) -> dict
         details.append("Insufficient R&D data for trend analysis")
 
     # 2. Free Cash Flow Analysis
-    fcf_vals = [item.free_cash_flow for item in financial_line_items if item.free_cash_flow]
+    fcf_vals = [item.free_cash_flow for item in financial_line_items if hasattr(item, "free_cash_flow") and item.free_cash_flow]
     if fcf_vals and len(fcf_vals) >= 2:
         fcf_growth = (fcf_vals[0] - fcf_vals[-1]) / abs(fcf_vals[-1])
         positive_fcf_count = sum(1 for f in fcf_vals if f > 0)
@@ -327,7 +326,7 @@ def analyze_cathie_wood_valuation(financial_line_items: list, market_cap: float)
         return {"score": 0, "details": "Insufficient data for valuation"}
 
     latest = financial_line_items[0]
-    fcf = latest.free_cash_flow if latest.free_cash_flow else 0
+    fcf = latest.free_cash_flow if hasattr(latest, "free_cash_flow") and latest.free_cash_flow else 0
 
     if fcf <= 0:
         return {"score": 0, "details": f"No positive FCF for valuation; FCF = {fcf}", "intrinsic_value": None}

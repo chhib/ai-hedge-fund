@@ -78,10 +78,13 @@ def valuation_analyst_agent(state: AgentState, agent_id: str = "valuation_analys
         # Valuation models
         # ------------------------------------------------------------------
         # Handle potential None values for working capital
-        if li_curr.working_capital is not None and li_prev.working_capital is not None:
-            wc_change = li_curr.working_capital - li_prev.working_capital
-        else:
-            wc_change = 0  # Default to 0 if working capital data is unavailable
+        try:
+            if li_curr.working_capital is not None and li_prev.working_capital is not None:
+                wc_change = li_curr.working_capital - li_prev.working_capital
+            else:
+                wc_change = 0  # Default to 0 if working capital data is unavailable
+        except AttributeError:
+            wc_change = 0
 
         # Owner Earnings
         owner_val = calculate_owner_earnings_value(

@@ -55,6 +55,7 @@ LINE_ITEM_KPI_MAPPING: dict[str, tuple[str, ...]] = {
     "return_on_invested_capital": ("return on invested capital", "roic"),
     "gross_margin": ("gross margin",),
     "operating_margin": ("operating margin",),
+    "working_capital": ("workingcapital-%", "working capital"),
     # KPI fallbacks for missing line items
     "book_value_per_share": ("book value per share", "bvps"),
     "total_debt": ("total debt", "debt"),
@@ -256,18 +257,6 @@ class LineItemAssembler:
         else:
             total_debt_value = None
 
-        working_capital_value = None
-        if current_assets is not None and current_liabilities is not None:
-            working_capital_value = current_assets - current_liabilities
-
-        gross_margin_value = None
-        if revenue not in (None, 0) and gross_profit is not None:
-            gross_margin_value = gross_profit / revenue
-
-        operating_margin_value = None
-        if revenue not in (None, 0) and operating_income is not None:
-            operating_margin_value = operating_income / revenue
-
         kpi_cache: Dict[str, Optional[float]] = {}
         for key in (
             "ebitda",
@@ -277,9 +266,27 @@ class LineItemAssembler:
             "return_on_invested_capital",
             "gross_margin",
             "operating_margin",
+            "working_capital",
         ):
             ids = line_item_kpis.get(key)
             kpi_cache[key] = self._get_kpi_value(ctx, ids) if ids else None
+
+        working_capital_value = None
+        if current_assets is not None and current_liabilities is not None:
+            working_capital_value = current_assets - current_liabilities
+        else:
+            # Try to calculate from KPI
+            wc_percent_kpi = kpi_cache.get("working_capital")
+            if wc_percent_kpi is not None and revenue is not None and revenue > 0:
+                working_capital_value = (wc_percent_kpi / 100) * revenue
+
+        gross_margin_value = None
+        if revenue not in (None, 0) and gross_profit is not None:
+            gross_margin_value = gross_profit / revenue
+
+        operating_margin_value = None
+        if revenue not in (None, 0) and operating_income is not None:
+            operating_margin_value = operating_income / revenue
 
         if item == "revenue":
             return revenue

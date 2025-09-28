@@ -13,7 +13,11 @@ from typing_extensions import Literal
 from src.utils.progress import progress
 from src.utils.llm import call_llm
 from src.utils.api_key import get_api_key_from_state
-from src.utils.data_cache import get_cached_or_fetch_line_items, get_cached_or_fetch_market_cap
+from src.utils.data_cache import (
+    get_cached_or_fetch_line_items,
+    get_cached_or_fetch_market_cap,
+    get_cached_or_fetch_financial_metrics,
+)
 
 
 class PeterLynchSignal(BaseModel):
@@ -48,6 +52,16 @@ def peter_lynch_agent(state: AgentState, agent_id: str = "peter_lynch_agent"):
     lynch_analysis = {}
 
     for ticker in tickers:
+        progress.update_status(agent_id, ticker, "Using cached financial metrics")
+        metrics = get_cached_or_fetch_financial_metrics(
+            ticker,
+            end_date,
+            state,
+            api_key,
+            period="annual",
+            limit=5,
+        )
+
         progress.update_status(agent_id, ticker, "Using cached financial line items")
         # Relevant line items for Peter Lynch's approach
         financial_line_items = get_cached_or_fetch_line_items(
@@ -87,10 +101,10 @@ def peter_lynch_agent(state: AgentState, agent_id: str = "peter_lynch_agent"):
         growth_analysis = analyze_lynch_growth(metrics, financial_line_items)
 
         progress.update_status(agent_id, ticker, "Analyzing fundamentals")
-        fundamentals_analysis = analyze_lynch_fundamentals(financial_line_items)
+        fundamentals_analysis = analyze_lynch_fundamentals(metrics, financial_line_items)
 
         progress.update_status(agent_id, ticker, "Analyzing valuation (focus on PEG)")
-        valuation_analysis = analyze_lynch_valuation(financial_line_items, market_cap)
+        valuation_analysis = analyze_lynch_valuation(metrics, financial_line_items, market_cap)
 
         progress.update_status(agent_id, ticker, "Assessing calendar context")
         calendar_context = analyze_calendar_events(calendar_events)
@@ -225,7 +239,7 @@ def analyze_lynch_growth(metrics: list, financial_line_items: list) -> dict:
     return {"score": final_score, "details": "; ".join(details)}
 
 
-def analyze_lynch_fundamentals(financial_line_items: list) -> dict:
+def analyze_lynch_fundamentals(metrics: list, financial_line_items: list) -> dict:
     """
     Evaluate basic fundamentals:
       - Debt/Equity
@@ -288,7 +302,7 @@ def analyze_lynch_fundamentals(financial_line_items: list) -> dict:
     return {"score": final_score, "details": "; ".join(details)}
 
 
-def analyze_lynch_valuation(financial_line_items: list, market_cap: float | None) -> dict:
+def analyze_lynch_valuation(metrics: list, financial_line_items: list, market_cap: float | None) -> dict:
     """
     Peter Lynch's approach to 'Growth at a Reasonable Price' (GARP):
       - Emphasize the PEG ratio: (P/E) / Growth Rate

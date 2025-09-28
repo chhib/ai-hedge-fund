@@ -152,7 +152,7 @@ def analyze_business_quality(metrics: list, financial_line_items: list) -> dict:
         }
     
     # 1. Multi-period revenue growth analysis
-    revenues = [item.revenue for item in financial_line_items if item.revenue is not None]
+    revenues = [item.revenue for item in financial_line_items if hasattr(item, "revenue") and item.revenue is not None]
     if len(revenues) >= 2:
         initial, final = revenues[-1], revenues[0]
         if initial and final and final > initial:
@@ -169,8 +169,8 @@ def analyze_business_quality(metrics: list, financial_line_items: list) -> dict:
         details.append("Not enough revenue data for multi-period trend.")
     
     # 2. Operating margin and free cash flow consistency
-    fcf_vals = [item.free_cash_flow for item in financial_line_items if item.free_cash_flow is not None]
-    op_margin_vals = [metric.operating_margin for metric in metrics if metric.operating_margin is not None]
+    fcf_vals = [item.free_cash_flow for item in financial_line_items if hasattr(item, "free_cash_flow") and item.free_cash_flow is not None]
+    op_margin_vals = [metric.operating_margin for metric in metrics if hasattr(metric, "operating_margin") and metric.operating_margin is not None]
     
     if op_margin_vals:
         above_15 = sum(1 for m in op_margin_vals if m > 0.15)
@@ -194,10 +194,10 @@ def analyze_business_quality(metrics: list, financial_line_items: list) -> dict:
     
     # 3. Return on Equity (ROE) check from the latest metrics
     latest_metrics = metrics[0]
-    if latest_metrics.return_on_equity and latest_metrics.return_on_equity > 0.15:
+    if hasattr(latest_metrics, "return_on_equity") and latest_metrics.return_on_equity and latest_metrics.return_on_equity > 0.15:
         score += 2
         details.append(f"High ROE of {latest_metrics.return_on_equity:.1%}, indicating a competitive advantage.")
-    elif latest_metrics.return_on_equity:
+    elif hasattr(latest_metrics, "return_on_equity") and latest_metrics.return_on_equity:
         details.append(f"ROE of {latest_metrics.return_on_equity:.1%} is moderate.")
     else:
         details.append("ROE data not available.")
@@ -230,7 +230,7 @@ def analyze_financial_discipline(metrics: list, financial_line_items: list) -> d
         }
     
     # 1. Multi-period debt ratio or debt_to_equity
-    debt_to_equity_vals = [metric.debt_to_equity for metric in metrics if metric.debt_to_equity is not None]
+    debt_to_equity_vals = [metric.debt_to_equity for metric in metrics if hasattr(metric, "debt_to_equity") and metric.debt_to_equity is not None]
     if debt_to_equity_vals:
         below_one_count = sum(1 for d in debt_to_equity_vals if d < 1.0)
         if below_one_count >= (len(debt_to_equity_vals) // 2 + 1):
@@ -242,7 +242,7 @@ def analyze_financial_discipline(metrics: list, financial_line_items: list) -> d
         # Fallback to total_liabilities / total_assets
         liab_to_assets = []
         for item in financial_line_items:
-            if item.total_liabilities and item.total_assets and item.total_assets > 0:
+            if hasattr(item, "total_liabilities") and item.total_liabilities and hasattr(item, "total_assets") and item.total_assets and item.total_assets > 0:
                 liab_to_assets.append(item.total_liabilities / item.total_assets)
         
         if liab_to_assets:
@@ -259,7 +259,7 @@ def analyze_financial_discipline(metrics: list, financial_line_items: list) -> d
     dividends_list = [
         item.dividends_and_other_cash_distributions
         for item in financial_line_items
-        if item.dividends_and_other_cash_distributions is not None
+        if hasattr(item, "dividends_and_other_cash_distributions") and item.dividends_and_other_cash_distributions is not None
     ]
     if dividends_list:
         paying_dividends_count = sum(1 for d in dividends_list if d < 0)
@@ -272,7 +272,7 @@ def analyze_financial_discipline(metrics: list, financial_line_items: list) -> d
         details.append("No dividend data found across periods.")
     
     # Check for decreasing share count (simple approach)
-    shares = [item.outstanding_shares for item in financial_line_items if item.outstanding_shares is not None]
+    shares = [item.outstanding_shares for item in financial_line_items if hasattr(item, "outstanding_shares") and item.outstanding_shares is not None]
     if len(shares) >= 2:
         # For buybacks, the newest count should be less than the oldest count
         if shares[0] < shares[-1]:
@@ -305,7 +305,7 @@ def analyze_activism_potential(metrics: list, financial_line_items: list) -> dic
         }
     
     # Check revenue growth vs. operating margin
-    revenues = [item.revenue for item in financial_line_items if item.revenue is not None]
+    revenues = [item.revenue for item in financial_line_items if hasattr(item, "revenue") and item.revenue is not None]
     op_margins = [metric.operating_margin for metric in metrics if metric.operating_margin is not None]
     
     if len(revenues) < 2 or not op_margins:
@@ -348,7 +348,7 @@ def analyze_valuation(financial_line_items: list, market_cap: float) -> dict:
     # Since financial_line_items are in descending order (newest first),
     # the most recent period is the first element
     latest = financial_line_items[0]
-    fcf = latest.free_cash_flow if latest.free_cash_flow else 0
+    fcf = latest.free_cash_flow if hasattr(latest, "free_cash_flow") and latest.free_cash_flow else 0
     
     if fcf <= 0:
         return {

@@ -234,6 +234,13 @@ Rebuild the data ingestion and processing pipeline so the application relies on 
   - **Validated Target Metrics**: All previously "missing" valuation ratios (P/E, P/B, P/S), financial health (current ratio, debt/equity), and enterprise value (EV/EBITDA) metrics now properly mapped with correct Börsdata KPI IDs
 - **Mapping Validation Results**: ✅ P/E (KPI 2), P/B (KPI 4), P/S (KPI 3), Current Ratio (KPI 44), Debt/Equity (KPI 40), EV/EBITDA (KPI 11), ROIC (KPI 37) all confirmed available and properly configured
 
+### Session 29 (Agent Stability and Bug Fixes)
+- **Fixed `NameError` in Peter Lynch Agent**: Resolved a crash in `peter_lynch.py` caused by an undefined `metrics` variable. Implemented logic to fetch financial metrics and pass them to the relevant analysis functions.
+- **Improved Agent Robustness**: Added `hasattr` checks to `cathie_wood.py` and `bill_ackman.py` to prevent potential `AttributeError` crashes when financial data points are missing.
+- **Corrected Insider Trading Logic**: Fixed a logical flaw in `charlie_munger.py` where insider trading analysis was using a non-existent `transaction_type` attribute. The logic now correctly uses the sign of `transaction_shares` to determine buys and sells.
+- **Resolved `AttributeError` in Valuation Agent**: Fixed a crash in `valuation.py` where the `working_capital` attribute was not found on `LineItem` objects. Implemented a `try-except` block to handle the missing attribute gracefully and added a fallback calculation for `working_capital` in `borsdata_reports.py`.
+- **Validation**: Successfully ran the full suite of analysts on the NVDA ticker, confirming that all bug fixes are effective and the system is stable.
+
 ## Phase 1 Status: ✅ COMPLETE
 **CLI backtest experience with Börsdata data flows is production-ready.** The system successfully:
 - Ingests price, financial metrics, corporate events, and insider trades from Börsdata fixtures
