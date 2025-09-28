@@ -1,5 +1,6 @@
 from src.graph.state import AgentState, show_agent_reasoning
 from src.tools.api import get_financial_metrics, get_market_cap, search_line_items
+from src.utils.data_cache import get_cached_or_fetch_financial_metrics, get_cached_or_fetch_line_items, get_cached_or_fetch_market_cap
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel
@@ -34,14 +35,14 @@ def ben_graham_agent(state: AgentState, agent_id: str = "ben_graham_agent"):
     graham_analysis = {}
 
     for ticker in tickers:
-        progress.update_status(agent_id, ticker, "Fetching financial metrics")
-        metrics = get_financial_metrics(ticker, end_date, period="annual", limit=10, api_key=api_key)
+        progress.update_status(agent_id, ticker, "Using cached financial metrics")
+        metrics = get_cached_or_fetch_financial_metrics(ticker, end_date, state, api_key, period="annual", limit=10)
 
-        progress.update_status(agent_id, ticker, "Gathering financial line items")
-        financial_line_items = search_line_items(ticker, ["earnings_per_share", "revenue", "net_income", "book_value_per_share", "total_assets", "total_liabilities", "current_assets", "current_liabilities", "dividends_and_other_cash_distributions", "outstanding_shares"], end_date, period="annual", limit=10, api_key=api_key)
+        progress.update_status(agent_id, ticker, "Using cached financial line items")
+        financial_line_items = get_cached_or_fetch_line_items(ticker, ["earnings_per_share", "revenue", "net_income", "book_value_per_share", "total_assets", "total_liabilities", "current_assets", "current_liabilities", "dividends_and_other_cash_distributions", "outstanding_shares"], end_date, state, api_key, period="annual", limit=10)
 
-        progress.update_status(agent_id, ticker, "Getting market cap")
-        market_cap = get_market_cap(ticker, end_date, api_key=api_key)
+        progress.update_status(agent_id, ticker, "Using cached market cap")
+        market_cap = get_cached_or_fetch_market_cap(ticker, end_date, state, api_key)
 
         # Perform sub-analyses
         progress.update_status(agent_id, ticker, "Analyzing earnings stability")

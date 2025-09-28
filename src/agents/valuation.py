@@ -17,6 +17,7 @@ from src.tools.api import (
     get_market_cap,
     search_line_items,
 )
+from src.utils.data_cache import get_cached_or_fetch_financial_metrics, get_cached_or_fetch_line_items, get_cached_or_fetch_market_cap
 
 def valuation_analyst_agent(state: AgentState, agent_id: str = "valuation_analyst_agent"):
     """Run valuation across tickers and write signals back to `state`."""
@@ -28,15 +29,16 @@ def valuation_analyst_agent(state: AgentState, agent_id: str = "valuation_analys
     valuation_analysis: dict[str, dict] = {}
 
     for ticker in tickers:
-        progress.update_status(agent_id, ticker, "Fetching financial data")
+        progress.update_status(agent_id, ticker, "Using cached financial data")
 
         # --- Historical financial metrics ---
-        financial_metrics = get_financial_metrics(
+        financial_metrics = get_cached_or_fetch_financial_metrics(
             ticker=ticker,
             end_date=end_date,
+            state=state,
+            api_key=api_key,
             period="ttm",
             limit=8,
-            api_key=api_key,
         )
         if not financial_metrics:
             progress.update_status(agent_id, ticker, "Failed: No financial metrics found")
@@ -44,17 +46,17 @@ def valuation_analyst_agent(state: AgentState, agent_id: str = "valuation_analys
         most_recent_metrics = financial_metrics[0]
 
         # --- Enhanced line‑items ---
-        progress.update_status(agent_id, ticker, "Gathering comprehensive line items")
-        line_items = search_line_items(
+        progress.update_status(agent_id, ticker, "Using cached line items")
+        line_items = get_cached_or_fetch_line_items(
             ticker=ticker,
-            line_items=[
+            line_items_list=[
                 "free_cash_flow",
                 "net_income",
                 "depreciation_and_amortization",
                 "capital_expenditure",
                 "working_capital",
                 "total_debt",
-                "cash_and_equivalents", 
+                "cash_and_equivalents",
                 "interest_expense",
                 "revenue",
                 "operating_income",
@@ -62,9 +64,10 @@ def valuation_analyst_agent(state: AgentState, agent_id: str = "valuation_analys
                 "ebitda"
             ],
             end_date=end_date,
+            state=state,
+            api_key=api_key,
             period="ttm",
             limit=8,
-            api_key=api_key,
         )
         if len(line_items) < 2:
             progress.update_status(agent_id, ticker, "Failed: Insufficient financial line items")
@@ -136,7 +139,7 @@ def valuation_analyst_agent(state: AgentState, agent_id: str = "valuation_analys
         # ------------------------------------------------------------------
         # Aggregate & signal
         # ------------------------------------------------------------------
-        market_cap = get_market_cap(ticker, end_date, api_key=api_key)
+        market_cap = get_cached_or_fetch_market_cap(ticker, end_date, state, api_key)
         if not market_cap:
             progress.update_status(agent_id, ticker, "Failed: Market cap unavailable")
             continue

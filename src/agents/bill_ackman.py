@@ -170,7 +170,7 @@ def analyze_business_quality(metrics: list, financial_line_items: list) -> dict:
     
     # 2. Operating margin and free cash flow consistency
     fcf_vals = [item.free_cash_flow for item in financial_line_items if item.free_cash_flow is not None]
-    op_margin_vals = [item.operating_margin for item in financial_line_items if item.operating_margin is not None]
+    op_margin_vals = [metric.operating_margin for metric in metrics if metric.operating_margin is not None]
     
     if op_margin_vals:
         above_15 = sum(1 for m in op_margin_vals if m > 0.15)
