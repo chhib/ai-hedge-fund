@@ -395,4 +395,41 @@ Conducted comprehensive comparison testing between enhanced Börsdata fork and o
 - **Currency Harmonization Framework**: Created `scripts/multi_currency_analysis.py` and `docs/CURRENCY_HARMONIZATION_PLAN.md` documenting currency normalization strategy combining 1M scaling fix with real-time exchange rate conversion.
 - **Cross-Currency Validation**: Successfully tested 12 tickers across 4 currencies (USD: AAPL/MSFT/NVDA, SEK: AAK/ASSA B/ALFA, DKK: DSV/NOVO B/ORSTED, NOK: DNB/TEL) with proper currency identification and normalization examples.
 
+### Session 31 (Jim Simons Agent and Currency Conversion)
+- **feat: Integrate Jim Simons agent and real-time currency conversion**
+- This commit introduces two major features:
+- 1.  **Jim Simons Agent:** A new quantitative agent based on the strategies of Jim Simons has been added. This agent uses a multi-factor model to generate trading signals.
+- 2.  **Real-time Currency Conversion:** The backtester now supports a mix of Nordic and Global tickers and performs real-time currency conversion using the Börsdata API.
+- **Changes:**
+-   **New Agent:**
+    -   Added `src/agents/jim_simons.py` with the implementation of the Jim Simons agent.
+    -   Registered the new agent in `src/utils/analysts.py`.
+-   **Currency Conversion:**
+    -   Added `src/data/exchange_rate_service.py` to fetch and cache exchange rates from the Börsdata API.
+    -   Improved the heuristic for identifying currency pairs in `exchange_rate_service.py`.
+    -   Added a `get_all_instruments` method to `src/data/borsdata_client.py` to fetch both Nordic and Global instruments.
+    -   Added caching to `ExchangeRateService` to avoid redundant API calls.
+    -   The backtesting engine now uses the `ExchangeRateService` to convert all monetary values to a target currency.
+-   **Backtester Enhancements:**
+    -   The backtesting CLI now accepts `--tickers-nordics` and `--initial-currency` arguments.
+    -   The backtesting engine has been updated to handle the new currency conversion logic.
+    -   The output of the backtester now displays the correct currency symbol.
+-   **API and Data Models:**
+    -   Added `rsi` and `bollinger_bands` to the `FinancialMetrics` model in `src/data/models.py`.
+    -   Added mappings for the new metrics in `src/data/borsdata_metrics_mapping.py`.
+    -   Modified `src/tools/api.py` to support global tickers and dynamic return types for `search_line_items`.
+
+### Session 32 (Jim Simons Agent and Global Ticker Support)
+- **feat: Integrate Jim Simons agent and global ticker support**
+- This session focused on integrating the Jim Simons agent and adding robust support for both global and Nordic tickers in the CLI.
+- **Changes:**
+-   **Jim Simons Agent:**
+    -   The `jim_simons` agent is now fully integrated and can be selected via the `--analysts` CLI argument.
+-   **Global Ticker Support:**
+    -   The CLI now accepts both `--tickers` (for global tickers) and `--tickers-nordics` (for Nordic tickers).
+    -   The data fetching logic now correctly identifies the market for each ticker and uses the appropriate data source.
+-   **CLI Enhancements:**
+    -   Added `--model-name` and `--model-provider` arguments to allow non-interactive model selection.
+    -   Fixed several bugs related to argument parsing and case-sensitivity.
+
 **IMPORTANT**: Update this log at the end of each work session: note completed steps, new decisions, blockers, and refreshed next actions. Always use session numbers (Session X, Session X+1, etc.) for progress entries. Update the "Last updated" date at the top with the actual current date when making changes.
