@@ -198,7 +198,7 @@ def analyze_lynch_growth(financial_line_items: list) -> dict:
         details.append("Not enough revenue data to assess growth.")
 
     # 2) EPS Growth
-    eps_values = [fi.earnings_per_share for fi in financial_line_items if fi.earnings_per_share is not None]
+    eps_values = [metric.earnings_per_share for metric in metrics if metric.earnings_per_share is not None]
     if len(eps_values) >= 2:
         latest_eps = eps_values[0]
         older_eps = eps_values[-1]
@@ -258,7 +258,7 @@ def analyze_lynch_fundamentals(financial_line_items: list) -> dict:
         details.append("No consistent debt/equity data available.")
 
     # 2) Operating Margin
-    om_values = [fi.operating_margin for fi in financial_line_items if fi.operating_margin is not None]
+    om_values = [metric.operating_margin for metric in metrics if metric.operating_margin is not None]
     if om_values:
         om_recent = om_values[0]
         if om_recent > 0.20:
@@ -303,7 +303,7 @@ def analyze_lynch_valuation(financial_line_items: list, market_cap: float | None
 
     # Gather data for P/E
     net_incomes = [fi.net_income for fi in financial_line_items if fi.net_income is not None]
-    eps_values = [fi.earnings_per_share for fi in financial_line_items if fi.earnings_per_share is not None]
+    eps_values = [metric.earnings_per_share for metric in metrics if metric.earnings_per_share is not None]
 
     # Approximate P/E via (market cap / net income) if net income is positive
     pe_ratio = None

@@ -1,5 +1,6 @@
 from src.graph.state import AgentState, show_agent_reasoning
 from src.tools.api import get_financial_metrics, get_market_cap, search_line_items
+from src.utils.data_cache import get_cached_or_fetch_financial_metrics, get_cached_or_fetch_line_items, get_cached_or_fetch_market_cap
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel
@@ -32,12 +33,12 @@ def cathie_wood_agent(state: AgentState, agent_id: str = "cathie_wood_agent"):
     cw_analysis = {}
 
     for ticker in tickers:
-        progress.update_status(agent_id, ticker, "Fetching financial metrics")
-        metrics = get_financial_metrics(ticker, end_date, period="annual", limit=5, api_key=api_key)
+        progress.update_status(agent_id, ticker, "Using cached financial metrics")
+        metrics = get_cached_or_fetch_financial_metrics(ticker, end_date, state, api_key, period="annual", limit=5)
 
-        progress.update_status(agent_id, ticker, "Gathering financial line items")
+        progress.update_status(agent_id, ticker, "Using cached financial line items")
         # Request multiple periods of data (annual or TTM) for a more robust view.
-        financial_line_items = search_line_items(
+        financial_line_items = get_cached_or_fetch_line_items(
             ticker,
             [
                 "revenue",
@@ -54,13 +55,14 @@ def cathie_wood_agent(state: AgentState, agent_id: str = "cathie_wood_agent"):
                 "operating_expense",
             ],
             end_date,
+            state,
+            api_key,
             period="annual",
             limit=5,
-            api_key=api_key,
         )
 
-        progress.update_status(agent_id, ticker, "Getting market cap")
-        market_cap = get_market_cap(ticker, end_date, api_key=api_key)
+        progress.update_status(agent_id, ticker, "Using cached market cap")
+        market_cap = get_cached_or_fetch_market_cap(ticker, end_date, state, api_key)
 
         progress.update_status(agent_id, ticker, "Analyzing disruptive potential")
         disruptive_analysis = analyze_disruptive_potential(metrics, financial_line_items)
@@ -264,7 +266,7 @@ def analyze_innovation_growth(metrics: list, financial_line_items: list) -> dict
         details.append("Insufficient FCF data for analysis")
 
     # 3. Operating Efficiency Analysis
-    op_margin_vals = [item.operating_margin for item in financial_line_items if item.operating_margin]
+    op_margin_vals = [metric.operating_margin for metric in metrics if metric.operating_margin]
     if op_margin_vals and len(op_margin_vals) >= 2:
         margin_trend = op_margin_vals[0] - op_margin_vals[-1]
 

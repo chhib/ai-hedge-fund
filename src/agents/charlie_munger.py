@@ -1,5 +1,6 @@
 from src.graph.state import AgentState, show_agent_reasoning
 from src.tools.api import get_financial_metrics, get_market_cap, search_line_items, get_insider_trades, get_company_events
+from src.utils.data_cache import get_cached_or_fetch_financial_metrics, get_cached_or_fetch_line_items, get_cached_or_fetch_market_cap
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel
@@ -108,11 +109,11 @@ def charlie_munger_agent(state: AgentState, agent_id: str = "charlie_munger_agen
     munger_analysis = {}
     
     for ticker in tickers:
-        progress.update_status(agent_id, ticker, "Fetching financial metrics")
-        metrics = get_financial_metrics(ticker, end_date, period="annual", limit=10, api_key=api_key)  # Munger looks at longer periods
+        progress.update_status(agent_id, ticker, "Using cached financial metrics")
+        metrics = get_cached_or_fetch_financial_metrics(ticker, end_date, state, api_key, period="annual", limit=10)  # Munger looks at longer periods
         
-        progress.update_status(agent_id, ticker, "Gathering financial line items")
-        financial_line_items = search_line_items(
+        progress.update_status(agent_id, ticker, "Using cached financial line items")
+        financial_line_items = get_cached_or_fetch_line_items(
             ticker,
             [
                 "revenue",
@@ -131,13 +132,14 @@ def charlie_munger_agent(state: AgentState, agent_id: str = "charlie_munger_agen
                 "goodwill_and_intangible_assets",
             ],
             end_date,
+            state,
+            api_key,
             period="annual",
             limit=10,  # Munger examines long-term trends
-            api_key=api_key,
         )
         
-        progress.update_status(agent_id, ticker, "Getting market cap")
-        market_cap = get_market_cap(ticker, end_date, api_key=api_key)
+        progress.update_status(agent_id, ticker, "Using cached market cap")
+        market_cap = get_cached_or_fetch_market_cap(ticker, end_date, state, api_key)
         
         progress.update_status(agent_id, ticker, "Fetching insider trades")
         # Munger values management with skin in the game
@@ -256,8 +258,8 @@ def analyze_moat_strength(metrics: list, financial_line_items: list) -> dict:
         }
     
     # 1. Return on Invested Capital (ROIC) analysis - Munger's favorite metric
-    roic_values = [item.return_on_invested_capital for item in financial_line_items 
-                   if hasattr(item, 'return_on_invested_capital') and item.return_on_invested_capital is not None]
+    roic_values = [metric.return_on_invested_capital for metric in metrics
+                   if hasattr(metric, 'return_on_invested_capital') and metric.return_on_invested_capital is not None]
     
     if roic_values:
         # Check if ROIC consistently above 15% (Munger's threshold)
@@ -621,8 +623,8 @@ def analyze_predictability(financial_line_items: list) -> dict:
         details.append("Insufficient operating income history")
     
     # 3. Margin consistency - Munger values stable margins
-    op_margins = [item.operating_margin for item in financial_line_items 
-                 if hasattr(item, 'operating_margin') and item.operating_margin is not None]
+    op_margins = [metric.operating_margin for metric in metrics
+                 if hasattr(metric, 'operating_margin') and metric.operating_margin is not None]
     
     if op_margins and len(op_margins) >= 5:
         # Calculate margin volatility

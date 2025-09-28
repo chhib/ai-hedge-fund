@@ -1,5 +1,6 @@
 from src.graph.state import AgentState, show_agent_reasoning
 from src.tools.api import get_financial_metrics, get_market_cap, search_line_items
+from src.utils.data_cache import get_cached_or_fetch_financial_metrics, get_cached_or_fetch_line_items, get_cached_or_fetch_market_cap
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel
@@ -29,11 +30,11 @@ def mohnish_pabrai_agent(state: AgentState, agent_id: str = "mohnish_pabrai_agen
     # Pabrai focuses on: downside protection, simple business, moat via unit economics, FCF yield vs alternatives,
     # and potential for doubling in 2-3 years at low risk.
     for ticker in tickers:
-        progress.update_status(agent_id, ticker, "Fetching financial metrics")
-        metrics = get_financial_metrics(ticker, end_date, period="annual", limit=8, api_key=api_key)
+        progress.update_status(agent_id, ticker, "Using cached financial metrics")
+        metrics = get_cached_or_fetch_financial_metrics(ticker, end_date, state, api_key, period="annual", limit=8)
 
-        progress.update_status(agent_id, ticker, "Gathering financial line items")
-        line_items = search_line_items(
+        progress.update_status(agent_id, ticker, "Using cached financial line items")
+        line_items = get_cached_or_fetch_line_items(
             ticker,
             [
                 # Profitability and cash generation
@@ -57,13 +58,14 @@ def mohnish_pabrai_agent(state: AgentState, agent_id: str = "mohnish_pabrai_agen
                 "outstanding_shares",
             ],
             end_date,
+            state,
+            api_key,
             period="annual",
-            limit=8,
-            api_key=api_key,
+            limit=8
         )
 
-        progress.update_status(agent_id, ticker, "Getting market cap")
-        market_cap = get_market_cap(ticker, end_date, api_key=api_key)
+        progress.update_status(agent_id, ticker, "Using cached market cap")
+        market_cap = get_cached_or_fetch_market_cap(ticker, end_date, state, api_key)
 
         progress.update_status(agent_id, ticker, "Analyzing downside protection")
         downside = analyze_downside_protection(line_items)

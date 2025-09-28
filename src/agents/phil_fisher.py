@@ -5,6 +5,7 @@ from src.tools.api import (
     get_insider_trades,
     get_company_events,
 )
+from src.utils.data_cache import get_cached_or_fetch_financial_metrics, get_cached_or_fetch_line_items, get_cached_or_fetch_market_cap
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel
@@ -41,13 +42,16 @@ def phil_fisher_agent(state: AgentState, agent_id: str = "phil_fisher_agent"):
     fisher_analysis = {}
 
     for ticker in tickers:
-        progress.update_status(agent_id, ticker, "Gathering financial line items")
+        progress.update_status(agent_id, ticker, "Using cached financial metrics")
+        metrics = get_cached_or_fetch_financial_metrics(ticker, end_date, state, api_key, period="annual", limit=5)
+
+        progress.update_status(agent_id, ticker, "Using cached financial line items")
         # Include relevant line items for Phil Fisher's approach:
         #   - Growth & Quality: revenue, net_income, earnings_per_share, R&D expense
         #   - Margins & Stability: operating_income, operating_margin, gross_margin
         #   - Management Efficiency & Leverage: total_debt, shareholders_equity, free_cash_flow
         #   - Valuation: net_income, free_cash_flow (for P/E, P/FCF), ebit, ebitda
-        financial_line_items = search_line_items(
+        financial_line_items = get_cached_or_fetch_line_items(
             ticker,
             [
                 "revenue",
@@ -65,13 +69,14 @@ def phil_fisher_agent(state: AgentState, agent_id: str = "phil_fisher_agent"):
                 "ebitda",
             ],
             end_date,
+            state,
+            api_key,
             period="annual",
-            limit=5,
-            api_key=api_key,
+            limit=5
         )
 
-        progress.update_status(agent_id, ticker, "Getting market cap")
-        market_cap = get_market_cap(ticker, end_date, api_key=api_key)
+        progress.update_status(agent_id, ticker, "Using cached market cap")
+        market_cap = get_cached_or_fetch_market_cap(ticker, end_date, state, api_key)
 
         progress.update_status(agent_id, ticker, "Fetching insider trades")
         insider_trades = get_insider_trades(ticker, end_date, limit=50, api_key=api_key)
@@ -80,10 +85,10 @@ def phil_fisher_agent(state: AgentState, agent_id: str = "phil_fisher_agent"):
         calendar_events = get_company_events(ticker, end_date, limit=50, api_key=api_key)
 
         progress.update_status(agent_id, ticker, "Analyzing growth & quality")
-        growth_quality = analyze_fisher_growth_quality(financial_line_items)
+        growth_quality = analyze_fisher_growth_quality(metrics, financial_line_items)
 
         progress.update_status(agent_id, ticker, "Analyzing margins & stability")
-        margins_stability = analyze_margins_stability(financial_line_items)
+        margins_stability = analyze_margins_stability(metrics, financial_line_items)
 
         progress.update_status(agent_id, ticker, "Analyzing management efficiency & leverage")
         mgmt_efficiency = analyze_management_efficiency_leverage(financial_line_items)
@@ -164,7 +169,7 @@ def phil_fisher_agent(state: AgentState, agent_id: str = "phil_fisher_agent"):
     return {"messages": [message], "data": state["data"]}
 
 
-def analyze_fisher_growth_quality(financial_line_items: list) -> dict:
+def analyze_fisher_growth_quality(metrics: list, financial_line_items: list) -> dict:
     """
     Evaluate growth & quality:
       - Consistent Revenue Growth
@@ -207,7 +212,7 @@ def analyze_fisher_growth_quality(financial_line_items: list) -> dict:
         details.append("Not enough revenue data points for growth calculation.")
 
     # 2. EPS Growth (annualized CAGR)
-    eps_values = [fi.earnings_per_share for fi in financial_line_items if fi.earnings_per_share is not None]
+    eps_values = [metric.earnings_per_share for metric in metrics if metric.earnings_per_share is not None]
     if len(eps_values) >= 2:
         latest_eps = eps_values[0]
         oldest_eps = eps_values[-1]
@@ -259,7 +264,7 @@ def analyze_fisher_growth_quality(financial_line_items: list) -> dict:
     return {"score": final_score, "details": "; ".join(details)}
 
 
-def analyze_margins_stability(financial_line_items: list) -> dict:
+def analyze_margins_stability(metrics: list, financial_line_items: list) -> dict:
     """
     Looks at margin consistency (gross/operating margin) and general stability over time.
     """
@@ -273,7 +278,7 @@ def analyze_margins_stability(financial_line_items: list) -> dict:
     raw_score = 0  # up to 6 => scale to 0-10
 
     # 1. Operating Margin Consistency
-    op_margins = [fi.operating_margin for fi in financial_line_items if fi.operating_margin is not None]
+    op_margins = [metric.operating_margin for metric in metrics if metric.operating_margin is not None]
     if len(op_margins) >= 2:
         # Check if margins are stable or improving (comparing oldest to newest)
         oldest_op_margin = op_margins[-1]

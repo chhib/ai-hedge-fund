@@ -7,6 +7,7 @@ from src.tools.api import (
     get_company_events,
     get_prices,
 )
+from src.utils.data_cache import get_cached_or_fetch_financial_metrics, get_cached_or_fetch_line_items, get_cached_or_fetch_market_cap
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel
@@ -129,16 +130,16 @@ def stanley_druckenmiller_agent(state: AgentState, agent_id: str = "stanley_druc
     druck_analysis = {}
 
     for ticker in tickers:
-        progress.update_status(agent_id, ticker, "Fetching financial metrics")
-        metrics = get_financial_metrics(ticker, end_date, period="annual", limit=5, api_key=api_key)
+        progress.update_status(agent_id, ticker, "Using cached financial metrics")
+        metrics = get_cached_or_fetch_financial_metrics(ticker, end_date, state, api_key, period="annual", limit=5)
 
-        progress.update_status(agent_id, ticker, "Gathering financial line items")
+        progress.update_status(agent_id, ticker, "Using cached financial line items")
         # Include relevant line items for Stan Druckenmiller's approach:
         #   - Growth & momentum: revenue, EPS, operating_income, ...
         #   - Valuation: net_income, free_cash_flow, ebit, ebitda
         #   - Leverage: total_debt, shareholders_equity
         #   - Liquidity: cash_and_equivalents
-        financial_line_items = search_line_items(
+        financial_line_items = get_cached_or_fetch_line_items(
             ticker,
             [
                 "revenue",
@@ -157,13 +158,14 @@ def stanley_druckenmiller_agent(state: AgentState, agent_id: str = "stanley_druc
                 "ebitda",
             ],
             end_date,
+            state,
+            api_key,
             period="annual",
-            limit=5,
-            api_key=api_key,
+            limit=5
         )
 
-        progress.update_status(agent_id, ticker, "Getting market cap")
-        market_cap = get_market_cap(ticker, end_date, api_key=api_key)
+        progress.update_status(agent_id, ticker, "Using cached market cap")
+        market_cap = get_cached_or_fetch_market_cap(ticker, end_date, state, api_key)
 
         progress.update_status(agent_id, ticker, "Fetching insider trades")
         insider_trades = get_insider_trades(ticker, end_date, limit=50, api_key=api_key)
@@ -175,7 +177,7 @@ def stanley_druckenmiller_agent(state: AgentState, agent_id: str = "stanley_druc
         prices = get_prices(ticker, start_date=start_date, end_date=end_date, api_key=api_key)
 
         progress.update_status(agent_id, ticker, "Analyzing growth & momentum")
-        growth_momentum_analysis = analyze_growth_and_momentum(financial_line_items, prices)
+        growth_momentum_analysis = analyze_growth_and_momentum(metrics, financial_line_items, prices)
 
         progress.update_status(agent_id, ticker, "Assessing calendar context")
         calendar_context = analyze_calendar_context(calendar_events)
@@ -250,7 +252,7 @@ def stanley_druckenmiller_agent(state: AgentState, agent_id: str = "stanley_druc
     return {"messages": [message], "data": state["data"]}
 
 
-def analyze_growth_and_momentum(financial_line_items: list, prices: list) -> dict:
+def analyze_growth_and_momentum(metrics: list, financial_line_items: list, prices: list) -> dict:
     """
     Evaluate:
       - Revenue Growth (YoY)
@@ -293,7 +295,7 @@ def analyze_growth_and_momentum(financial_line_items: list, prices: list) -> dic
     #
     # 2. EPS Growth (annualized CAGR)
     #
-    eps_values = [fi.earnings_per_share for fi in financial_line_items if fi.earnings_per_share is not None]
+    eps_values = [metric.earnings_per_share for metric in metrics if metric.earnings_per_share is not None]
     if len(eps_values) >= 2:
         latest_eps = eps_values[0]
         older_eps = eps_values[-1]

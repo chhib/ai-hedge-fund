@@ -67,7 +67,7 @@ def bill_ackman_agent(state: AgentState, agent_id: str = "bill_ackman_agent"):
         balance_sheet_analysis = analyze_financial_discipline(metrics, financial_line_items)
         
         progress.update_status(agent_id, ticker, "Analyzing activism potential")
-        activism_analysis = analyze_activism_potential(financial_line_items)
+        activism_analysis = analyze_activism_potential(metrics, financial_line_items)
         
         progress.update_status(agent_id, ticker, "Calculating intrinsic value & margin of safety")
         valuation_analysis = analyze_valuation(financial_line_items, market_cap)
@@ -230,7 +230,7 @@ def analyze_financial_discipline(metrics: list, financial_line_items: list) -> d
         }
     
     # 1. Multi-period debt ratio or debt_to_equity
-    debt_to_equity_vals = [item.debt_to_equity for item in financial_line_items if item.debt_to_equity is not None]
+    debt_to_equity_vals = [metric.debt_to_equity for metric in metrics if metric.debt_to_equity is not None]
     if debt_to_equity_vals:
         below_one_count = sum(1 for d in debt_to_equity_vals if d < 1.0)
         if below_one_count >= (len(debt_to_equity_vals) // 2 + 1):
@@ -289,7 +289,7 @@ def analyze_financial_discipline(metrics: list, financial_line_items: list) -> d
     }
 
 
-def analyze_activism_potential(financial_line_items: list) -> dict:
+def analyze_activism_potential(metrics: list, financial_line_items: list) -> dict:
     """
     Bill Ackman often engages in activism if a company has a decent brand or moat
     but is underperforming operationally.
@@ -306,7 +306,7 @@ def analyze_activism_potential(financial_line_items: list) -> dict:
     
     # Check revenue growth vs. operating margin
     revenues = [item.revenue for item in financial_line_items if item.revenue is not None]
-    op_margins = [item.operating_margin for item in financial_line_items if item.operating_margin is not None]
+    op_margins = [metric.operating_margin for metric in metrics if metric.operating_margin is not None]
     
     if len(revenues) < 2 or not op_margins:
         return {

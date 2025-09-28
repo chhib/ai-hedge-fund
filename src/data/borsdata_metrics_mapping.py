@@ -106,9 +106,13 @@ FINANCIAL_METRICS_MAPPING: dict[str, MetricMapping] = {
         "default_report_type": "r12",
     },
     "free_cash_flow_yield": {
-        "source": "kpi",
+        "source": "derived",
         "metadata_match": ["FCF Yield"],
         "default_report_type": "r12",
+        "notes": "Calculated as 1/P_FCF ratio since Börsdata has P/FCF (KPI 16) but not FCF Yield directly",
+        "dependencies": ["price_to_fcf_ratio"],
+        "calculation": "inverse",
+        "is_percentage": True,
     },
     "peg_ratio": {
         "source": "screener",
@@ -567,15 +571,7 @@ FINANCIAL_METRICS_MAPPING: dict[str, MetricMapping] = {
     },
     
     # Additional critical financial KPIs from Börsdata (expanding toward 322 total)
-    "debt_to_equity": {
-        "source": "kpi",
-        "metadata_match": ["Debt to Equity", "Skuldsättningsgrad"],
-        "kpi_id": 40,
-        "default_report_type": "year",
-        "screener_calc_group": "last",
-        "screener_calc": "latest",
-        "is_percentage": True,
-    },
+    # NOTE: debt_to_equity already defined above - removing duplicate
     "debt_to_assets": {
         "source": "kpi",
         "metadata_match": ["Debt to Assets", "Skuld/Tillgångar"],
@@ -593,14 +589,7 @@ FINANCIAL_METRICS_MAPPING: dict[str, MetricMapping] = {
         "screener_calc_group": "last",
         "screener_calc": "latest",
     },
-    "current_ratio": {
-        "source": "kpi",
-        "metadata_match": ["Current Ratio", "Likviditet"],
-        "kpi_id": 47,
-        "default_report_type": "year",
-        "screener_calc_group": "last",
-        "screener_calc": "latest",
-    },
+    # NOTE: current_ratio already defined above - removing duplicate with incorrect KPI ID 47
     "quick_ratio": {
         "source": "kpi",
         "metadata_match": ["Quick Ratio", "Snabb Likviditet"],

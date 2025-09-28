@@ -39,7 +39,7 @@ def ben_graham_agent(state: AgentState, agent_id: str = "ben_graham_agent"):
         metrics = get_cached_or_fetch_financial_metrics(ticker, end_date, state, api_key, period="annual", limit=10)
 
         progress.update_status(agent_id, ticker, "Using cached financial line items")
-        financial_line_items = get_cached_or_fetch_line_items(ticker, ["earnings_per_share", "revenue", "net_income", "book_value_per_share", "total_assets", "total_liabilities", "current_assets", "current_liabilities", "dividends_and_other_cash_distributions", "outstanding_shares"], end_date, state, api_key, period="annual", limit=10)
+        financial_line_items = get_cached_or_fetch_line_items(ticker, ["revenue", "net_income", "book_value_per_share", "total_assets", "total_liabilities", "current_assets", "current_liabilities", "dividends_and_other_cash_distributions", "outstanding_shares"], end_date, state, api_key, period="annual", limit=10)
 
         progress.update_status(agent_id, ticker, "Using cached market cap")
         market_cap = get_cached_or_fetch_market_cap(ticker, end_date, state, api_key)
@@ -109,9 +109,9 @@ def analyze_earnings_stability(metrics: list, financial_line_items: list) -> dic
         return {"score": score, "details": "Insufficient data for earnings stability analysis"}
 
     eps_vals = []
-    for item in financial_line_items:
-        if item.earnings_per_share is not None:
-            eps_vals.append(item.earnings_per_share)
+    for metric in metrics:
+        if metric.earnings_per_share is not None:
+            eps_vals.append(metric.earnings_per_share)
 
     if len(eps_vals) < 2:
         details.append("Not enough multi-year EPS data.")

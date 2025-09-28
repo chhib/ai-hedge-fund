@@ -14,6 +14,7 @@ from src.tools.api import (
     search_line_items,
 )
 from src.utils.api_key import get_api_key_from_state
+from src.utils.data_cache import get_cached_or_fetch_financial_metrics, get_cached_or_fetch_line_items, get_cached_or_fetch_market_cap
 from src.utils.llm import call_llm
 from src.utils.progress import progress
 
@@ -43,11 +44,11 @@ def aswath_damodaran_agent(state: AgentState, agent_id: str = "aswath_damodaran_
 
     for ticker in tickers:
         # ─── Fetch core data ────────────────────────────────────────────────────
-        progress.update_status(agent_id, ticker, "Fetching financial metrics")
-        metrics = get_financial_metrics(ticker, end_date, period="ttm", limit=5, api_key=api_key)
+        progress.update_status(agent_id, ticker, "Using cached financial metrics")
+        metrics = get_cached_or_fetch_financial_metrics(ticker, end_date, state, api_key, period="ttm", limit=5)
 
-        progress.update_status(agent_id, ticker, "Fetching financial line items")
-        line_items = search_line_items(
+        progress.update_status(agent_id, ticker, "Using cached financial line items")
+        line_items = get_cached_or_fetch_line_items(
             ticker,
             [
                 "free_cash_flow",
@@ -60,11 +61,12 @@ def aswath_damodaran_agent(state: AgentState, agent_id: str = "aswath_damodaran_
                 "total_debt",
             ],
             end_date,
-            api_key=api_key,
+            state,
+            api_key
         )
 
-        progress.update_status(agent_id, ticker, "Getting market cap")
-        market_cap = get_market_cap(ticker, end_date, api_key=api_key)
+        progress.update_status(agent_id, ticker, "Using cached market cap")
+        market_cap = get_cached_or_fetch_market_cap(ticker, end_date, state, api_key)
 
         # ─── Analyses ───────────────────────────────────────────────────────────
         progress.update_status(agent_id, ticker, "Analyzing growth and reinvestment")
