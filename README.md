@@ -55,6 +55,7 @@ This system employs several agents working together:
 - **Stanley Druckenmiller** - Macro momentum with growth and risk/reward analysis
 - **Rakesh Jhunjhunwala** - High-quality growth with ROE > 20% requirements
 - **Aswath Damodaran** - Academic valuation using CAPM and sophisticated DCF models
+- **Jim Simons** - Quantitative agent based on multi-factor models
 
 ### Portfolio Management
 - **Portfolio Manager** - Aggregates all signals and makes final trading decisions within risk limits
@@ -192,6 +193,17 @@ You can optionally specify the start and end dates to make decisions over a spec
 ```bash
 poetry run python src/main.py --tickers-global AAPL,MSFT,NVDA --start-date 2024-01-01 --end-date 2024-03-01
 ```
+
+#### Additional CLI Arguments
+
+-   **`--model-name` and `--model-provider`**: Allows non-interactive selection of the LLM model.
+    ```bash
+    poetry run python src/main.py --tickers-global AAPL --model-name gpt-4o --model-provider openai
+    ```
+-   **`--initial-currency`**: Specifies the target currency for all monetary values in the backtester.
+    ```bash
+    poetry run python src/backtester.py --tickers-nordics TELIA --initial-currency SEK
+    ```
 
 #### Run the Backtester
 

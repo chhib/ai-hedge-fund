@@ -432,4 +432,8 @@ Conducted comprehensive comparison testing between enhanced Börsdata fork and o
     -   Added `--model-name` and `--model-provider` arguments to allow non-interactive model selection.
     -   Fixed several bugs related to argument parsing and case-sensitivity.
 
+### Session 33 (README.md Updates)
+- Updated `README.md` to reflect the integration of the Jim Simons agent.
+- Added documentation for the new CLI arguments: `--model-name`, `--model-provider`, and `--initial-currency` in `README.md`.
+
 **IMPORTANT**: Update this log at the end of each work session: note completed steps, new decisions, blockers, and refreshed next actions. Always use session numbers (Session X, Session X+1, etc.) for progress entries. Update the "Last updated" date at the top with the actual current date when making changes.
