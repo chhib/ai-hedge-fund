@@ -150,55 +150,55 @@ The system supports both Nordic/European and global company analysis:
 **Nordic/European companies** (via Börsdata Nordic instruments):
 ```bash
 # Swedish companies (note the space in ticker symbols like "HM B", "MTG B")
-poetry run python src/main.py --tickers "HM B,MTG B,TELIA,ADVT"
+poetry run python src/main.py --tickers-nordics "HM B,MTG B,TELIA,ADVT"
 
 # Norwegian/Danish companies
-poetry run python src/main.py --tickers "FRO,ZAL,TRMD A"
+poetry run python src/main.py --tickers-nordics "FRO,ZAL,TRMD A"
 ```
 
 **Global companies** (via Börsdata Global instruments):
 ```bash
 # US tech stocks
-poetry run python src/main.py --tickers-global AAPL,MSFT,NVDA,META,TSLA
+poetry run python src/main.py --tickers AAPL,MSFT,NVDA,META,TSLA
 
 # Mixed global companies
-poetry run python src/main.py --tickers-global AAPL,UBI,BABA
+poetry run python src/main.py --tickers AAPL,UBI,BABA
 ```
 
 **Mixed analysis** (both Nordic and global companies in one command):
 ```bash
-poetry run python src/main.py --tickers "HM B,TELIA" --tickers-global "AAPL,META"
+poetry run python src/main.py --tickers-nordics "HM B,TELIA" --tickers "AAPL,META"
 ```
 
 **Quick test mode** (uses gpt-5 with fundamentals, technical, and sentiment analysts):
 ```bash
 # Test with Nordic company
-poetry run python src/main.py --tickers "HM B" --test
+poetry run python src/main.py --tickers-nordics "HM B" --test
 
 # Test with global company
-poetry run python src/main.py --tickers-global AAPL --test
+poetry run python src/main.py --tickers AAPL --test
 
 # Test with mixed tickers
-poetry run python src/main.py --tickers "BAHN B,TELIA" --tickers-global "AAPL,TSLA" --test
+poetry run python src/main.py --tickers-nordics "BAHN B,TELIA" --tickers "AAPL,TSLA" --test
 ```
 
 You can also specify a `--ollama` flag to run the AI hedge fund using local LLMs.
 
 ```bash
-poetry run python src/main.py --tickers-global AAPL,MSFT,NVDA --ollama
+poetry run python src/main.py --tickers AAPL,MSFT,NVDA --ollama
 ```
 
 You can optionally specify the start and end dates to make decisions over a specific time period.
 
 ```bash
-poetry run python src/main.py --tickers-global AAPL,MSFT,NVDA --start-date 2024-01-01 --end-date 2024-03-01
+poetry run python src/main.py --tickers AAPL,MSFT,NVDA --start-date 2024-01-01 --end-date 2024-03-01
 ```
 
 #### Additional CLI Arguments
 
 -   **`--model-name` and `--model-provider`**: Allows non-interactive selection of the LLM model.
     ```bash
-    poetry run python src/main.py --tickers-global AAPL --model-name gpt-4o --model-provider openai
+    poetry run python src/main.py --tickers AAPL --model-name gpt-4o --model-provider openai
     ```
 -   **`--initial-currency`**: Specifies the target currency for all monetary values in the backtester.
     ```bash
@@ -209,17 +209,17 @@ poetry run python src/main.py --tickers-global AAPL,MSFT,NVDA --start-date 2024-
 
 **Nordic/European companies:**
 ```bash
-poetry run python src/backtester.py --tickers TELIA,VOLV-B,ADVT
+poetry run python src/backtester.py --tickers-nordics TELIA,VOLV-B,ADVT
 ```
 
 **Global companies:**
 ```bash
-poetry run python src/backtester.py --tickers-global AAPL,MSFT,NVDA
+poetry run python src/backtester.py --tickers AAPL,MSFT,NVDA
 ```
 
 **Mixed analysis:**
 ```bash
-poetry run python src/backtester.py --tickers TELIA,ADVT --tickers-global AAPL,META
+poetry run python src/backtester.py --tickers-nordics TELIA,ADVT --tickers AAPL,META
 ```
 
 **Example Output:**
@@ -275,49 +275,7 @@ The system has been validated with both Nordic (ATCO B) and Global (AAPL) ticker
 - Correct percentage conversion (fixed 100x inflation bug)
 - Multi-market support for diverse portfolio strategies
 
-For detailed technical documentation, see:
-- `ENHANCED_KPI_SYSTEM.md`: Comprehensive technical documentation
-- `BORSDATA_PERCENTAGE_FIX.md`: Bug fix validation and methodology
-
-## 🎯 Next Steps: FD/BD Model Comparison
-
-### Objective
-Achieve comparable results between FinancialDatasets (FD) and Börsdata (BD) models to enable:
-- Cross-validation of trading strategies
-- Data source redundancy and reliability
-- Market-specific optimization (Nordic vs Global)
-
-### Implementation Plan
-
-#### Phase 1: Metric Harmonization
-- [ ] Map equivalent metrics between FD and BD APIs
-- [ ] Standardize percentage conversion across both sources
-- [ ] Implement metric quality scoring and validation
-
-#### Phase 2: Dual-Source Agent Framework
-- [ ] Create hybrid agents that can use both FD and BD data
-- [ ] Implement data source fallback mechanisms
-- [ ] Add confidence scoring based on data source agreement
-
-#### Phase 3: Strategy Validation
-- [ ] Run parallel analysis with both data sources
-- [ ] Measure strategy performance variance
-- [ ] Develop consensus-based trading signals
-
-#### Phase 4: Performance Optimization ✅ **COMPLETE**
-- [x] **LLM Caching**: In-memory caching for reduced API calls
-- [x] **Agent Parallelization**: Multiple analysts run concurrently per ticker
-- [x] **Parallel Ticker Processing**: Multi-ticker analysis via ThreadPoolExecutor
-- [x] **Currency Conversion**: Real-time exchange rate handling for mixed markets
-- [x] **Robust Error Handling**: Malformed data protection and graceful degradation
-- [ ] Optimize API call strategies for cost/latency (future enhancement)
-- [ ] Implement intelligent data source selection (future enhancement)
-- [ ] Add real-time data quality monitoring (future enhancement)
-
-### Success Metrics
-- Trading signal correlation > 80% between FD/BD models
-- Data coverage parity for overlapping markets
-- <5% variance in key financial ratios (P/E, ROE, Debt/Equity)
+This comprehensive financial analysis system provides institutional-grade capabilities for algorithmic trading research and education.
 
 ## How to Contribute
 
