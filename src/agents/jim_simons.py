@@ -29,31 +29,44 @@ def jim_simons_agent(state: AgentState):
     for ticker in tickers:
         print(f"{datetime.now()} - Starting Jim Simons agent for {ticker}")
 
-        # Core Data Collection
+        # Core Data Collection - use prefetched data instead of fresh API calls
+        progress.update_status("jim_simons_agent", ticker, "Using prefetched financial data")
 
+        # Get prefetched data for this ticker
+        prefetched_data = data.get("prefetched_financial_data", {}).get(ticker, {})
 
-        progress.update_status("jim_simons_agent", ticker, "Fetching financial line items")
-        financial_line_items = search_line_items(
-            ticker,
-            [
-                "net_income",
-                "earnings_per_share",
-                "revenue",
-                "operating_income",
-                "total_assets",
-                "total_liabilities",
-                "current_assets",
-                "current_liabilities",
-                "free_cash_flow",
-                "research_and_development",
-                "capital_expenditure",
-                "working_capital"
-            ],
-            end_date,
-        )
+        if prefetched_data:
+            # Use prefetched line items (already contains most of what we need)
+            financial_line_items = prefetched_data.get("line_items", [])
 
-        progress.update_status("jim_simons_agent", ticker, "Getting market cap")
-        market_cap = get_market_cap(ticker, end_date)
+            # Use prefetched market cap
+            market_cap = prefetched_data.get("market_cap")
+
+            progress.update_status("jim_simons_agent", ticker, "Using prefetched data (performance optimized)")
+        else:
+            # Fallback to fresh API calls if prefetched data unavailable
+            progress.update_status("jim_simons_agent", ticker, "Fetching financial line items (fallback)")
+            financial_line_items = search_line_items(
+                ticker,
+                [
+                    "net_income",
+                    "earnings_per_share",
+                    "revenue",
+                    "operating_income",
+                    "total_assets",
+                    "total_liabilities",
+                    "current_assets",
+                    "current_liabilities",
+                    "free_cash_flow",
+                    "research_and_development",
+                    "capital_expenditure",
+                    "working_capital"
+                ],
+                end_date,
+            )
+
+            progress.update_status("jim_simons_agent", ticker, "Getting market cap (fallback)")
+            market_cap = get_market_cap(ticker, end_date)
 
         # ─── Quantitative Analyses ─────────────────────────────────────────────
         progress.update_status("jim_simons_agent", ticker, "Analyzing statistical patterns")

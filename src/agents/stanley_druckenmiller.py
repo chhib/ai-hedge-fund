@@ -35,51 +35,81 @@ def stanley_druckenmiller_agent(state: AgentState):
     for ticker in tickers:
         print(f"{datetime.now()} - Starting Stanley Druckenmiller agent for {ticker}")
 
-        # Core Data Collection
-        progress.update_status(agent_name, ticker, "Fetching financial metrics")
-        metrics = get_financial_metrics(ticker, end_date, api_key=api_key, period="annual", limit=5)
+        # Core Data Collection - use prefetched data where available
+        progress.update_status(agent_name, ticker, "Using prefetched financial data")
 
-        progress.update_status(agent_name, ticker, "Fetching financial line items")
-        # Include relevant line items for Stan Druckenmiller's approach:
-        #   - Growth & momentum: revenue, EPS, operating_income, ...
-        #   - Valuation: net_income, free_cash_flow, ebit, ebitda
-        #   - Leverage: total_debt, shareholders_equity
-        #   - Liquidity: cash_and_equivalents
-        financial_line_items = search_line_items(
-            ticker,
-            [
-                "revenue",
-                "earnings_per_share",
-                "net_income",
-                "operating_income",
-                "gross_margin",
-                "operating_margin",
-                "free_cash_flow",
-                "capital_expenditure",
-                "cash_and_equivalents",
-                "total_debt",
-                "shareholders_equity",
-                "outstanding_shares",
-                "ebit",
-                "ebitda",
-            ],
-            end_date,
-            api_key=api_key,
-            period="annual",
-            limit=5
-        )
+        # Get prefetched data for this ticker
+        prefetched_data = data.get("prefetched_financial_data", {}).get(ticker, {})
 
-        progress.update_status(agent_name, ticker, "Fetching market cap")
-        market_cap = get_market_cap(ticker, end_date, api_key=api_key)
+        if prefetched_data:
+            # Use prefetched financial metrics
+            metrics = prefetched_data.get("financial_metrics", [])
 
-        progress.update_status(agent_name, ticker, "Fetching insider trades")
-        insider_trades = get_insider_trades(ticker, end_date, limit=50, api_key=api_key)
+            # Use prefetched line items (covers most of what we need)
+            financial_line_items = prefetched_data.get("line_items", [])
 
-        progress.update_status(agent_name, ticker, "Fetching company calendar")
-        calendar_events = get_company_events(ticker, end_date, limit=50, api_key=api_key)
+            # Use prefetched market cap
+            market_cap = prefetched_data.get("market_cap")
 
-        progress.update_status(agent_name, ticker, "Fetching recent price data for momentum")
-        prices = get_prices(ticker, start_date=start_date, end_date=end_date, api_key=api_key)
+            progress.update_status(agent_name, ticker, "Using prefetched data (performance optimized)")
+        else:
+            # Fallback to fresh API calls if prefetched data unavailable
+            progress.update_status(agent_name, ticker, "Fetching financial metrics (fallback)")
+            metrics = get_financial_metrics(ticker, end_date, api_key=api_key, period="annual", limit=5)
+
+            progress.update_status(agent_name, ticker, "Fetching financial line items (fallback)")
+            # Include relevant line items for Stan Druckenmiller's approach:
+            #   - Growth & momentum: revenue, EPS, operating_income, ...
+            #   - Valuation: net_income, free_cash_flow, ebit, ebitda
+            #   - Leverage: total_debt, shareholders_equity
+            #   - Liquidity: cash_and_equivalents
+            financial_line_items = search_line_items(
+                ticker,
+                [
+                    "revenue",
+                    "earnings_per_share",
+                    "net_income",
+                    "operating_income",
+                    "gross_margin",
+                    "operating_margin",
+                    "free_cash_flow",
+                    "capital_expenditure",
+                    "cash_and_equivalents",
+                    "total_debt",
+                    "shareholders_equity",
+                    "outstanding_shares",
+                    "ebit",
+                    "ebitda",
+                ],
+                end_date,
+                api_key=api_key,
+                period="annual",
+                limit=5
+            )
+
+            progress.update_status(agent_name, ticker, "Fetching market cap (fallback)")
+            market_cap = get_market_cap(ticker, end_date, api_key=api_key)
+
+        # Use prefetched data for remaining data sources if available
+        if prefetched_data:
+            progress.update_status(agent_name, ticker, "Using prefetched insider trades")
+            insider_trades = prefetched_data.get("insider_trades", [])
+
+            progress.update_status(agent_name, ticker, "Using prefetched company events")
+            calendar_events = prefetched_data.get("company_events", [])
+
+            progress.update_status(agent_name, ticker, "Using prefetched price data")
+            prices = prefetched_data.get("prices", [])
+        else:
+            # Fallback to fresh API calls
+            progress.update_status(agent_name, ticker, "Fetching insider trades (fallback)")
+            insider_trades = get_insider_trades(ticker, end_date, limit=50, api_key=api_key)
+
+            progress.update_status(agent_name, ticker, "Fetching company calendar (fallback)")
+            calendar_events = get_company_events(ticker, end_date, limit=50, api_key=api_key)
+
+            progress.update_status(agent_name, ticker, "Fetching recent price data for momentum (fallback)")
+            prices = get_prices(ticker, start_date=start_date, end_date=end_date, api_key=api_key)
 
         progress.update_status(agent_name, ticker, "Analyzing growth & momentum")
         growth_momentum_analysis = analyze_growth_and_momentum(metrics, financial_line_items, prices)

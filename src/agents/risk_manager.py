@@ -216,6 +216,7 @@ def risk_management_agent(state: AgentState, agent_id: str = "risk_management_ag
     return {
         "messages": state["messages"] + [message],
         "data": data,
+        "metadata": state.get("metadata", {}),  # Preserve metadata for downstream agents
     }
 
 

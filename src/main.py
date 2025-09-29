@@ -71,23 +71,51 @@ def run_hedge_fund(
         # Create a single workflow for all analysts (this will be reused for each ticker)
         base_agent = create_workflow(selected_analysts if selected_analysts else None)
 
-        def process_single_ticker(ticker: str):
-            print(f"Processing ticker: {ticker}", flush=True)
-            # Each ticker gets its own initial state
-            initial_state = {
+        # First, prefetch ALL data for ALL tickers upfront (performance optimization)
+        print("Prefetching data for all tickers...")
+        all_prefetched_data = {}
+        for ticker in tickers:
+            print(f"Prefetching data for {ticker}")
+            state = {
+                "data": {
+                    "tickers": [ticker],
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "exchange_rate_service": exchange_rate_service,
+                    "target_currency": target_currency,
+                }
+            }
+            prefetch_state = prefetch_financial_data(state)
+            all_prefetched_data.update(prefetch_state["data"]["prefetched_financial_data"])
+
+        def process_single_analyst_ticker(analyst_key: str, ticker: str, prefetched_data: dict):
+            """Process a single analyst for a single ticker - maximum parallelization"""
+            print(f"Processing {analyst_key} for {ticker}", flush=True)
+
+            # Get the specific analyst function
+            from src.utils.analysts import get_analyst_nodes
+            analyst_nodes = get_analyst_nodes()
+
+            if analyst_key not in analyst_nodes:
+                return None
+
+            node_name, node_func = analyst_nodes[analyst_key]
+
+            # Create minimal state for this specific analyst×ticker combination
+            state = {
                 "messages": [
-                    HumanMessage(
-                        content=f"Make trading decisions for {ticker} based on the provided data.",
-                    )
+                    HumanMessage(content=f"Analyze {ticker}")
                 ],
                 "data": {
-                    "tickers": [ticker],  # Pass only the current ticker
+                    "tickers": [ticker],
                     "portfolio": portfolio,
                     "start_date": start_date,
                     "end_date": end_date,
                     "analyst_signals": {},
                     "exchange_rate_service": exchange_rate_service,
                     "target_currency": target_currency,
+                    # Use the pre-fetched data for ALL tickers
+                    "prefetched_financial_data": prefetched_data
                 },
                 "metadata": {
                     "show_reasoning": show_reasoning,
@@ -95,31 +123,80 @@ def run_hedge_fund(
                     "model_provider": model_provider,
                 },
             }
-            final_state = base_agent.invoke(initial_state)
 
-            return {
-                "decisions": parse_hedge_fund_response(final_state["messages"][-1].content),
-                "analyst_signals": final_state["data"]["analyst_signals"],
+            # Run the specific analyst (no additional API calls needed!)
+            try:
+                result_state = node_func(state)
+                return {
+                    "analyst_key": analyst_key,
+                    "ticker": ticker,
+                    "signals": result_state["data"]["analyst_signals"],
+                }
+            except Exception as e:
+                print(f"Error in {analyst_key} for {ticker}: {e}")
+                return None
+
+        # Create all analyst×ticker combinations for maximum parallelization
+        analyst_ticker_combinations = [
+            (analyst_key, ticker)
+            for analyst_key in (selected_analysts if selected_analysts else ["jim_simons", "stanley_druckenmiller"])
+            for ticker in tickers
+        ]
+
+        print(f"Running {len(analyst_ticker_combinations)} analyst×ticker combinations in parallel...")
+
+        # Process all combinations in parallel with rate limiting consideration
+        max_workers = min(len(analyst_ticker_combinations), 8)  # Limit to avoid overwhelming APIs
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_combo = {
+                executor.submit(process_single_analyst_ticker, analyst_key, ticker, all_prefetched_data): (analyst_key, ticker)
+                for analyst_key, ticker in analyst_ticker_combinations
             }
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=len(tickers)) as executor:
-            future_to_ticker = {executor.submit(process_single_ticker, ticker): ticker for ticker in tickers}
-            for future in concurrent.futures.as_completed(future_to_ticker):
-                ticker = future_to_ticker[future]
+            for future in concurrent.futures.as_completed(future_to_combo):
+                analyst_key, ticker = future_to_combo[future]
                 try:
                     result = future.result()
-                    # Merge decisions dictionaries instead of appending to list
-                    if result["decisions"]:
-                        all_decisions.update(result["decisions"])
-
-                    # Properly merge analyst signals to avoid overwriting data from previous tickers
-                    for agent_name, signals in result["analyst_signals"].items():
-                        if agent_name not in all_analyst_signals:
-                            all_analyst_signals[agent_name] = {}
-                        # Merge the ticker-specific signals for this agent
-                        all_analyst_signals[agent_name].update(signals)
+                    if result:
+                        # Merge analyst signals properly
+                        for agent_name, signals in result["signals"].items():
+                            if agent_name not in all_analyst_signals:
+                                all_analyst_signals[agent_name] = {}
+                            all_analyst_signals[agent_name].update(signals)
                 except Exception as exc:
-                    print(f'{ticker} generated an exception: {exc}')
+                    print(f'{analyst_key} for {ticker} generated an exception: {exc}')
+
+        # Now run portfolio and risk management on the collected signals
+        print("Running portfolio and risk management...")
+        portfolio_state = {
+            "messages": [
+                HumanMessage(content="Analyze collected analyst signals and make portfolio decisions")
+            ],
+            "data": {
+                "tickers": tickers,
+                "portfolio": portfolio,
+                "start_date": start_date,
+                "end_date": end_date,
+                "analyst_signals": all_analyst_signals,
+                "exchange_rate_service": exchange_rate_service,
+                "target_currency": target_currency,
+            },
+            "metadata": {
+                "show_reasoning": show_reasoning,
+                "model_name": model_name,
+                "model_provider": model_provider,
+            },
+        }
+
+        # Run risk and portfolio management
+        portfolio_state = risk_management_agent(portfolio_state)
+        portfolio_state = portfolio_management_agent(portfolio_state)
+
+        # Extract final decisions
+        if portfolio_state["messages"]:
+            final_decisions = parse_hedge_fund_response(portfolio_state["messages"][-1].content)
+            if final_decisions:
+                all_decisions.update(final_decisions)
 
         return {
             "decisions": all_decisions,
@@ -171,7 +248,6 @@ def _fetch_data_for_ticker(ticker: str, end_date: str, exchange_rate_service, ta
     financial_metrics = get_financial_metrics(ticker, end_date, period="ttm", limit=10, api_key=api_key)
     financial_metrics = _normalize_monetary_values(financial_metrics, exchange_rate_service, target_currency)
 
-
     progress.update_status("data_prefetch", ticker, "Fetching line items")
     # Common line items used by multiple analysts
     line_items = search_line_items(
@@ -211,11 +287,31 @@ def _fetch_data_for_ticker(ticker: str, end_date: str, exchange_rate_service, ta
             if rate:
                 market_cap *= rate
 
+    # Additional data for Stanley Druckenmiller and other agents
+    progress.update_status("data_prefetch", ticker, "Fetching insider trades")
+    from src.tools.api import get_insider_trades, get_company_events, get_prices
+
+    insider_trades = get_insider_trades(ticker, end_date, limit=50, api_key=api_key)
+
+    progress.update_status("data_prefetch", ticker, "Fetching company events")
+    company_events = get_company_events(ticker, end_date, limit=50, api_key=api_key)
+
+    progress.update_status("data_prefetch", ticker, "Fetching price data")
+    # We need start_date for prices, get it from state
+    start_date = state["data"].get("start_date")
+    if start_date:
+        prices = get_prices(ticker, start_date=start_date, end_date=end_date, api_key=api_key)
+    else:
+        prices = []
+
     # Store all data for this ticker
     return {
         "financial_metrics": financial_metrics,
         "line_items": line_items,
         "market_cap": market_cap,
+        "insider_trades": insider_trades,
+        "company_events": company_events,
+        "prices": prices,
     }
 
 
