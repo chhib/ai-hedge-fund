@@ -124,14 +124,30 @@ def print_trading_output(result: dict) -> None:
         table_data = sort_agent_signals(table_data)
 
         print(f"\n{Fore.WHITE}{Style.BRIGHT}AGENT ANALYSIS:{Style.RESET_ALL} [{Fore.CYAN}{ticker}{Style.RESET_ALL}]")
-        print(
-            tabulate(
-                table_data,
-                headers=[f"{Fore.WHITE}Agent", "Signal", "Confidence", "Reasoning"],
-                tablefmt="grid",
-                colalign=("left", "center", "right", "left"),
-            )
-        )
+
+        # Safety check: ensure all rows have the same number of columns
+        if table_data:
+            expected_cols = 4
+            filtered_table_data = []
+            for row in table_data:
+                if isinstance(row, list) and len(row) == expected_cols:
+                    filtered_table_data.append(row)
+                else:
+                    print(f"Warning: Skipping malformed row with {len(row) if isinstance(row, list) else 'non-list'} columns")
+
+            if filtered_table_data:
+                print(
+                    tabulate(
+                        filtered_table_data,
+                        headers=[f"{Fore.WHITE}Agent", "Signal", "Confidence", "Reasoning"],
+                        tablefmt="grid",
+                        colalign=("left", "center", "right", "left"),
+                    )
+                )
+            else:
+                print(f"{Fore.YELLOW}No valid analyst data available for {ticker}{Style.RESET_ALL}")
+        else:
+            print(f"{Fore.YELLOW}No analyst data available for {ticker}{Style.RESET_ALL}")
 
         # Print Trading Decision Table
         action = decision.get("action", "").upper()

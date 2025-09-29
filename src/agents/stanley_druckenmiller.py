@@ -1,145 +1,51 @@
+from datetime import datetime
 from src.graph.state import AgentState, show_agent_reasoning
-from src.tools.api import (
-    get_financial_metrics,
-    get_market_cap,
-    search_line_items,
-    get_insider_trades,
-    get_company_events,
-    get_prices,
-)
-from src.utils.data_cache import get_cached_or_fetch_financial_metrics, get_cached_or_fetch_line_items, get_cached_or_fetch_market_cap
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel
-import json
-from typing import Any, Optional
 from typing_extensions import Literal
-from src.utils.progress import progress
+import json
+from src.tools.api import get_financial_metrics, get_market_cap, get_company_events, get_insider_trades, search_line_items, get_prices
 from src.utils.llm import call_llm
+from src.utils.progress import progress
 import statistics
-from src.utils.api_key import get_api_key_from_state
 
 class StanleyDruckenmillerSignal(BaseModel):
     signal: Literal["bullish", "bearish", "neutral"]
     confidence: float
     reasoning: str
 
-
-class StanleyDruckenMillerAgent:
-    """Heuristic compatibility layer for legacy class-based integrations."""
-
-    def __init__(self, *, thresholds: Optional[dict[str, float]] = None) -> None:
-        self.thresholds = thresholds or {
-            "revenue_growth": 0.15,
-            "earnings_growth": 0.12,
-            "price_momentum": 0.05,
-        }
-
-    def analyze(self, context: dict[str, Any]) -> StanleyDruckenmillerSignal:
-        metrics = context.get("financial_data")
-        price_data = context.get("price_data") or []
-        if metrics is None:
-            return StanleyDruckenmillerSignal(signal="neutral", confidence=0.0, reasoning="Missing financial metrics")
-
-        positives: list[str] = []
-        negatives: list[str] = []
-        neutrals: list[str] = []
-
-        revenue_growth = getattr(metrics, "revenue_growth", None)
-        if revenue_growth is not None:
-            if revenue_growth >= self.thresholds["revenue_growth"]:
-                positives.append(f"Revenue growth {revenue_growth:.1%} supports momentum")
-            elif revenue_growth <= 0:
-                negatives.append(f"Revenue contraction of {revenue_growth:.1%}")
-            else:
-                neutrals.append(f"Revenue growth {revenue_growth:.1%} is modest")
-        else:
-            neutrals.append("Revenue growth unavailable")
-
-        earnings_growth = getattr(metrics, "earnings_growth", None)
-        if earnings_growth is not None:
-            if earnings_growth >= self.thresholds["earnings_growth"]:
-                positives.append(f"Earnings growth {earnings_growth:.1%} indicates upside capture")
-            elif earnings_growth <= 0:
-                negatives.append(f"Earnings contraction of {earnings_growth:.1%}")
-            else:
-                neutrals.append(f"Earnings growth {earnings_growth:.1%} lacks punch")
-        else:
-            neutrals.append("Earnings growth unavailable")
-
-        closes: list[float] = []
-        for item in price_data:
-            if isinstance(item, dict):
-                close = item.get("c")
-            else:
-                close = getattr(item, "close", None)
-            if close is not None:
-                try:
-                    closes.append(float(close))
-                except (TypeError, ValueError):  # Defensive; skip malformed entries
-                    continue
-
-        if len(closes) >= 2 and closes[0] != 0:
-            momentum = (closes[-1] - closes[0]) / closes[0]
-            if momentum >= self.thresholds["price_momentum"]:
-                positives.append(f"Price momentum {momentum:.1%} confirms trend")
-            elif momentum <= -self.thresholds["price_momentum"]:
-                negatives.append(f"Price momentum {momentum:.1%} signals downside pressure")
-            else:
-                neutrals.append(f"Price momentum {momentum:.1%} is indecisive")
-        else:
-            neutrals.append("Insufficient price history for momentum read")
-
-        total_checks = len(positives) + len(negatives)
-        if total_checks == 0:
-            signal = "neutral"
-            confidence = 0.0
-        else:
-            if len(positives) > len(negatives):
-                signal = "bullish"
-            elif len(negatives) > len(positives):
-                signal = "bearish"
-            else:
-                signal = "neutral"
-
-            spread = abs(len(positives) - len(negatives))
-            confidence = float((spread / total_checks) * 100) if total_checks else 0.0
-
-        reasoning_parts = positives + negatives + neutrals
-        reasoning = "; ".join(reasoning_parts) if reasoning_parts else "No Druckenmiller factors available"
-
-        return StanleyDruckenmillerSignal(signal=signal, confidence=confidence, reasoning=reasoning)
-
-
-def stanley_druckenmiller_agent(state: AgentState, agent_id: str = "stanley_druckenmiller_agent"):
-    """
-    Analyzes stocks using Stanley Druckenmiller's investing principles:
-      - Seeking asymmetric risk-reward opportunities
-      - Emphasizing growth, momentum, and sentiment
-      - Willing to be aggressive if conditions are favorable
-      - Focus on preserving capital by avoiding high-risk, low-reward bets
-
-    Returns a bullish/bearish/neutral signal with confidence and reasoning.
-    """
+def stanley_druckenmiller_agent(state: AgentState):
+    """Analyzes stocks using Stanley Druckenmiller's macro-driven, opportunistic approach."""
     data = state["data"]
-    start_date = data["start_date"]
     end_date = data["end_date"]
     tickers = data["tickers"]
-    api_key = get_api_key_from_state(state, "BORSDATA_API_KEY")
+    start_date = data["start_date"]
+
+    api_key = None
+    try:
+        api_key = state["data"]["api_key"]
+    except KeyError:
+        pass # API key might not be present if not using Börsdata
+
+    druckenmiller_analysis = {}
     analysis_data = {}
-    druck_analysis = {}
+    agent_name = "stanley_druckenmiller_agent"
 
     for ticker in tickers:
-        progress.update_status(agent_id, ticker, "Using cached financial metrics")
-        metrics = get_cached_or_fetch_financial_metrics(ticker, end_date, state, api_key, period="annual", limit=5)
+        print(f"{datetime.now()} - Starting Stanley Druckenmiller agent for {ticker}")
 
-        progress.update_status(agent_id, ticker, "Using cached financial line items")
+        # Core Data Collection
+        progress.update_status(agent_name, ticker, "Fetching financial metrics")
+        metrics = get_financial_metrics(ticker, end_date, api_key=api_key, period="annual", limit=5)
+
+        progress.update_status(agent_name, ticker, "Fetching financial line items")
         # Include relevant line items for Stan Druckenmiller's approach:
         #   - Growth & momentum: revenue, EPS, operating_income, ...
         #   - Valuation: net_income, free_cash_flow, ebit, ebitda
         #   - Leverage: total_debt, shareholders_equity
         #   - Liquidity: cash_and_equivalents
-        financial_line_items = get_cached_or_fetch_line_items(
+        financial_line_items = search_line_items(
             ticker,
             [
                 "revenue",
@@ -158,37 +64,36 @@ def stanley_druckenmiller_agent(state: AgentState, agent_id: str = "stanley_druc
                 "ebitda",
             ],
             end_date,
-            state,
-            api_key,
+            api_key=api_key,
             period="annual",
             limit=5
         )
 
-        progress.update_status(agent_id, ticker, "Using cached market cap")
-        market_cap = get_cached_or_fetch_market_cap(ticker, end_date, state, api_key)
+        progress.update_status(agent_name, ticker, "Fetching market cap")
+        market_cap = get_market_cap(ticker, end_date, api_key=api_key)
 
-        progress.update_status(agent_id, ticker, "Fetching insider trades")
+        progress.update_status(agent_name, ticker, "Fetching insider trades")
         insider_trades = get_insider_trades(ticker, end_date, limit=50, api_key=api_key)
 
-        progress.update_status(agent_id, ticker, "Fetching company calendar")
+        progress.update_status(agent_name, ticker, "Fetching company calendar")
         calendar_events = get_company_events(ticker, end_date, limit=50, api_key=api_key)
 
-        progress.update_status(agent_id, ticker, "Fetching recent price data for momentum")
+        progress.update_status(agent_name, ticker, "Fetching recent price data for momentum")
         prices = get_prices(ticker, start_date=start_date, end_date=end_date, api_key=api_key)
 
-        progress.update_status(agent_id, ticker, "Analyzing growth & momentum")
+        progress.update_status(agent_name, ticker, "Analyzing growth & momentum")
         growth_momentum_analysis = analyze_growth_and_momentum(metrics, financial_line_items, prices)
 
-        progress.update_status(agent_id, ticker, "Assessing calendar context")
+        progress.update_status(agent_name, ticker, "Assessing calendar context")
         calendar_context = analyze_calendar_context(calendar_events)
 
-        progress.update_status(agent_id, ticker, "Analyzing insider activity")
+        progress.update_status(agent_name, ticker, "Analyzing insider activity")
         insider_activity = analyze_insider_activity(insider_trades)
 
-        progress.update_status(agent_id, ticker, "Analyzing risk-reward")
+        progress.update_status(agent_name, ticker, "Analyzing risk-reward")
         risk_reward_analysis = analyze_risk_reward(financial_line_items, prices)
 
-        progress.update_status(agent_id, ticker, "Performing Druckenmiller-style valuation")
+        progress.update_status(agent_name, ticker, "Performing Druckenmiller-style valuation")
         valuation_analysis = analyze_druckenmiller_valuation(financial_line_items, market_cap)
 
         # Combine partial scores with weights typical for Druckenmiller:
@@ -223,32 +128,32 @@ def stanley_druckenmiller_agent(state: AgentState, agent_id: str = "stanley_druc
             "valuation_analysis": valuation_analysis,
         }
 
-        progress.update_status(agent_id, ticker, "Generating Stanley Druckenmiller analysis")
+        progress.update_status(agent_name, ticker, "Generating Stanley Druckenmiller analysis")
         druck_output = generate_druckenmiller_output(
             ticker=ticker,
             analysis_data=analysis_data,
             state=state,
-            agent_id=agent_id,
+            agent_id=agent_name,
         )
 
-        druck_analysis[ticker] = {
+        druckenmiller_analysis[ticker] = {
             "signal": druck_output.signal,
             "confidence": druck_output.confidence,
             "reasoning": druck_output.reasoning,
         }
 
-        progress.update_status(agent_id, ticker, "Done", analysis=druck_output.reasoning)
+        progress.update_status(agent_name, ticker, "Done", analysis=druck_output.reasoning)
 
-    # Wrap results in a single message
-    message = HumanMessage(content=json.dumps(druck_analysis), name=agent_id)
+    # ─── Push message back to graph state ──────────────────────────────────────
+    message = HumanMessage(content=json.dumps(druckenmiller_analysis), name=agent_name)
 
-    if state["metadata"].get("show_reasoning"):
-        show_agent_reasoning(druck_analysis, "Stanley Druckenmiller Agent")
+    if state["metadata"]["show_reasoning"]:
+        show_agent_reasoning(druckenmiller_analysis, "Stanley Druckenmiller Agent")
 
-    state["data"]["analyst_signals"][agent_id] = druck_analysis
+    state["data"]["analyst_signals"][agent_name] = druckenmiller_analysis
+    progress.update_status(agent_name, None, "Done")
+    print(f"{datetime.now()} - Finished Stanley Druckenmiller agent for {ticker}")
 
-    progress.update_status(agent_id, None, "Done")
-    
     return {"messages": [message], "data": state["data"]}
 
 

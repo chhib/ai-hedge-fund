@@ -1,3 +1,4 @@
+from datetime import datetime
 from src.graph.state import AgentState, show_agent_reasoning
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.messages import HumanMessage
@@ -26,6 +27,7 @@ def jim_simons_agent(state: AgentState):
     simons_analysis = {}
 
     for ticker in tickers:
+        print(f"{datetime.now()} - Starting Jim Simons agent for {ticker}")
 
         # Core Data Collection
 
@@ -154,6 +156,7 @@ def jim_simons_agent(state: AgentState):
 
     state["data"]["analyst_signals"]["jim_simons_agent"] = simons_analysis
     progress.update_status("jim_simons_agent", None, "Done")
+    print(f"{datetime.now()} - Finished Jim Simons agent for {ticker}")
 
     return {"messages": [message], "data": state["data"]}
 
