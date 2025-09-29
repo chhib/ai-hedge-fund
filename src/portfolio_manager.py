@@ -25,7 +25,7 @@ from src.utils.portfolio_loader import load_portfolio, load_universe
 @click.option("--universe-nordics", type=str, help="Comma-separated list of Nordic tickers")
 @click.option("--universe-global", type=str, help="Comma-separated list of global tickers")
 # Analysis configuration
-@click.option("--analysts", type=str, default="fundamentals,technical,sentiment,valuation,risk", help='Comma-separated list of analysts to use (or "all")')
+@click.option("--analysts", type=str, default="all", help='Comma-separated list: warren_buffett, charlie_munger, fundamentals (or "all" for all 3)')
 @click.option("--model", type=str, default="gpt-4o", help="LLM model to use")
 @click.option("--model-provider", type=click.Choice(["openai", "anthropic", "groq", "ollama"]), help="Model provider (optional, auto-detected from model name)")
 # Position sizing constraints
@@ -60,9 +60,9 @@ def main(portfolio, universe, universe_tickers, universe_nordics, universe_globa
 
     # Test mode overrides
     if test:
-        analysts = "fundamentals,technical,sentiment"
+        analysts = "warren_buffett"
         if verbose:
-            print("🧪 Test mode: Using limited analysts for quick validation")
+            print("🧪 Test mode: Using 1 analyst for quick validation")
 
     # Validate inputs
     if not universe and not universe_tickers and not universe_nordics and not universe_global:
@@ -100,7 +100,9 @@ def main(portfolio, universe, universe_tickers, universe_nordics, universe_globa
 
     # Parse analysts
     if analysts == "all":
-        analyst_list = ["fundamentals", "technical", "sentiment", "valuation", "risk"]
+        analyst_list = ["warren_buffett", "charlie_munger", "fundamentals"]
+    elif analysts == "basic":
+        analyst_list = ["fundamentals"]
     else:
         analyst_list = [a.strip() for a in analysts.split(",")]
 

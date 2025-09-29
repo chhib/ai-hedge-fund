@@ -35,20 +35,31 @@ class EnhancedPortfolioManager:
         This wraps existing analyst classes without modifying them
         """
         # Import analysts dynamically to avoid circular dependencies
+        # Note: Only importing analysts with class-based Agent interfaces
+        # Other analysts (druckenmiller, lynch, etc.) are function-based and require LangGraph state
         try:
             from src.agents.fundamentals import FundamentalsAnalyst
-            from src.agents.technicals import TechnicalAnalyst
-            from src.agents.sentiment import SentimentAnalyst
-            from src.agents.valuation import ValuationAnalyst
-            from src.agents.risk_manager import RiskManager
+            from src.agents.warren_buffett import WarrenBuffettAgent
+            from src.agents.charlie_munger import CharlieMungerAgent
 
-            analyst_map = {"fundamentals": FundamentalsAnalyst, "technical": TechnicalAnalyst, "technicals": TechnicalAnalyst, "sentiment": SentimentAnalyst, "valuation": ValuationAnalyst, "risk": RiskManager}
+            analyst_map = {
+                # Basic class-based analyst
+                "fundamentals": FundamentalsAnalyst,
+                # Famous investor personas with class-based interfaces
+                "warren_buffett": WarrenBuffettAgent,
+                "buffett": WarrenBuffettAgent,
+                "charlie_munger": CharlieMungerAgent,
+                "munger": CharlieMungerAgent,
+            }
 
             analysts = []
             for name in analyst_names:
-                if name in analyst_map:
+                name_lower = name.lower().strip()
+                if name_lower in analyst_map:
                     # These are class-based analysts that can be instantiated
-                    analysts.append({"name": name, "class": analyst_map[name]})
+                    analysts.append({"name": name_lower, "class": analyst_map[name_lower]})
+                else:
+                    print(f"Warning: Unknown analyst '{name}' - skipping")
 
             return analysts
         except ImportError as e:
@@ -87,15 +98,70 @@ class EnhancedPortfolioManager:
     def _collect_analyst_signals(self) -> List[AnalystSignal]:
         """
         Collect signals from all analysts for all tickers in universe
-        This is a simplified implementation - in production would call actual analysts
+        Calls each analyst's analyze() method with financial data
         """
         signals = []
 
-        # Placeholder implementation - would call actual analysts
-        # For now, return empty list to avoid errors
-        print(f"Collecting signals from {len(self.analysts)} analysts for {len(self.universe)} tickers")
-        print("Note: Analyst signal collection is a placeholder - integrate with actual analyst system")
+        if not self.analysts:
+            print(f"Warning: No analysts initialized")
+            return signals
 
+        print(f"Collecting signals from {len(self.analysts)} analysts for {len(self.universe)} tickers...")
+
+        # Import financial data fetching
+        from src.tools.api import get_financial_metrics
+        from src.utils.data_cache import get_cached_or_fetch_financial_metrics
+        import os
+
+        api_key = os.getenv("BORSDATA_API_KEY")
+        if not api_key:
+            print("Warning: BORSDATA_API_KEY not found - using neutral signals")
+            return signals
+
+        # For each ticker, collect signals from all analysts
+        for ticker in self.universe:
+            try:
+                # Fetch financial metrics for this ticker
+                financial_data = get_cached_or_fetch_financial_metrics(api_key, ticker)
+
+                if financial_data:
+                    # Call each analyst with this data
+                    for analyst_info in self.analysts:
+                        analyst_name = analyst_info["name"]
+                        analyst_class = analyst_info["class"]
+
+                        try:
+                            # Instantiate analyst
+                            analyst_instance = analyst_class()
+
+                            # Call analyze with context
+                            context = {"financial_data": financial_data}
+                            result = analyst_instance.analyze(context)
+
+                            # Convert signal to numeric score (-1 to 1)
+                            signal_map = {"bullish": 1.0, "neutral": 0.0, "bearish": -1.0}
+                            numeric_signal = signal_map.get(result.signal, 0.0)
+
+                            # Convert confidence to 0-1 scale
+                            confidence = result.confidence / 100.0
+
+                            signals.append(
+                                AnalystSignal(ticker=ticker, analyst=analyst_name, signal=numeric_signal, confidence=confidence, reasoning=result.reasoning)
+                            )
+
+                        except Exception as e:
+                            print(f"Warning: Analyst {analyst_name} failed for {ticker}: {e}")
+                            continue
+                else:
+                    # No financial data available
+                    if self.verbose:
+                        print(f"  No financial data for {ticker}")
+
+            except Exception as e:
+                print(f"Warning: Could not fetch data for {ticker}: {e}")
+                continue
+
+        print(f"✓ Collected {len(signals)} signals from {len(self.analysts)} analysts")
         return signals
 
     def _aggregate_signals(self, signals: List[AnalystSignal]) -> Dict[str, float]:
