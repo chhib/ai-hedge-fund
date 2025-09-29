@@ -519,4 +519,14 @@ Conducted comprehensive comparison testing between enhanced Börsdata fork and o
 
 - **System Status**: **Performance optimization complete and validated** - the AI hedge fund system now operates at maximum efficiency with comprehensive data prefetching, true parallel processing, and 95% reduction in redundant API calls. The system is optimized for scalability with dramatic performance improvements for multi-ticker analysis.
 
+
+### Session 36 (Financial Metrics Fetching Bug Fix)
+- **Identified Critical Bug**: The application was failing to fetch financial metrics from the Börsdata API, resulting in `404 Not Found` errors. This was happening during the parallel pre-fetching step for multiple tickers.
+- **Root Cause Analysis**: The initial implementation was using an incorrect API endpoint. Subsequent attempts to fix this by switching to a bulk endpoint also failed, likely due to the API returning a 404 error when some of the requested KPIs were not available for a given instrument.
+- **Implemented Hybrid Solution**: To address this, a hybrid approach was implemented in `src/data/borsdata_kpis.py`:
+    1.  **Bulk Fetch Attempt**: The system first attempts to fetch all required KPIs in a single bulk request for maximum efficiency.
+    2.  **Resilient Fallback**: If the bulk request fails, the system gracefully falls back to fetching each KPI individually. Each individual request is wrapped in a `try...except` block to handle cases where a specific KPI is not available, preventing the entire process from failing.
+- **Validation**: The new implementation was tested with multiple tickers and analysts, and it successfully fetched all available financial metrics without any errors. While this approach is slightly slower when the fallback is triggered, it ensures the resilience and stability of the data fetching process.
+- **System Status**: The financial metrics fetching bug is resolved. The system is now able to robustly handle cases where some KPIs may not be available for certain instruments.
+
 **IMPORTANT**: Update this log at the end of each work session: note completed steps, new decisions, blockers, and refreshed next actions. Always use session numbers (Session X, Session X+1, etc.) for progress entries. Update the "Last updated" date at the top with the actual current date when making changes.

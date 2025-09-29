@@ -105,6 +105,7 @@ class BorsdataClient:
         path: str,
         *,
         params: Optional[Dict[str, Any]] = None,
+        json: Optional[Dict[str, Any]] = None,
         api_key: Optional[str] = None,
     ) -> Dict[str, Any]:
         url = f"{self.base_url}{path}"
@@ -115,7 +116,7 @@ class BorsdataClient:
         for attempt in range(self._max_retries + 1):
             self.rate_limiter.acquire()
             try:
-                response = self.session.request(method.upper(), url, params=query_params)
+                response = self.session.request(method.upper(), url, params=query_params, json=json)
             except requests.RequestException as exc:  # pragma: no cover - network failure path
                 last_error = exc
                 break
@@ -481,36 +482,20 @@ class BorsdataClient:
             api_key=api_key,
         )
 
-    def get_all_kpi_screener_values(
-        self,
-        instrument_id: int,
-        *,
-        api_key: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        """Return all screener values for an instrument."""
-        return self._request(
-            "GET",
-            f"/v1/instruments/{instrument_id}/kpis/screener",
-            api_key=api_key,
-        )
-
     def get_kpi_bulk_values(
         self,
-        instrument_id: int,
-        kpi_ids: Iterable[int],
-        calc_group: str = "last",
-        calc: str = "latest",
+        instrument_ids: Iterable[int],
+        kpi_filters: Iterable[Dict[str, Any]],
         *,
         api_key: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Return bulk KPI values for multiple KPIs at once."""
         return self._request(
             "POST",
-            f"/v1/instruments/{instrument_id}/kpis/screener/bulk",
+            "/v1/instruments/kpis/bulk",
             json={
-                "kpiIds": list(kpi_ids),
-                "calcGroup": calc_group,
-                "calc": calc
+                "instruments": list(instrument_ids),
+                "kpis": list(kpi_filters),
             },
             api_key=api_key,
         )

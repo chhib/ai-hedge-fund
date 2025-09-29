@@ -45,29 +45,76 @@ class FinancialMetricsAssembler:
         # Get current stock price for ratio calculations
         current_price = None
         try:
-            prices = self._client.get_stock_prices(instrument_id, original_currency=True, api_key=api_key)  # Use original currency for consistency
+            prices = self._client.get_stock_prices(instrument_id, original_currency=True, api_key=api_key)
             if prices:
-                current_price = safe_float(prices[-1].get("c"))  # Latest close price
+                current_price = safe_float(prices[-1].get("c"))
         except Exception:
             current_price = None
 
         report_type = map_period_to_report_type(period)
         summary_max = max(limit * SUMMARY_LIMIT_MULTIPLIER, limit)
+        
+        # 1. Fetch all required data in bulk
         summary_payload = self._client.get_kpi_summary(
             instrument_id,
             report_type,
             max_count=summary_max,
-            original_currency=True,  # Use original currency for consistency
+            original_currency=True,
             api_key=api_key,
         )
         reports_payload = self._client.get_reports(
             instrument_id,
             report_type,
             max_count=summary_max,
-            original_currency=True,  # Use original currency for consistency
+            original_currency=True,
             api_key=api_key,
         )
+        kpi_filters = []
+        for config in FINANCIAL_METRICS_MAPPING.values():
+            if 'kpi_id' in config:
+                kpi_filters.append({
+                    "kpiId": config['kpi_id'],
+                    "calcGroup": config.get('screener_calc_group', 'last'),
+                    "calc": config.get('screener_calc', 'latest')
+                })
 
+        screener_kpis = {}
+        try:
+            # First, try to fetch all KPIs in bulk for efficiency
+            def chunks(lst, n):
+                for i in range(0, len(lst), n):
+                    yield lst[i:i + n]
+
+            screener_payload = {"values": []}
+            for chunk in chunks(kpi_filters, 50):
+                response = self._client.get_kpi_bulk_values(
+                    [instrument_id], kpi_filters=chunk, api_key=api_key
+                )
+                if response and response.get("values"):
+                    screener_payload["values"].extend(response.get("values", []))
+            
+            for item in screener_payload.get('values', []):
+                if item.get('i') == instrument_id:
+                    screener_kpis[item['k']] = safe_float(item['n'])
+
+        except BorsdataAPIError:
+            # If bulk fails, fall back to individual KPI requests for resilience
+            for config in FINANCIAL_METRICS_MAPPING.values():
+                if 'kpi_id' in config:
+                    try:
+                        kpi_id = config['kpi_id']
+                        calc_group = config.get('screener_calc_group', 'last')
+                        calc = config.get('screener_calc', 'latest')
+                        response = self._client.get_kpi_screener_value(
+                            instrument_id, kpi_id, calc_group, calc, api_key=api_key
+                        )
+                        if response and response.get('value'):
+                            screener_kpis[kpi_id] = safe_float(response['value']['n'])
+                    except BorsdataAPIError:
+                        # Ignore if a specific KPI is not available
+                        continue
+
+        # 2. Build period records
         end_date_dt = parse_iso_date(end_date)
         contexts = build_period_records(
             summary_payload,
@@ -79,12 +126,18 @@ class FinancialMetricsAssembler:
         if not contexts:
             return []
 
+        # 3. Create a dictionary of all available KPIs from the screener payload
+        # This is now done before building period records
+
+        # 4. Get KPI metadata to map metric names to KPI IDs
         metadata = self._client.get_kpi_metadata(api_key=api_key)
         metric_to_kpi = self._resolve_metric_kpis(metadata)
 
+        # 5. Assemble the FinancialMetrics objects
         records: list[Dict[str, Any]] = []
         metric_names = list(FINANCIAL_METRICS_MAPPING.keys())
         period_value = period.strip().lower() if period else "ttm"
+
         for ctx in contexts:
             currency = ctx.report.get("currency") or base_currency
             payload: Dict[str, Any] = {
@@ -105,124 +158,25 @@ class FinancialMetricsAssembler:
                     continue
                 value = ctx.kpis.get(kpi_id)
                 if value is not None:
-                    # Apply percentage conversion for metrics flagged as percentages
                     config = FINANCIAL_METRICS_MAPPING.get(metric_name, {})
                     if config.get("is_percentage", False):
                         value = value / 100.0
                     payload[metric_name] = value
 
-        # Bulk KPI retrieval for comprehensive coverage
-        bulk_cache: Dict[int, Optional[float]] = {}
-        missing_kpi_ids = []
-        for metric_name, config in FINANCIAL_METRICS_MAPPING.items():
-            if config.get("source") == "kpi":
-                kpi_id = metric_to_kpi.get(metric_name)
-                if kpi_id is not None:
-                    # Check if any record is missing this metric
-                    for payload in records:
-                        if payload.get(metric_name) is None:
-                            if kpi_id not in missing_kpi_ids:
-                                missing_kpi_ids.append(kpi_id)
-                            break
-        
-        # Fetch missing KPIs in bulk using multiple endpoints
-        if missing_kpi_ids:
-            try:
-                # Try bulk screener values first (most comprehensive)
-                bulk_data = self._client.get_all_kpi_screener_values(instrument_id, api_key=api_key)
-                screener_values = bulk_data.get("values", []) if bulk_data else []
-                for value_entry in screener_values:
-                    kpi_id = value_entry.get("kpiId")
-                    if kpi_id in missing_kpi_ids:
-                        numeric_value = safe_float(value_entry.get("n"))
-                        if numeric_value is not None:
-                            bulk_cache[kpi_id] = numeric_value
-            except Exception:
-                pass  # Continue with individual fetches
-
-            # Fill remaining gaps with individual screener calls
-            for kpi_id in missing_kpi_ids:
-                if kpi_id not in bulk_cache:
-                    try:
-                        screener_response = self._client.get_kpi_screener_value(
-                            instrument_id, kpi_id, "last", "latest", api_key=api_key
-                        )
-                        value = ((screener_response or {}).get("value") or {}).get("n")
-                        numeric_value = safe_float(value)
-                        if numeric_value is not None:
-                            bulk_cache[kpi_id] = numeric_value
-                    except Exception:
-                        pass  # Continue to next KPI
-
-            # Fill remaining gaps with holdings endpoint
-            for kpi_id in missing_kpi_ids:
-                if kpi_id not in bulk_cache:
-                    try:
-                        holdings_response = self._client.get_kpi_holdings(instrument_id, kpi_id, api_key=api_key)
-                        if holdings_response and "value" in holdings_response:
-                            numeric_value = safe_float(holdings_response["value"])
-                            if numeric_value is not None:
-                                bulk_cache[kpi_id] = numeric_value
-                    except Exception:
-                        pass  # Continue to next KPI
-
-        # Apply bulk-fetched values to records
-        for metric_name, config in FINANCIAL_METRICS_MAPPING.items():
-            if config.get("source") == "kpi":
-                kpi_id = metric_to_kpi.get(metric_name)
-                if kpi_id in bulk_cache:
-                    bulk_value = bulk_cache[kpi_id]
-                    if bulk_value is not None:
-                        for payload in records:
-                            if payload.get(metric_name) is None:
-                                # Apply percentage conversion for metrics flagged as percentages
-                                final_value = bulk_value
-                                if config.get("is_percentage", False):
-                                    final_value = bulk_value / 100.0
-                                payload[metric_name] = final_value
-
-        # Screener-derived fields for specialized calculations
-        screener_cache: Dict[Tuple[int, str, str], Optional[float]] = {}
-        for metric_name, config in FINANCIAL_METRICS_MAPPING.items():
-            if config.get("source") != "screener":
-                continue
-            kpi_id = metric_to_kpi.get(metric_name)
-            if kpi_id is None:
-                continue
-            calc = config.get("screener_calc")
-            if not calc:
-                continue
-            calc_groups = self._resolve_screener_calc_groups(config, period_value, report_type)
-            screener_value: Optional[float] = None
-            for calc_group in calc_groups:
-                cache_key = (kpi_id, calc_group, calc)
-                if cache_key not in screener_cache:
-                    value = self._fetch_screener_value(
-                        instrument_id,
-                        kpi_id,
-                        calc_group,
-                        calc,
-                        api_key=api_key,
-                        is_percent=calc.lower() == "percent",
-                    )
-                    screener_cache[cache_key] = value
-                screener_value = screener_cache.get(cache_key)
-                if screener_value is not None:
-                    break
-            if screener_value is None:
-                continue
-            for payload in records:
+        # Second pass: fill in missing values from the bulk screener fetch
+        for payload in records:
+            for metric_name in metric_names:
                 if payload.get(metric_name) is None:
-                    # Apply percentage conversion for metrics flagged as percentages
-                    # Note: screener values with calc="percent" are already converted in _fetch_screener_value
-                    final_value = screener_value
-                    if (screener_value is not None and 
-                        config.get("is_percentage", False) and 
-                        calc.lower() not in ["percent"]):
-                        final_value = screener_value / 100.0
-                    payload[metric_name] = final_value
-
-        # Derived metrics computed from previously resolved data
+                    kpi_id = metric_to_kpi.get(metric_name)
+                    if kpi_id in screener_kpis:
+                        value = screener_kpis[kpi_id]
+                        if value is not None:
+                            config = FINANCIAL_METRICS_MAPPING.get(metric_name, {})
+                            if config.get("is_percentage", False):
+                                value = value / 100.0
+                            payload[metric_name] = value
+        
+        # Third pass: derived metrics
         for payload, ctx in zip(records, contexts):
             report_currency = payload.get("currency") or base_currency
             for metric_name, config in FINANCIAL_METRICS_MAPPING.items():
@@ -267,80 +221,9 @@ class FinancialMetricsAssembler:
             metric_to_kpi[metric_name] = kpi_id
         return metric_to_kpi
 
-    def _fetch_screener_value(
-        self,
-        instrument_id: int,
-        kpi_id: int,
-        calc_group: str,
-        calc: str,
-        *,
-        api_key: Optional[str],
-        is_percent: bool,
-    ) -> Optional[float]:
-        try:
-            response = self._client.get_kpi_screener_value(
-                instrument_id,
-                kpi_id,
-                calc_group,
-                calc,
-                api_key=api_key,
-            )
-        except BorsdataAPIError:
-            return None
-        value = ((response or {}).get("value") or {}).get("n")
-        numeric = safe_float(value)
-        if numeric is None:
-            return None
-        if is_percent:
-            numeric /= 100.0
-        return numeric
 
-    def _resolve_screener_calc_groups(
-        self,
-        config: Dict[str, Any],
-        period_value: str,
-        report_type: str,
-    ) -> list[str]:
-        """Determine which screener calc groups to attempt for a metric."""
 
-        def normalise_period(value: Optional[str]) -> Optional[str]:
-            if not value:
-                return None
-            cleaned = value.strip().lower()
-            if not cleaned:
-                return None
-            aliases = {
-                "annual": "year",
-                "y": "year",
-                "quarterly": "quarter",
-                "q": "quarter",
-                "ttm": "r12",
-                "rolling": "r12",
-            }
-            return aliases.get(cleaned, cleaned)
 
-        ordered_groups: list[str] = []
-        overrides = config.get("screener_calc_group_overrides") or {}
-        for key in (normalise_period(period_value), normalise_period(report_type)):
-            if not key:
-                continue
-            override_group = overrides.get(key)
-            if override_group:
-                ordered_groups.append(override_group)
-
-        default_group = config.get("screener_calc_group")
-        if default_group:
-            ordered_groups.append(default_group)
-
-        seen: set[str] = set()
-        deduped: list[str] = []
-        for group in ordered_groups:
-            normalised = (group or "").strip().lower()
-            if not normalised or normalised in seen:
-                continue
-            seen.add(normalised)
-            deduped.append(normalised)
-        return deduped
 
     def _compute_derived_metric(
         self,
