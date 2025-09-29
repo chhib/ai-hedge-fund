@@ -1,5 +1,9 @@
 import concurrent.futures
+import warnings
 from dotenv import load_dotenv
+
+# Suppress LangChain deprecation warnings
+warnings.filterwarnings("ignore", message=".*Importing debug from langchain root module.*", category=UserWarning)
 from langchain_core.messages import HumanMessage
 from langgraph.graph import END
 from colorama import Fore, Style, init
@@ -14,6 +18,7 @@ from src.utils.progress import progress
 from src.utils.visualize import save_graph_as_png
 from src.tools.api import set_ticker_markets, get_financial_metrics, get_market_cap, search_line_items
 from src.utils.api_key import get_api_key_from_state
+from src.data.parallel_api_wrapper import run_parallel_fetch_ticker_data
 from src.cli.input import (
     parse_cli_inputs,
 )
@@ -60,6 +65,7 @@ def run_hedge_fund(
     model_provider: str = "OpenAI",
     exchange_rate_service: "ExchangeRateService" = None,
     target_currency: str = "USD",
+    ticker_markets: dict[str, str] = None,
 ):
     # Start progress tracking
     progress.start()
@@ -71,26 +77,60 @@ def run_hedge_fund(
         # Create a single workflow for all analysts (this will be reused for each ticker)
         base_agent = create_workflow(selected_analysts if selected_analysts else None)
 
-        # First, prefetch ALL data for ALL tickers upfront (performance optimization)
-        print("Prefetching data for all tickers...")
-        all_prefetched_data = {}
-        for ticker in tickers:
-            print(f"Prefetching data for {ticker}")
-            state = {
-                "data": {
-                    "tickers": [ticker],
-                    "start_date": start_date,
-                    "end_date": end_date,
-                    "exchange_rate_service": exchange_rate_service,
-                    "target_currency": target_currency,
-                }
-            }
-            prefetch_state = prefetch_financial_data(state)
-            all_prefetched_data.update(prefetch_state["data"]["prefetched_financial_data"])
+        # PERFORMANCE OPTIMIZATION: Pre-initialize expensive shared resources
+        import time
+        init_start = time.time()
+        print(f"[{time.strftime('%H:%M:%S')}] Pre-initializing shared resources...")
+
+        # Pre-initialize currency service and BorsdataClient caches to avoid redundant API calls
+        from src.tools.api import _borsdata_client
+
+        # Pre-populate instrument caches (both Nordic and Global) to avoid repeated fetches
+        print(f"[{time.strftime('%H:%M:%S')}] Pre-populating instrument caches...")
+        try:
+            # Pre-populate Nordic instruments cache
+            _borsdata_client.get_instruments(force_refresh=False)
+            print(f"[{time.strftime('%H:%M:%S')}] ✓ Nordic instruments cache populated")
+
+            # Pre-populate Global instruments cache
+            _borsdata_client.get_all_instruments(force_refresh=False)
+            print(f"[{time.strftime('%H:%M:%S')}] ✓ Global instruments cache populated")
+        except Exception as e:
+            print(f"[{time.strftime('%H:%M:%S')}] ⚠️ Warning: Could not pre-populate instrument caches: {e}")
+
+        if exchange_rate_service:
+            print(f"[{time.strftime('%H:%M:%S')}] Initializing currency mapping...")
+            exchange_rate_service._initialize_currency_map()  # Do this once globally
+            print(f"[{time.strftime('%H:%M:%S')}] ✓ Currency mapping initialized")
+
+        init_end = time.time()
+        print(f"[{time.strftime('%H:%M:%S')}] ✅ Shared resources initialized ({init_end - init_start:.2f}s)")
+
+        # Now prefetch ALL data for ALL tickers in parallel
+        prefetch_start = time.time()
+        print(f"[{time.strftime('%H:%M:%S')}] Prefetching data for all tickers in parallel...")
+
+        # Use the new parallel fetcher
+        all_prefetched_data = run_parallel_fetch_ticker_data(
+            tickers=tickers,
+            end_date=end_date,
+            start_date=start_date,
+            include_prices=True,
+            include_metrics=True,
+            include_line_items=True,
+            include_insider_trades=True,
+            include_events=True,
+            include_market_caps=True,
+            ticker_markets=ticker_markets,
+        )
+
+        prefetch_end = time.time()
+        print(f"[{time.strftime('%H:%M:%S')}] ✅ Parallel prefetching completed for {len(all_prefetched_data)} tickers ({prefetch_end - prefetch_start:.2f}s total)")
 
         def process_single_analyst_ticker(analyst_key: str, ticker: str, prefetched_data: dict):
             """Process a single analyst for a single ticker - maximum parallelization"""
-            print(f"Processing {analyst_key} for {ticker}", flush=True)
+            analyst_start = time.time()
+            print(f"[{time.strftime('%H:%M:%S')}] Processing {analyst_key} for {ticker}", flush=True)
 
             # Get the specific analyst function
             from src.utils.analysts import get_analyst_nodes
@@ -127,13 +167,16 @@ def run_hedge_fund(
             # Run the specific analyst (no additional API calls needed!)
             try:
                 result_state = node_func(state)
+                analyst_end = time.time()
+                print(f"[{time.strftime('%H:%M:%S')}] ✓ {analyst_key} completed for {ticker} ({analyst_end - analyst_start:.2f}s)")
                 return {
                     "analyst_key": analyst_key,
                     "ticker": ticker,
                     "signals": result_state["data"]["analyst_signals"],
                 }
             except Exception as e:
-                print(f"Error in {analyst_key} for {ticker}: {e}")
+                analyst_end = time.time()
+                print(f"[{time.strftime('%H:%M:%S')}] ❌ Error in {analyst_key} for {ticker} ({analyst_end - analyst_start:.2f}s): {e}")
                 return None
 
         # Create all analyst×ticker combinations for maximum parallelization
@@ -240,110 +283,6 @@ def _normalize_monetary_values(data, exchange_rate_service, target_currency):
     data.currency = target_currency
     return data
 
-def _fetch_data_for_ticker(ticker: str, end_date: str, exchange_rate_service, target_currency: str, api_key: str, state: AgentState):
-    """Helper function to fetch all financial data for a single ticker."""
-    progress.update_status("data_prefetch", ticker, "Fetching financial metrics")
-
-    # Fetch all the data that analysts typically need
-    financial_metrics = get_financial_metrics(ticker, end_date, period="ttm", limit=10, api_key=api_key)
-    financial_metrics = _normalize_monetary_values(financial_metrics, exchange_rate_service, target_currency)
-
-    progress.update_status("data_prefetch", ticker, "Fetching line items")
-    # Common line items used by multiple analysts
-    line_items = search_line_items(
-        ticker,
-        [
-            "capital_expenditure",
-            "depreciation_and_amortization",
-            "net_income",
-            "outstanding_shares",
-            "total_assets",
-            "total_liabilities",
-            "shareholders_equity",
-            "dividends_and_other_cash_distributions",
-            "issuance_or_purchase_of_equity_shares",
-            "gross_profit",
-            "revenue",
-            "free_cash_flow",
-            "current_assets",
-            "current_liabilities",
-        ],
-        end_date,
-        period="ttm",
-        limit=10,
-        api_key=api_key,
-    )
-    line_items = _normalize_monetary_values(line_items, exchange_rate_service, target_currency)
-
-    progress.update_status("data_prefetch", ticker, "Fetching market cap")
-    market_cap = get_market_cap(ticker, end_date, api_key=api_key)
-    if market_cap and exchange_rate_service:
-        # Assuming market_cap is a simple float and we need to know its currency.
-        # The get_market_cap function does not return currency.
-        # We will assume the currency of the market cap is the same as the financial_metrics.
-        if financial_metrics:
-            mc_currency = financial_metrics[0].currency
-            rate = exchange_rate_service.get_rate(mc_currency, target_currency)
-            if rate:
-                market_cap *= rate
-
-    # Additional data for Stanley Druckenmiller and other agents
-    progress.update_status("data_prefetch", ticker, "Fetching insider trades")
-    from src.tools.api import get_insider_trades, get_company_events, get_prices
-
-    insider_trades = get_insider_trades(ticker, end_date, limit=50, api_key=api_key)
-
-    progress.update_status("data_prefetch", ticker, "Fetching company events")
-    company_events = get_company_events(ticker, end_date, limit=50, api_key=api_key)
-
-    progress.update_status("data_prefetch", ticker, "Fetching price data")
-    # We need start_date for prices, get it from state
-    start_date = state["data"].get("start_date")
-    if start_date:
-        prices = get_prices(ticker, start_date=start_date, end_date=end_date, api_key=api_key)
-    else:
-        prices = []
-
-    # Store all data for this ticker
-    return {
-        "financial_metrics": financial_metrics,
-        "line_items": line_items,
-        "market_cap": market_cap,
-        "insider_trades": insider_trades,
-        "company_events": company_events,
-        "prices": prices,
-    }
-
-
-def prefetch_financial_data(state: AgentState):
-    """Pre-fetch all financial data needed by analysts to avoid duplicate API calls."""
-    data = state["data"]
-    tickers = data["tickers"]
-    end_date = data["end_date"]
-    exchange_rate_service = data.get("exchange_rate_service")
-    target_currency = data.get("target_currency", "USD")
-
-    # Extract API key if available
-    api_key = None
-    try:
-        api_key = get_api_key_from_state(state, "BORSDATA_API_KEY")
-    except:
-        pass  # Continue without API key if not available
-
-    # Store pre-fetched data in state
-    prefetched_data = {}
-
-    # The _fetch_data_for_ticker function now takes a single ticker
-    # We need to call it directly for the single ticker in the state
-    ticker = tickers[0] # Assuming state["data"]["tickers"] will only contain one ticker now
-    prefetched_data[ticker] = _fetch_data_for_ticker(ticker, end_date, exchange_rate_service, target_currency, api_key, state)
-    progress.update_status("data_prefetch", ticker, "Done")
-
-    # Add prefetched data to state
-    state["data"]["prefetched_financial_data"] = prefetched_data
-    progress.update_status("data_prefetch", None, "All data prefetched")
-
-    return state
 
 
 def start(state: AgentState):
@@ -355,7 +294,6 @@ def create_workflow(selected_analysts=None):
     """Create the workflow with selected analysts."""
     workflow = CustomStateGraph(AgentState)
     workflow.add_node("start_node", start)
-    workflow.add_node("prefetch_data", prefetch_financial_data)
 
     # Get analyst nodes from the configuration
     analyst_nodes = get_analyst_nodes()
@@ -373,13 +311,10 @@ def create_workflow(selected_analysts=None):
     workflow.add_node("risk_management_agent", risk_management_agent)
     workflow.add_node("portfolio_manager", portfolio_management_agent)
 
-    # Connect start -> prefetch
-    workflow.add_edge("start_node", "prefetch_data")
-
-    # Connect prefetch to all selected analysts (parallel execution)
+    # Connect start to all selected analysts (parallel execution)
     for analyst_key in selected_analysts:
         node_name = analyst_nodes[analyst_key][0]
-        workflow.add_edge("prefetch_data", node_name)
+        workflow.add_edge("start_node", node_name)
 
     # Connect all selected analysts to risk management (join point)
     # The state will be merged using the defined reducer for analyst_signals
@@ -442,6 +377,7 @@ if __name__ == "__main__":
         model_provider=inputs.model_provider,
         exchange_rate_service=exchange_rate_service,
         target_currency="USD",
+        ticker_markets=inputs.ticker_markets,
     )
 
     # Display the results

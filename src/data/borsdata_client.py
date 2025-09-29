@@ -482,21 +482,20 @@ class BorsdataClient:
             api_key=api_key,
         )
 
-    def get_kpi_bulk_values(
+    def get_kpi_all_instruments(
         self,
-        instrument_ids: Iterable[int],
-        kpi_filters: Iterable[Dict[str, Any]],
+        kpi_id: int,
+        calc_group: str,
+        calc: str,
         *,
+        use_global: bool = False,
         api_key: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Return bulk KPI values for multiple KPIs at once."""
+        """Return KPI values for all instruments (much more efficient than individual requests)."""
+        endpoint = "/v1/instruments/global/kpis" if use_global else "/v1/instruments/kpis"
         return self._request(
-            "POST",
-            "/v1/instruments/kpis/bulk",
-            json={
-                "instruments": list(instrument_ids),
-                "kpis": list(kpi_filters),
-            },
+            "GET",
+            f"{endpoint}/{kpi_id}/{calc_group}/{calc}",
             api_key=api_key,
         )
 

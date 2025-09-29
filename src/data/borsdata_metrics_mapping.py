@@ -631,12 +631,10 @@ FINANCIAL_METRICS_MAPPING: dict[str, MetricMapping] = {
     },
 
     "free_cash_flow": {
-        "source": "kpi",
+        "source": "derived",
         "metadata_match": ["Free Cash Flow", "Fritt kassaflöde"],
-        "kpi_id": 67,
         "default_report_type": "r12",
-        "screener_calc_group": "last",
-        "screener_calc": "latest",
+        "dependencies": ["free_Cash_Flow"],
     },
     "operating_cash_flow": {
         "source": "kpi",
@@ -732,12 +730,10 @@ FINANCIAL_METRICS_MAPPING: dict[str, MetricMapping] = {
         "is_percentage": True,
     },
     "beta": {
-        "source": "kpi",
+        "source": "derived",
         "metadata_match": ["Beta"],
-        "kpi_id": 80,
         "default_report_type": "3year",
-        "screener_calc_group": "3year",
-        "screener_calc": "latest",
+        "dependencies": [],
     },
     "alpha": {
         "source": "kpi",

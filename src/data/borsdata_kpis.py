@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any, Dict, Iterable, Optional, Tuple
+import time
 
 from .borsdata_client import BorsdataAPIError, BorsdataClient
 from .borsdata_common import (
@@ -20,6 +21,12 @@ from .models import FinancialMetrics
 
 class FinancialMetricsAssembler:
     """Builds `FinancialMetrics` sequences by orchestrating Börsdata endpoints."""
+
+    # Class-level cache for all-instruments KPI responses
+    # This allows multiple tickers to benefit from the same API calls
+    _kpi_cache: Dict[str, Dict[str, Any]] = {}
+    _cache_timestamps: Dict[str, float] = {}
+    _cache_ttl = 300  # 5 minutes cache TTL
 
     def __init__(self, client: BorsdataClient) -> None:
         self._client = client
@@ -69,50 +76,72 @@ class FinancialMetricsAssembler:
             original_currency=True,
             api_key=api_key,
         )
-        kpi_filters = []
-        for config in FINANCIAL_METRICS_MAPPING.values():
-            if 'kpi_id' in config:
-                kpi_filters.append({
-                    "kpiId": config['kpi_id'],
-                    "calcGroup": config.get('screener_calc_group', 'last'),
-                    "calc": config.get('screener_calc', 'latest')
-                })
+        essential_metrics = {
+            'return_on_equity', 'debt_to_equity', 'operating_margin', 'current_ratio',
+            'price_to_earnings_ratio', 'price_to_book_ratio', 'price_to_sales_ratio',
+            'earnings_per_share', 'free_cash_flow_per_share', 'revenue_growth', 'free_cash_flow_growth',
+            'return_on_invested_capital', 'beta', 'revenue', 'free_cash_flow'
+        }
 
         screener_kpis = {}
-        try:
-            # First, try to fetch all KPIs in bulk for efficiency
-            def chunks(lst, n):
-                for i in range(0, len(lst), n):
-                    yield lst[i:i + n]
+        essential_configs = {name: config for name, config in FINANCIAL_METRICS_MAPPING.items()
+                           if name in essential_metrics and 'kpi_id' in config}
 
-            screener_payload = {"values": []}
-            for chunk in chunks(kpi_filters, 50):
-                response = self._client.get_kpi_bulk_values(
-                    [instrument_id], kpi_filters=chunk, api_key=api_key
-                )
-                if response and response.get("values"):
-                    screener_payload["values"].extend(response.get("values", []))
-            
-            for item in screener_payload.get('values', []):
-                if item.get('i') == instrument_id:
-                    screener_kpis[item['k']] = safe_float(item['n'])
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        import threading
 
-        except BorsdataAPIError:
-            # If bulk fails, fall back to individual KPI requests for resilience
-            for config in FINANCIAL_METRICS_MAPPING.values():
-                if 'kpi_id' in config:
+        def fetch_kpi(metric_name, config):
+            start_time = time.time()
+            try:
+                kpi_id = config['kpi_id']
+                calc_group = config.get('screener_calc_group', 'last')
+                calc = config.get('screener_calc', 'latest')
+
+                cache_key = f"{kpi_id}_{calc_group}_{calc}_{use_global}"
+                current_time = time.time()
+
+                if (cache_key in self._kpi_cache and
+                    cache_key in self._cache_timestamps and
+                    current_time - self._cache_timestamps[cache_key] < self._cache_ttl):
+
+                    response = self._kpi_cache[cache_key]
+                else:
+                    response = self._client.get_kpi_all_instruments(
+                        kpi_id, calc_group, calc, use_global=use_global, api_key=api_key
+                    )
+                    if response:
+                        self._kpi_cache[cache_key] = response
+                        self._cache_timestamps[cache_key] = current_time
+
+                if response and response.get('values'):
+                    for item in response['values']:
+                        if item.get('i') == instrument_id:
+                            return kpi_id, safe_float(item.get('n'))
+
+                if metric_name in essential_metrics:
                     try:
-                        kpi_id = config['kpi_id']
-                        calc_group = config.get('screener_calc_group', 'last')
-                        calc = config.get('screener_calc', 'latest')
                         response = self._client.get_kpi_screener_value(
                             instrument_id, kpi_id, calc_group, calc, api_key=api_key
                         )
                         if response and response.get('value'):
-                            screener_kpis[kpi_id] = safe_float(response['value']['n'])
+                            return kpi_id, safe_float(response['value']['n'])
                     except BorsdataAPIError:
-                        # Ignore if a specific KPI is not available
-                        continue
+                        pass
+            except BorsdataAPIError:
+                pass
+            return None, None
+
+        essential_results = {}
+        with ThreadPoolExecutor(max_workers=min(16, len(essential_configs))) as executor:
+            future_to_metric = {
+                executor.submit(fetch_kpi, metric_name, config): metric_name
+                for metric_name, config in essential_configs.items()
+            }
+
+            for future in as_completed(future_to_metric):
+                kpi_id, value = future.result()
+                if kpi_id is not None and value is not None:
+                    screener_kpis[kpi_id] = value
 
         # 2. Build period records
         end_date_dt = parse_iso_date(end_date)
@@ -327,6 +356,14 @@ class FinancialMetricsAssembler:
         # Populate revenue_per_share from KPI data
         if metric_name == "revenue_per_share":
             return safe_float(ctx.kpis.get(5))  # KPI ID 5: Revenue/share
+
+        if metric_name == "free_cash_flow":
+            if not report:
+                return None
+            return safe_float(report.get("free_Cash_Flow"))
+
+        if metric_name == "beta":
+            return None
 
         return None
 
