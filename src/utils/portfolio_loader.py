@@ -59,11 +59,35 @@ def load_portfolio(portfolio_file: str) -> Portfolio:
     return Portfolio(positions=positions, cash_holdings=cash_holdings, last_updated=datetime.now())
 
 
-def load_universe(universe_file: Optional[str] = None, tickers_str: Optional[str] = None, nordics_str: Optional[str] = None, global_str: Optional[str] = None) -> List[str]:
+def load_universe(universe_file: Optional[str] = None, tickers_str: Optional[str] = None) -> List[str]:
     """
-    Load investment universe from various sources
-    Supports both comma-separated and line-separated formats
+    Load investment universe from various sources.
+
+    Supports both comma-separated and line-separated formats.
+    Supports comments: lines starting with # or --, and inline comments after #.
+    Market detection (Nordic vs Global) is handled automatically via borsdata_ticker_mapping.
+
+    Args:
+        universe_file: Path to a file containing tickers (line-separated or CSV)
+        tickers_str: Comma-separated string of tickers
+
+    Returns:
+        List of ticker symbols
     """
+
+    def clean_ticker(ticker: str) -> Optional[str]:
+        """Extract ticker from string, removing inline comments and whitespace"""
+        # Remove inline comments (everything after #)
+        if "#" in ticker:
+            ticker = ticker.split("#")[0]
+        # Strip whitespace and quotes
+        ticker = ticker.strip().strip('"').strip("'")
+        return ticker if ticker else None
+
+    def is_comment_line(line: str) -> bool:
+        """Check if line is a comment (starts with # or --)"""
+        stripped = line.strip()
+        return stripped.startswith("#") or stripped.startswith("--")
 
     universe = set()
 
@@ -74,27 +98,31 @@ def load_universe(universe_file: Optional[str] = None, tickers_str: Optional[str
             # Detect and parse format
             if "," in content:
                 # CSV format - handles quoted tickers like "ERIC B"
-                csv_reader = csv.reader(StringIO(content))
+                # Filter out comment lines before CSV parsing
+                non_comment_lines = [line for line in content.split("\n") if not is_comment_line(line)]
+                csv_content = "\n".join(non_comment_lines)
+                csv_reader = csv.reader(StringIO(csv_content))
                 for row in csv_reader:
                     for ticker in row:
-                        ticker = ticker.strip().strip('"').strip("'")
-                        if ticker and not ticker.startswith("#"):
-                            universe.add(ticker)
+                        cleaned = clean_ticker(ticker)
+                        if cleaned:
+                            universe.add(cleaned)
             else:
                 # Line-separated format
                 for line in content.split("\n"):
-                    ticker = line.strip().strip('"').strip("'")
-                    if ticker and not ticker.startswith("#"):
-                        universe.add(ticker)
+                    if is_comment_line(line):
+                        continue
+                    cleaned = clean_ticker(line)
+                    if cleaned:
+                        universe.add(cleaned)
 
     # Add inline tickers
-    for ticker_str in [tickers_str, nordics_str, global_str]:
-        if ticker_str:
-            csv_reader = csv.reader(StringIO(ticker_str))
-            for row in csv_reader:
-                for ticker in row:
-                    ticker = ticker.strip().strip('"').strip("'")
-                    if ticker:
-                        universe.add(ticker)
+    if tickers_str:
+        csv_reader = csv.reader(StringIO(tickers_str))
+        for row in csv_reader:
+            for ticker in row:
+                cleaned = clean_ticker(ticker)
+                if cleaned:
+                    universe.add(cleaned)
 
     return list(universe)
