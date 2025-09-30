@@ -21,11 +21,12 @@ class EnhancedPortfolioManager:
     Maintains concentrated portfolio of 5-10 positions
     """
 
-    def __init__(self, portfolio: Portfolio, universe: List[str], analysts: List[str], model_config: Dict[str, Any], verbose: bool = False):
+    def __init__(self, portfolio: Portfolio, universe: List[str], analysts: List[str], model_config: Dict[str, Any], ticker_markets: Dict[str, str] = None, verbose: bool = False):
         self.portfolio = portfolio
         self.universe = universe
         self.analyst_names = analysts
         self.model_config = model_config
+        self.ticker_markets = ticker_markets or {}
         self.verbose = verbose
         self.analysts = self._initialize_analysts(analysts, model_config)
 
@@ -119,7 +120,7 @@ class EnhancedPortfolioManager:
         print(f"\n🔄 Collecting signals from {len(self.analysts)} analysts for {len(self.universe)} tickers...")
 
         # STEP 1: Pre-populate instrument caches (same as main.py lines 86-99)
-        from src.tools.api import _borsdata_client
+        from src.tools.api import _borsdata_client, set_ticker_markets
 
         print("Pre-populating instrument caches...")
         try:
@@ -130,7 +131,10 @@ class EnhancedPortfolioManager:
         except Exception as e:
             print(f"⚠️  Warning: Could not pre-populate instrument caches: {e}")
 
-        # STEP 2: Parallel data prefetching (same as main.py lines 114-128)
+        # STEP 2: Set ticker market routing (Nordic vs Global API)
+        set_ticker_markets(self.ticker_markets)
+
+        # STEP 3: Parallel data prefetching (same as main.py lines 114-128)
         from src.data.parallel_api_wrapper import run_parallel_fetch_ticker_data
 
         end_date = datetime.now().strftime("%Y-%m-%d")
@@ -146,13 +150,14 @@ class EnhancedPortfolioManager:
                 include_insider_trades=False,
                 include_events=False,
                 include_market_caps=False,
+                ticker_markets=self.ticker_markets,
             )
             print(f"✅ Parallel prefetching completed for {len(prefetched_data)} tickers\n")
         except Exception as e:
             print(f"❌ Error during parallel prefetching: {e}")
             return signals
 
-        # STEP 3: Extract metrics and call analysts
+        # STEP 4: Extract metrics and call analysts
         for ticker in self.universe:
             ticker_data = prefetched_data.get(ticker, {})
             metrics_list = ticker_data.get("metrics", [])

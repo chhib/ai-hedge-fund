@@ -25,9 +25,8 @@ load_dotenv()
 @click.option("--portfolio", type=click.Path(exists=True), required=True, help="Path to portfolio CSV file")
 # Universe input options
 @click.option("--universe", type=click.Path(exists=True), help="Path to universe list file")
-@click.option("--universe-tickers", type=str, help="Comma-separated list of global tickers")
-@click.option("--universe-nordics", type=str, help="Comma-separated list of Nordic tickers")
-@click.option("--universe-global", type=str, help="Comma-separated list of global tickers")
+@click.option("--universe-tickers", type=str, help="Comma-separated list of global tickers (e.g., AAPL,MSFT,NVDA)")
+@click.option("--universe-nordics", type=str, help="Comma-separated list of Nordic tickers (e.g., HM B,ERIC B,VOLV B)")
 # Analysis configuration
 @click.option("--analysts", type=str, default="all", help='Comma-separated list: warren_buffett, charlie_munger, fundamentals (or "all" for all 3)')
 @click.option("--model", type=str, default="gpt-4o", help="LLM model to use")
@@ -41,7 +40,7 @@ load_dotenv()
 @click.option("--verbose", is_flag=True, help="Show detailed analysis from each analyst")
 @click.option("--dry-run", is_flag=True, help="Show recommendations without saving")
 @click.option("--test", is_flag=True, help="Run in test mode with limited analysts for quick validation")
-def main(portfolio, universe, universe_tickers, universe_nordics, universe_global, analysts, model, model_provider, max_holdings, max_position, min_position, min_trade, verbose, dry_run, test):
+def main(portfolio, universe, universe_tickers, universe_nordics, analysts, model, model_provider, max_holdings, max_position, min_position, min_trade, verbose, dry_run, test):
     """
     AI Hedge Fund Portfolio Manager - Long-only portfolio rebalancing
 
@@ -69,8 +68,8 @@ def main(portfolio, universe, universe_tickers, universe_nordics, universe_globa
             print("🧪 Test mode: Using 1 analyst for quick validation")
 
     # Validate inputs
-    if not universe and not universe_tickers and not universe_nordics and not universe_global:
-        click.echo("Error: Must provide at least one universe source (--universe, --universe-tickers, --universe-nordics, or --universe-global)", err=True)
+    if not universe and not universe_tickers and not universe_nordics:
+        click.echo("Error: Must provide at least one universe source (--universe, --universe-tickers, or --universe-nordics)", err=True)
         raise click.Abort()
 
     # Load portfolio
@@ -82,9 +81,9 @@ def main(portfolio, universe, universe_tickers, universe_nordics, universe_globa
         click.echo(f"Error loading portfolio: {e}", err=True)
         raise click.Abort()
 
-    # Load universe
+    # Load universe and build ticker_markets dict (same pattern as main.py)
     try:
-        universe_list = load_universe(universe, universe_tickers, universe_nordics, universe_global)
+        universe_list = load_universe(universe, universe_tickers, universe_nordics, None)
         if not universe_list:
             click.echo("Error: Universe is empty. Please provide valid ticker symbols.", err=True)
             raise click.Abort()
@@ -93,6 +92,26 @@ def main(portfolio, universe, universe_tickers, universe_nordics, universe_globa
     except Exception as e:
         click.echo(f"Error loading universe: {e}", err=True)
         raise click.Abort()
+
+    # Build ticker_markets dict to route tickers to correct API (Nordic vs Global)
+    ticker_markets = {}
+
+    # Parse Nordic tickers
+    if universe_nordics:
+        nordic_tickers = [t.strip() for t in universe_nordics.split(",") if t.strip()]
+        for ticker in nordic_tickers:
+            ticker_markets[ticker] = "Nordic"
+
+    # Parse global tickers
+    if universe_tickers:
+        global_tickers = [t.strip() for t in universe_tickers.split(",") if t.strip()]
+        for ticker in global_tickers:
+            ticker_markets[ticker] = "global"
+
+    if verbose and ticker_markets:
+        global_count = sum(1 for v in ticker_markets.values() if v == "global")
+        nordic_count = sum(1 for v in ticker_markets.values() if v == "Nordic")
+        print(f"✓ Ticker routing: {global_count} global, {nordic_count} Nordic")
 
     # Validate universe includes all current holdings
     current_tickers = {pos.ticker for pos in portfolio_data.positions}
@@ -114,7 +133,7 @@ def main(portfolio, universe, universe_tickers, universe_nordics, universe_globa
         print(f"✓ Using analysts: {', '.join(analyst_list)}")
 
     # Initialize portfolio manager
-    manager = EnhancedPortfolioManager(portfolio=portfolio_data, universe=universe_list, analysts=analyst_list, model_config={"name": model, "provider": model_provider}, verbose=verbose)
+    manager = EnhancedPortfolioManager(portfolio=portfolio_data, universe=universe_list, analysts=analyst_list, model_config={"name": model, "provider": model_provider}, ticker_markets=ticker_markets, verbose=verbose)
 
     # Generate recommendations (LONG-ONLY constraint applied here)
     if verbose:
