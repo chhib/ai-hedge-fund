@@ -582,4 +582,34 @@ The system now operates efficiently at scale with comprehensive financial data i
 - **Performance**: Uses full LLM-based analysis (not simple heuristics), providing same quality as main.py but aggregated for portfolio decisions.
 - **System Status**: Portfolio manager now supports complete analyst ecosystem with full LLM intelligence.
 
+### Session 39 (Clean Progress Display)
+- **User Feedback**: Requested cleaner output with progress indicators similar to main.py, eliminating verbose logging.
+- **Progress Display Integration**: Integrated Rich-based progress system showing real-time analyst status updates:
+  - Each analyst displays live status: "⋯ Analyzing" → "✓ Done" or "✗ Error"
+  - Progress table automatically starts before analyst execution and stops after completion
+  - Clean visual feedback showing [ticker] and status for each analyst
+- **Verbose Output Suppression**: Implemented stdout capture to hide excessive logging:
+  - API fetching logs suppressed by default (parallel_fetch prints hidden)
+  - Agent reasoning output (show_agent_reasoning) always disabled in portfolio mode
+  - Individual analyst print statements captured unless --verbose flag used
+  - Only shows essential status messages: portfolio load, universe load, market routing, analyst count
+- **CLI Output Improvements**:
+  - Removed excessive "if verbose" conditionals - now shows essential info by default
+  - Concise status lines for portfolio, universe, and market routing
+  - Final summary shows signal collection count across all tickers
+- **User Experience**: Clean, professional output matching main.py's style:
+  ```
+  ✓ Loaded portfolio with 0 positions
+  ✓ Loaded universe with 1 tickers
+  ✓ Using 4 analysts
+
+  ✓ Fundamentals Analyst [AAPL] Done
+  ✓ Warren Buffett       [AAPL] Done
+  ✓ Charlie Munger       [AAPL] Done
+  ✓ Technical Analyst    [AAPL] Done
+
+  ✓ Collected 4 signals from 4 analysts across 1 tickers
+  ```
+- **System Status**: Portfolio manager now provides clean, informative output with real-time progress tracking matching main.py's user experience.
+
 **IMPORTANT**: Update this log at the end of each work session: note completed steps, new decisions, blockers, and refreshed next actions. Always use session numbers (Session X, Session X+1, etc.) for progress entries. Update the "Last updated" date at the top with the actual current date when making changes.
