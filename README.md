@@ -205,6 +205,58 @@ poetry run python src/main.py --tickers AAPL,MSFT,NVDA --start-date 2024-01-01 -
     poetry run python src/backtester.py --tickers-nordics TELIA --initial-currency SEK
     ```
 
+#### Run the Portfolio Manager
+
+The Portfolio Manager provides long-only portfolio rebalancing for concentrated positions (5-10 holdings). It analyzes your current portfolio and investment universe using selected analysts, then generates rebalancing recommendations.
+
+**Starting from scratch (empty portfolio):**
+```bash
+poetry run python src/portfolio_manager.py \
+  --portfolio portfolios/empty_portfolio.csv \
+  --universe-tickers "AAPL,MSFT,NVDA,META,TSLA" \
+  --analysts all
+```
+
+**Rebalancing existing portfolio with mixed markets:**
+```bash
+poetry run python src/portfolio_manager.py \
+  --portfolio portfolio_20250930.csv \
+  --universe-tickers "AAPL,MSFT,NVDA,META" \
+  --universe-nordics "HM B,ERIC B,VOLV B,ABB" \
+  --analysts warren_buffett,charlie_munger,fundamentals \
+  --max-holdings 8 \
+  --verbose
+```
+
+**Quick test with limited analysts:**
+```bash
+poetry run python src/portfolio_manager.py \
+  --portfolio portfolio.csv \
+  --universe-tickers "AAPL,MSFT" \
+  --test
+```
+
+**Key CLI Options:**
+- `--portfolio`: Path to your current portfolio CSV file
+- `--universe-tickers`: Comma-separated global tickers to consider
+- `--universe-nordics`: Comma-separated Nordic tickers to consider
+- `--analysts`: Comma-separated analyst list or "all" for all available analysts
+- `--max-holdings`: Maximum number of positions (default: 8)
+- `--max-position`: Maximum position size as decimal (default: 0.25 = 25%)
+- `--min-position`: Minimum position size as decimal (default: 0.05 = 5%)
+- `--verbose`: Show detailed analysis from each analyst
+- `--dry-run`: Show recommendations without saving output file
+
+**Portfolio CSV Format:**
+```csv
+ticker,shares,cost_basis,currency,date_acquired
+AAPL,100,150.50,USD,2024-01-15
+MSFT,50,350.00,USD,2024-02-20
+CASH,50000,,USD,
+```
+
+The system automatically saves rebalanced portfolios to `portfolio_YYYYMMDD.csv` for iterative rebalancing.
+
 #### Run the Backtester
 
 **Nordic/European companies:**
