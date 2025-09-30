@@ -138,40 +138,55 @@ class EnhancedPortfolioManager:
         signals = []
 
         if not self.analysts:
-            print(f"Warning: No analysts initialized")
+            if self.verbose:
+                print(f"Warning: No analysts initialized")
             return signals
 
         import os
+        from src.utils.progress import progress
 
         api_key = os.getenv("BORSDATA_API_KEY")
         if not api_key:
-            print("Warning: BORSDATA_API_KEY not found - using neutral signals")
+            if self.verbose:
+                print("Warning: BORSDATA_API_KEY not found - using neutral signals")
             return signals
 
-        print(f"\n🔄 Collecting signals from {len(self.analysts)} analysts for {len(self.universe)} tickers...")
+        # Start progress display
+        progress.start()
 
-        # STEP 1: Pre-populate instrument caches (same as main.py lines 86-99)
+        # STEP 1: Pre-populate instrument caches (silent unless verbose)
         from src.tools.api import _borsdata_client, set_ticker_markets
 
-        print("Pre-populating instrument caches...")
+        if self.verbose:
+            print("Pre-populating instrument caches...")
         try:
             _borsdata_client.get_instruments(force_refresh=False)
-            print("✓ Nordic instruments cache populated")
+            if self.verbose:
+                print("✓ Nordic instruments cache populated")
             _borsdata_client.get_all_instruments(force_refresh=False)
-            print("✓ Global instruments cache populated")
+            if self.verbose:
+                print("✓ Global instruments cache populated")
         except Exception as e:
-            print(f"⚠️  Warning: Could not pre-populate instrument caches: {e}")
+            if self.verbose:
+                print(f"⚠️  Warning: Could not pre-populate instrument caches: {e}")
 
         # STEP 2: Set ticker market routing (Nordic vs Global API)
         set_ticker_markets(self.ticker_markets)
 
         # STEP 3: Parallel data prefetching - fetch ALL data needed by analysts
         from src.data.parallel_api_wrapper import run_parallel_fetch_ticker_data
+        import io
+        import sys
 
         end_date = datetime.now().strftime("%Y-%m-%d")
         start_date = (datetime.now().replace(year=datetime.now().year - 1)).strftime("%Y-%m-%d")
 
-        print(f"Prefetching comprehensive data for all {len(self.universe)} tickers in parallel...")
+        # Suppress verbose API fetching output unless verbose mode
+        if not self.verbose:
+            # Capture stdout to suppress parallel fetching prints
+            old_stdout = sys.stdout
+            sys.stdout = io.StringIO()
+
         try:
             prefetched_data = run_parallel_fetch_ticker_data(
                 tickers=self.universe,
@@ -184,9 +199,15 @@ class EnhancedPortfolioManager:
                 include_market_caps=True,
                 ticker_markets=self.ticker_markets,
             )
-            print(f"✅ Parallel prefetching completed for {len(prefetched_data)} tickers\n")
-        except Exception as e:
-            print(f"❌ Error during parallel prefetching: {e}")
+        finally:
+            if not self.verbose:
+                # Restore stdout
+                sys.stdout = old_stdout
+
+        if not prefetched_data:
+            progress.stop()
+            if self.verbose:
+                print(f"❌ Error during parallel prefetching")
             return signals
 
         # STEP 4: Call function-based analysts with AgentState for each ticker
@@ -212,7 +233,7 @@ class EnhancedPortfolioManager:
                 },
                 "metadata": {
                     "portfolio_manager_mode": True,
-                    "show_reasoning": self.verbose,  # Required by agents
+                    "show_reasoning": False,  # Never show verbose reasoning in portfolio mode
                 }
             }
 
@@ -221,17 +242,30 @@ class EnhancedPortfolioManager:
                 analyst_name = analyst_info["name"]
                 analyst_func = analyst_info["func"]
                 display_name = analyst_info["display_name"]
+                agent_id = f"{analyst_name}_agent"
+
+                # Update progress: analyzing
+                progress.update_status(agent_id, ticker, "Analyzing")
 
                 try:
-                    # Call the function-based analyst
-                    result_state = analyst_func(state)
+                    # Suppress agent print statements (like show_agent_reasoning)
+                    if not self.verbose:
+                        old_stdout = sys.stdout
+                        sys.stdout = io.StringIO()
+
+                    try:
+                        # Call the function-based analyst
+                        result_state = analyst_func(state)
+                    finally:
+                        if not self.verbose:
+                            sys.stdout = old_stdout
 
                     # Extract analysis from state - agents store in analyst_signals[agent_name_agent]
-                    agent_id = f"{analyst_name}_agent"
                     analyst_signals = result_state.get("data", {}).get("analyst_signals", {})
                     analysis = analyst_signals.get(agent_id, {})
 
                     if not analysis or not isinstance(analysis, dict):
+                        progress.update_status(agent_id, ticker, "Error")
                         if self.verbose:
                             print(f"  Warning: No analysis returned by {display_name} for {ticker}")
                         continue
@@ -239,6 +273,7 @@ class EnhancedPortfolioManager:
                     # Get the ticker's analysis
                     ticker_analysis = analysis.get(ticker, {})
                     if not ticker_analysis:
+                        progress.update_status(agent_id, ticker, "Error")
                         if self.verbose:
                             print(f"  Warning: No analysis for {ticker} from {display_name}")
                         continue
@@ -266,17 +301,20 @@ class EnhancedPortfolioManager:
                         reasoning=reasoning
                     ))
 
-                    if self.verbose:
-                        print(f"  {ticker} - {display_name}: {signal_str} (confidence: {int(confidence * 100)}%)")
+                    # Update progress: done
+                    progress.update_status(agent_id, ticker, "Done")
 
                 except Exception as e:
+                    progress.update_status(agent_id, ticker, "Error")
                     if self.verbose:
-                        print(f"  Warning: Analyst {display_name} failed for {ticker}: {e}")
+                        print(f"\n  Warning: Analyst {display_name} failed for {ticker}: {e}")
                         import traceback
                         traceback.print_exc()
                     continue
 
-        print(f"\n✓ Collected {len(signals)} signals from {len(self.analysts)} analysts")
+        # Stop progress display and show summary
+        progress.stop()
+        print(f"\n✓ Collected {len(signals)} signals from {len(self.analysts)} analysts across {len(self.universe)} tickers\n")
         return signals
 
     def _aggregate_signals(self, signals: List[AnalystSignal]) -> Dict[str, float]:

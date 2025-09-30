@@ -75,8 +75,7 @@ def main(portfolio, universe, universe_tickers, universe_nordics, analysts, mode
     # Load portfolio
     try:
         portfolio_data = load_portfolio(portfolio)
-        if verbose:
-            print(f"\n✓ Loaded portfolio with {len(portfolio_data.positions)} positions")
+        print(f"\n✓ Loaded portfolio with {len(portfolio_data.positions)} positions")
     except Exception as e:
         click.echo(f"Error loading portfolio: {e}", err=True)
         raise click.Abort()
@@ -87,8 +86,7 @@ def main(portfolio, universe, universe_tickers, universe_nordics, analysts, mode
         if not universe_list:
             click.echo("Error: Universe is empty. Please provide valid ticker symbols.", err=True)
             raise click.Abort()
-        if verbose:
-            print(f"✓ Loaded universe with {len(universe_list)} tickers")
+        print(f"✓ Loaded universe with {len(universe_list)} tickers")
     except Exception as e:
         click.echo(f"Error loading universe: {e}", err=True)
         raise click.Abort()
@@ -108,17 +106,18 @@ def main(portfolio, universe, universe_tickers, universe_nordics, analysts, mode
         for ticker in global_tickers:
             ticker_markets[ticker] = "global"
 
-    if verbose and ticker_markets:
+    # Show ticker routing info
+    if ticker_markets:
         global_count = sum(1 for v in ticker_markets.values() if v == "global")
         nordic_count = sum(1 for v in ticker_markets.values() if v == "Nordic")
-        print(f"✓ Ticker routing: {global_count} global, {nordic_count} Nordic")
+        print(f"✓ Market routing: {global_count} global, {nordic_count} Nordic\n")
 
     # Validate universe includes all current holdings
     current_tickers = {pos.ticker for pos in portfolio_data.positions}
     universe_set = set(universe_list)
     missing = current_tickers - universe_set
     if missing:
-        print(f"⚠️  Warning: Current holdings not in universe: {missing}")
+        print(f"⚠️  Warning: Adding current holdings to universe: {missing}\n")
         universe_list.extend(list(missing))
 
     # Parse analysts
@@ -147,15 +146,13 @@ def main(portfolio, universe, universe_tickers, universe_nordics, analysts, mode
     else:
         analyst_list = [a.strip() for a in analysts.split(",")]
 
-    if verbose:
-        print(f"✓ Using {len(analyst_list)} analysts: {', '.join(analyst_list)}")
+    # Show selected analysts
+    print(f"✓ Using {len(analyst_list)} analysts\n")
 
     # Initialize portfolio manager
     manager = EnhancedPortfolioManager(portfolio=portfolio_data, universe=universe_list, analysts=analyst_list, model_config={"name": model, "provider": model_provider}, ticker_markets=ticker_markets, verbose=verbose)
 
     # Generate recommendations (LONG-ONLY constraint applied here)
-    if verbose:
-        print("\n🔄 Analyzing portfolio and generating recommendations...\n")
 
     try:
         results = manager.generate_rebalancing_recommendations(max_holdings=max_holdings, max_position=max_position, min_position=min_position, min_trade_size=min_trade)
