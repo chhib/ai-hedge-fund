@@ -203,10 +203,14 @@ class EnhancedPortfolioManager:
         # Start progress display for analyst execution
         progress.start()
 
+        # Calculate total analyst calls for progress tracking
+        total_analyst_calls = len(self.analysts) * len(self.universe)
+        completed_calls = 0
+
         # STEP 4: Call function-based analysts with AgentState for each ticker
         from src.graph.state import AgentState
 
-        for ticker in self.universe:
+        for ticker_idx, ticker in enumerate(self.universe):
             ticker_data = prefetched_data.get(ticker, {})
 
             # Create AgentState with prefetched data (same pattern as main.py)
@@ -231,7 +235,7 @@ class EnhancedPortfolioManager:
             }
 
             # Call each analyst with this state
-            for analyst_info in self.analysts:
+            for analyst_idx, analyst_info in enumerate(self.analysts):
                 analyst_name = analyst_info["name"]
                 analyst_func = analyst_info["func"]
                 display_name = analyst_info["display_name"]
@@ -296,6 +300,36 @@ class EnhancedPortfolioManager:
 
                     # Update progress: done
                     progress.update_status(agent_id, ticker, "Done")
+
+                    # Update progress counter
+                    completed_calls += 1
+
+                    # Show progress and next up
+                    # Calculate what's next
+                    next_ticker = None
+                    next_analyst = None
+
+                    if analyst_idx + 1 < len(self.analysts):
+                        # More analysts for this ticker
+                        next_analyst = self.analysts[analyst_idx + 1]["display_name"]
+                        next_ticker = ticker
+                    elif ticker_idx + 1 < len(self.universe):
+                        # Next ticker, first analyst
+                        next_ticker = self.universe[ticker_idx + 1]
+                        next_analyst = self.analysts[0]["display_name"]
+
+                    # Build progress bar
+                    bar_length = 20
+                    filled = int(bar_length * completed_calls / total_analyst_calls)
+                    bar = "█" * filled + "░" * (bar_length - filled)
+
+                    # Print progress line (goes to stderr like Rich, won't interfere)
+                    import sys
+                    progress_line = f"\n[{bar}] {completed_calls}/{total_analyst_calls} complete"
+                    if next_ticker and next_analyst:
+                        progress_line += f" | Next: {next_analyst} [{next_ticker}]"
+                    sys.stderr.write(progress_line + "\n")
+                    sys.stderr.flush()
 
                 except Exception as e:
                     progress.update_status(agent_id, ticker, "Error")
