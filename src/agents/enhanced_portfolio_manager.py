@@ -98,7 +98,10 @@ class EnhancedPortfolioManager:
     def _collect_analyst_signals(self) -> List[AnalystSignal]:
         """
         Collect signals from all analysts for all tickers in universe
-        Calls each analyst's analyze() method with financial data
+        Uses the same optimized infrastructure as main.py:
+        1. Pre-populate instrument caches
+        2. Parallel data prefetching
+        3. Extract metrics and pass to analysts
         """
         signals = []
 
@@ -106,10 +109,6 @@ class EnhancedPortfolioManager:
             print(f"Warning: No analysts initialized")
             return signals
 
-        print(f"Collecting signals from {len(self.analysts)} analysts for {len(self.universe)} tickers...")
-
-        # Import financial data fetching
-        from src.tools.api import get_financial_metrics
         import os
 
         api_key = os.getenv("BORSDATA_API_KEY")
@@ -117,59 +116,86 @@ class EnhancedPortfolioManager:
             print("Warning: BORSDATA_API_KEY not found - using neutral signals")
             return signals
 
-        # Use today's date as end_date
+        print(f"\n🔄 Collecting signals from {len(self.analysts)} analysts for {len(self.universe)} tickers...")
+
+        # STEP 1: Pre-populate instrument caches (same as main.py lines 86-99)
+        from src.tools.api import _borsdata_client
+
+        print("Pre-populating instrument caches...")
+        try:
+            _borsdata_client.get_instruments(force_refresh=False)
+            print("✓ Nordic instruments cache populated")
+            _borsdata_client.get_all_instruments(force_refresh=False)
+            print("✓ Global instruments cache populated")
+        except Exception as e:
+            print(f"⚠️  Warning: Could not pre-populate instrument caches: {e}")
+
+        # STEP 2: Parallel data prefetching (same as main.py lines 114-128)
+        from src.data.parallel_api_wrapper import run_parallel_fetch_ticker_data
+
         end_date = datetime.now().strftime("%Y-%m-%d")
 
-        # For each ticker, collect signals from all analysts
+        print(f"Prefetching data for all {len(self.universe)} tickers in parallel...")
+        try:
+            prefetched_data = run_parallel_fetch_ticker_data(
+                tickers=self.universe,
+                end_date=end_date,
+                include_prices=False,
+                include_metrics=True,
+                include_line_items=False,
+                include_insider_trades=False,
+                include_events=False,
+                include_market_caps=False,
+            )
+            print(f"✅ Parallel prefetching completed for {len(prefetched_data)} tickers\n")
+        except Exception as e:
+            print(f"❌ Error during parallel prefetching: {e}")
+            return signals
+
+        # STEP 3: Extract metrics and call analysts
         for ticker in self.universe:
-            try:
-                # Fetch financial metrics for this ticker
-                financial_data_list = get_financial_metrics(ticker=ticker, end_date=end_date, period="ttm", limit=10, api_key=api_key)
+            ticker_data = prefetched_data.get(ticker, {})
+            metrics_list = ticker_data.get("metrics", [])
 
-                if financial_data_list and len(financial_data_list) > 0:
-                    # Use the most recent metrics
-                    financial_data = financial_data_list[0]
-
-                    # Call each analyst with this data
-                    for analyst_info in self.analysts:
-                        analyst_name = analyst_info["name"]
-                        analyst_class = analyst_info["class"]
-
-                        try:
-                            # Instantiate analyst
-                            analyst_instance = analyst_class()
-
-                            # Call analyze with context
-                            context = {"financial_data": financial_data}
-                            result = analyst_instance.analyze(context)
-
-                            # Convert signal to numeric score (-1 to 1)
-                            signal_map = {"bullish": 1.0, "neutral": 0.0, "bearish": -1.0}
-                            numeric_signal = signal_map.get(result.signal, 0.0)
-
-                            # Convert confidence to 0-1 scale
-                            confidence = result.confidence / 100.0
-
-                            signals.append(AnalystSignal(ticker=ticker, analyst=analyst_name, signal=numeric_signal, confidence=confidence, reasoning=result.reasoning))
-
-                            if self.verbose:
-                                print(f"  {ticker} - {analyst_name}: {result.signal} (confidence: {result.confidence}%)")
-
-                        except Exception as e:
-                            if self.verbose:
-                                print(f"  Warning: Analyst {analyst_name} failed for {ticker}: {e}")
-                            continue
-                else:
-                    # No financial data available
-                    if self.verbose:
-                        print(f"  No financial data for {ticker}")
-
-            except Exception as e:
+            if not metrics_list or len(metrics_list) == 0:
                 if self.verbose:
-                    print(f"  Warning: Could not fetch data for {ticker}: {e}")
+                    print(f"  No financial data for {ticker}")
                 continue
 
-        print(f"✓ Collected {len(signals)} signals from {len(self.analysts)} analysts")
+            # Use the most recent metrics
+            financial_data = metrics_list[0]
+
+            # Call each analyst with this data
+            for analyst_info in self.analysts:
+                analyst_name = analyst_info["name"]
+                analyst_class = analyst_info["class"]
+
+                try:
+                    # Instantiate analyst
+                    analyst_instance = analyst_class()
+
+                    # Call analyze with context
+                    context = {"financial_data": financial_data}
+                    result = analyst_instance.analyze(context)
+
+                    # Convert signal to numeric score (-1 to 1)
+                    signal_map = {"bullish": 1.0, "neutral": 0.0, "bearish": -1.0}
+                    numeric_signal = signal_map.get(result.signal, 0.0)
+
+                    # Convert confidence to 0-1 scale
+                    confidence = result.confidence / 100.0
+
+                    signals.append(AnalystSignal(ticker=ticker, analyst=analyst_name, signal=numeric_signal, confidence=confidence, reasoning=result.reasoning))
+
+                    if self.verbose:
+                        print(f"  {ticker} - {analyst_name}: {result.signal} (confidence: {result.confidence}%)")
+
+                except Exception as e:
+                    if self.verbose:
+                        print(f"  Warning: Analyst {analyst_name} failed for {ticker}: {e}")
+                    continue
+
+        print(f"\n✓ Collected {len(signals)} signals from {len(self.analysts)} analysts")
         return signals
 
     def _aggregate_signals(self, signals: List[AnalystSignal]) -> Dict[str, float]:
