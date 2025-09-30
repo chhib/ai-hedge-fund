@@ -612,4 +612,18 @@ The system now operates efficiently at scale with comprehensive financial data i
   ```
 - **System Status**: Portfolio manager now provides clean, informative output with real-time progress tracking matching main.py's user experience.
 
+### Session 40 (Data Fetching Progress Display)
+- **User Request**: "Show a row that shows which ticker's data it is currently fetching... when they are done as they are fetched asynchronously."
+- **Solution**: Enabled parallel data fetching output to show through with ticker-by-ticker progress:
+  - Shows each API call completing with timing: `[0.51s] Fetched prices for MSFT`
+  - Displays parallel execution: multiple tickers complete simultaneously
+  - Total fetch time shown at end: `✅ Total parallel fetch completed in 2.48 seconds`
+- **Implementation**: Removed stdout capture for data fetching phase, letting `parallel_api_wrapper` native output display
+- **Progress Flow**:
+  1. **Data Fetching**: Shows parallel API calls completing with timings per ticker
+  2. **Analyst Execution**: Shows Rich progress display with live status updates
+  3. **Recommendations**: Shows final portfolio analysis
+- **User Experience**: Can now see exactly which tickers are being downloaded and how long each data type takes, providing transparency into the async fetching process.
+- **System Status**: Complete visibility into both data fetching (async parallel) and analyst execution (sequential per ticker) phases.
+
 **IMPORTANT**: Update this log at the end of each work session: note completed steps, new decisions, blockers, and refreshed next actions. Always use session numbers (Session X, Session X+1, etc.) for progress entries. Update the "Last updated" date at the top with the actual current date when making changes.
