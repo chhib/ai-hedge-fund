@@ -151,9 +151,6 @@ class EnhancedPortfolioManager:
                 print("Warning: BORSDATA_API_KEY not found - using neutral signals")
             return signals
 
-        # Start progress display
-        progress.start()
-
         # STEP 1: Pre-populate instrument caches (silent unless verbose)
         from src.tools.api import _borsdata_client, set_ticker_markets
 
@@ -205,10 +202,13 @@ class EnhancedPortfolioManager:
                 sys.stdout = old_stdout
 
         if not prefetched_data:
-            progress.stop()
             if self.verbose:
                 print(f"❌ Error during parallel prefetching")
             return signals
+
+        # Start progress display now (after data fetching)
+        print("")  # Add blank line before progress
+        progress.start()
 
         # STEP 4: Call function-based analysts with AgentState for each ticker
         from src.graph.state import AgentState

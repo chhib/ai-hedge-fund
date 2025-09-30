@@ -5,8 +5,10 @@ from rich.table import Table
 from rich.style import Style
 from rich.text import Text
 from typing import Dict, Optional, Callable, List
+import sys
 
-console = Console()
+# Use stderr for console output to avoid stdout buffering issues
+console = Console(file=sys.stderr, force_terminal=True)
 
 
 class AgentProgress:
@@ -15,7 +17,12 @@ class AgentProgress:
     def __init__(self):
         self.agent_status: Dict[str, Dict[str, str]] = {}
         self.table = Table(show_header=False, box=None, padding=(0, 1))
-        self.live = Live(self.table, console=console, refresh_per_second=4)
+        self.live = Live(
+            self.table,
+            console=console,
+            refresh_per_second=10,  # Increased refresh rate
+            transient=False  # Keep the display after stopping
+        )
         self.started = False
         self.update_handlers: List[Callable[[str, Optional[str], str], None]] = []
 
@@ -62,6 +69,9 @@ class AgentProgress:
             handler(agent_name, ticker, status, analysis, timestamp)
 
         self._refresh_display()
+
+        # Force flush to ensure immediate display
+        sys.stderr.flush()
 
     def get_all_status(self):
         """Get the current status of all agents as a dictionary."""
