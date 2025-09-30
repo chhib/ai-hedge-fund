@@ -205,6 +205,84 @@ class EnhancedPortfolioManager:
 
         # STEP 4: Call function-based analysts with AgentState for each ticker
         from src.graph.state import AgentState
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        def run_analyst(analyst_info, state, ticker, ticker_idx):
+            analyst_name = analyst_info["name"]
+            analyst_func = analyst_info["func"]
+            display_name = analyst_info["display_name"]
+            agent_id = f"{analyst_name}_agent"
+
+            # Calculate next ticker for this analyst
+            next_ticker = self.universe[ticker_idx + 1] if ticker_idx + 1 < len(self.universe) else None
+
+            # Update progress: analyzing
+            progress.update_status(agent_id, ticker, f"Generating {display_name} analysis", next_ticker=next_ticker)
+
+            try:
+                # Suppress agent print statements (like show_agent_reasoning)
+                if not self.verbose:
+                    old_stdout = sys.stdout
+                    sys.stdout = io.StringIO()
+
+                try:
+                    # Call the function-based analyst
+                    result_state = analyst_func(state.copy()) # Use a copy of the state for each thread
+                finally:
+                    if not self.verbose:
+                        sys.stdout = old_stdout
+
+                # Extract analysis from state - agents store in analyst_signals[agent_name_agent]
+                analyst_signals_result = result_state.get("data", {}).get("analyst_signals", {})
+                analysis = analyst_signals_result.get(agent_id, {})
+
+                if not analysis or not isinstance(analysis, dict):
+                    progress.update_status(agent_id, ticker, "Error")
+                    if self.verbose:
+                        print(f"  Warning: No analysis returned by {display_name} for {ticker}")
+                    return None
+
+                # Get the ticker's analysis
+                ticker_analysis = analysis.get(ticker, {})
+                if not ticker_analysis:
+                    progress.update_status(agent_id, ticker, "Error")
+                    if self.verbose:
+                        print(f"  Warning: No analysis for {ticker} from {display_name}")
+                    return None
+
+                # Extract signal info (varies by analyst, but all have these fields)
+                signal_str = ticker_analysis.get("signal", "neutral")
+                confidence_val = ticker_analysis.get("confidence", 0)
+                reasoning = ticker_analysis.get("reasoning", "No reasoning provided")
+
+                # Convert signal to numeric score (-1 to 1)
+                signal_map = {"bullish": 1.0, "neutral": 0.0, "bearish": -1.0}
+                numeric_signal = signal_map.get(signal_str.lower(), 0.0)
+
+                # Normalize confidence to 0-1 scale
+                if isinstance(confidence_val, (int, float)):
+                    confidence = confidence_val / 100.0 if confidence_val > 1 else confidence_val
+                else:
+                    confidence = 0.5
+
+                # Update progress: done (next_ticker is already set from before)
+                progress.update_status(agent_id, ticker, "Done", next_ticker=next_ticker)
+
+                return AnalystSignal(
+                    ticker=ticker,
+                    analyst=analyst_name,
+                    signal=numeric_signal,
+                    confidence=confidence,
+                    reasoning=reasoning
+                )
+
+            except Exception as e:
+                progress.update_status(agent_id, ticker, "Error", next_ticker=next_ticker)
+                if self.verbose:
+                    print(f"\n  Warning: Analyst {display_name} failed for {ticker}: {e}")
+                    import traceback
+                    traceback.print_exc()
+                return None
 
         for ticker_idx, ticker in enumerate(self.universe):
             ticker_data = prefetched_data.get(ticker, {})
@@ -230,83 +308,12 @@ class EnhancedPortfolioManager:
                 }
             }
 
-            # Call each analyst with this state
-            for analyst_idx, analyst_info in enumerate(self.analysts):
-                analyst_name = analyst_info["name"]
-                analyst_func = analyst_info["func"]
-                display_name = analyst_info["display_name"]
-                agent_id = f"{analyst_name}_agent"
-
-                # Calculate next ticker for this analyst
-                next_ticker = self.universe[ticker_idx + 1] if ticker_idx + 1 < len(self.universe) else None
-
-                # Update progress: analyzing
-                progress.update_status(agent_id, ticker, f"Generating {display_name} analysis", next_ticker=next_ticker)
-
-                try:
-                    # Suppress agent print statements (like show_agent_reasoning)
-                    if not self.verbose:
-                        old_stdout = sys.stdout
-                        sys.stdout = io.StringIO()
-
-                    try:
-                        # Call the function-based analyst
-                        result_state = analyst_func(state)
-                    finally:
-                        if not self.verbose:
-                            sys.stdout = old_stdout
-
-                    # Extract analysis from state - agents store in analyst_signals[agent_name_agent]
-                    analyst_signals = result_state.get("data", {}).get("analyst_signals", {})
-                    analysis = analyst_signals.get(agent_id, {})
-
-                    if not analysis or not isinstance(analysis, dict):
-                        progress.update_status(agent_id, ticker, "Error")
-                        if self.verbose:
-                            print(f"  Warning: No analysis returned by {display_name} for {ticker}")
-                        continue
-
-                    # Get the ticker's analysis
-                    ticker_analysis = analysis.get(ticker, {})
-                    if not ticker_analysis:
-                        progress.update_status(agent_id, ticker, "Error")
-                        if self.verbose:
-                            print(f"  Warning: No analysis for {ticker} from {display_name}")
-                        continue
-
-                    # Extract signal info (varies by analyst, but all have these fields)
-                    signal_str = ticker_analysis.get("signal", "neutral")
-                    confidence_val = ticker_analysis.get("confidence", 0)
-                    reasoning = ticker_analysis.get("reasoning", "No reasoning provided")
-
-                    # Convert signal to numeric score (-1 to 1)
-                    signal_map = {"bullish": 1.0, "neutral": 0.0, "bearish": -1.0}
-                    numeric_signal = signal_map.get(signal_str.lower(), 0.0)
-
-                    # Normalize confidence to 0-1 scale
-                    if isinstance(confidence_val, (int, float)):
-                        confidence = confidence_val / 100.0 if confidence_val > 1 else confidence_val
-                    else:
-                        confidence = 0.5
-
-                    signals.append(AnalystSignal(
-                        ticker=ticker,
-                        analyst=analyst_name,
-                        signal=numeric_signal,
-                        confidence=confidence,
-                        reasoning=reasoning
-                    ))
-
-                    # Update progress: done (next_ticker is already set from before)
-                    progress.update_status(agent_id, ticker, "Done", next_ticker=next_ticker)
-
-                except Exception as e:
-                    progress.update_status(agent_id, ticker, "Error", next_ticker=next_ticker)
-                    if self.verbose:
-                        print(f"\n  Warning: Analyst {display_name} failed for {ticker}: {e}")
-                        import traceback
-                        traceback.print_exc()
-                    continue
+            with ThreadPoolExecutor(max_workers=len(self.analysts)) as executor:
+                future_to_analyst = {executor.submit(run_analyst, analyst_info, state, ticker, ticker_idx): analyst_info for analyst_info in self.analysts}
+                for future in as_completed(future_to_analyst):
+                    result = future.result()
+                    if result:
+                        signals.append(result)
 
         # Stop progress display and show summary
         progress.stop()
