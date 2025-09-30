@@ -200,12 +200,12 @@ class EnhancedPortfolioManager:
 
         print(f"✓ Data fetching complete\n")
 
+        # Initialize progress tracking
+        agent_names = [f"{a['name']}_agent" for a in self.analysts]
+        progress.initialize_agents(agent_names, len(self.universe))
+
         # Start progress display for analyst execution
         progress.start()
-
-        # Calculate total analyst calls for progress tracking
-        total_analyst_calls = len(self.analysts) * len(self.universe)
-        completed_calls = 0
 
         # STEP 4: Call function-based analysts with AgentState for each ticker
         from src.graph.state import AgentState
@@ -241,8 +241,11 @@ class EnhancedPortfolioManager:
                 display_name = analyst_info["display_name"]
                 agent_id = f"{analyst_name}_agent"
 
+                # Calculate next ticker for this analyst
+                next_ticker = self.universe[ticker_idx + 1] if ticker_idx + 1 < len(self.universe) else None
+
                 # Update progress: analyzing
-                progress.update_status(agent_id, ticker, "Analyzing")
+                progress.update_status(agent_id, ticker, f"Generating {display_name} analysis", next_ticker=next_ticker)
 
                 try:
                     # Suppress agent print statements (like show_agent_reasoning)
@@ -298,41 +301,11 @@ class EnhancedPortfolioManager:
                         reasoning=reasoning
                     ))
 
-                    # Update progress: done
-                    progress.update_status(agent_id, ticker, "Done")
-
-                    # Update progress counter
-                    completed_calls += 1
-
-                    # Show progress and next up
-                    # Calculate what's next
-                    next_ticker = None
-                    next_analyst = None
-
-                    if analyst_idx + 1 < len(self.analysts):
-                        # More analysts for this ticker
-                        next_analyst = self.analysts[analyst_idx + 1]["display_name"]
-                        next_ticker = ticker
-                    elif ticker_idx + 1 < len(self.universe):
-                        # Next ticker, first analyst
-                        next_ticker = self.universe[ticker_idx + 1]
-                        next_analyst = self.analysts[0]["display_name"]
-
-                    # Build progress bar
-                    bar_length = 20
-                    filled = int(bar_length * completed_calls / total_analyst_calls)
-                    bar = "█" * filled + "░" * (bar_length - filled)
-
-                    # Print progress line (goes to stderr like Rich, won't interfere)
-                    import sys
-                    progress_line = f"\n[{bar}] {completed_calls}/{total_analyst_calls} complete"
-                    if next_ticker and next_analyst:
-                        progress_line += f" | Next: {next_analyst} [{next_ticker}]"
-                    sys.stderr.write(progress_line + "\n")
-                    sys.stderr.flush()
+                    # Update progress: done (next_ticker is already set from before)
+                    progress.update_status(agent_id, ticker, "Done", next_ticker=next_ticker)
 
                 except Exception as e:
-                    progress.update_status(agent_id, ticker, "Error")
+                    progress.update_status(agent_id, ticker, "Error", next_ticker=next_ticker)
                     if self.verbose:
                         print(f"\n  Warning: Analyst {display_name} failed for {ticker}: {e}")
                         import traceback
