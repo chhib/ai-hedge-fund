@@ -28,7 +28,7 @@ load_dotenv()
 @click.option("--universe-tickers", type=str, help="Comma-separated list of global tickers (e.g., AAPL,MSFT,NVDA)")
 @click.option("--universe-nordics", type=str, help="Comma-separated list of Nordic tickers (e.g., HM B,ERIC B,VOLV B)")
 # Analysis configuration
-@click.option("--analysts", type=str, default="all", help='Comma-separated list: warren_buffett, charlie_munger, fundamentals (or "all" for all 3)')
+@click.option("--analysts", type=str, default="all", help='Analyst selection: "all" (16 analysts), "famous" (13 investors), "core" (4 analysts), "basic" (fundamentals only), or comma-separated list')
 @click.option("--model", type=str, default="gpt-4o", help="LLM model to use")
 @click.option("--model-provider", type=click.Choice(["openai", "anthropic", "groq", "ollama"]), help="Model provider (optional, auto-detected from model name)")
 # Position sizing constraints
@@ -61,11 +61,11 @@ def main(portfolio, universe, universe_tickers, universe_nordics, analysts, mode
         python src/portfolio_manager.py --portfolio portfolio.csv --universe-tickers "AAPL,MSFT" --test
     """
 
-    # Test mode overrides
+    # Test mode overrides - use basic analyst for quick validation
     if test:
-        analysts = "warren_buffett"
+        analysts = "basic"
         if verbose:
-            print("🧪 Test mode: Using 1 analyst for quick validation")
+            print("🧪 Test mode: Using fundamentals analyst for quick validation")
 
     # Validate inputs
     if not universe and not universe_tickers and not universe_nordics:
@@ -123,14 +123,32 @@ def main(portfolio, universe, universe_tickers, universe_nordics, analysts, mode
 
     # Parse analysts
     if analysts == "all":
-        analyst_list = ["warren_buffett", "charlie_munger", "fundamentals"]
+        # Use all 16 available analysts from the registry
+        analyst_list = [
+            "warren_buffett", "charlie_munger", "stanley_druckenmiller",
+            "peter_lynch", "ben_graham", "phil_fisher", "bill_ackman",
+            "cathie_wood", "michael_burry", "mohnish_pabrai",
+            "rakesh_jhunjhunwala", "aswath_damodaran", "jim_simons",
+            "fundamentals", "technical", "sentiment", "valuation"
+        ]
     elif analysts == "basic":
         analyst_list = ["fundamentals"]
+    elif analysts == "famous":
+        # Just the famous investor personas
+        analyst_list = [
+            "warren_buffett", "charlie_munger", "stanley_druckenmiller",
+            "peter_lynch", "ben_graham", "phil_fisher", "bill_ackman",
+            "cathie_wood", "michael_burry", "mohnish_pabrai",
+            "rakesh_jhunjhunwala", "aswath_damodaran", "jim_simons"
+        ]
+    elif analysts == "core":
+        # Just the core 4 analysts
+        analyst_list = ["fundamentals", "technical", "sentiment", "valuation"]
     else:
         analyst_list = [a.strip() for a in analysts.split(",")]
 
     if verbose:
-        print(f"✓ Using analysts: {', '.join(analyst_list)}")
+        print(f"✓ Using {len(analyst_list)} analysts: {', '.join(analyst_list)}")
 
     # Initialize portfolio manager
     manager = EnhancedPortfolioManager(portfolio=portfolio_data, universe=universe_list, analysts=analyst_list, model_config={"name": model, "provider": model_provider}, ticker_markets=ticker_markets, verbose=verbose)

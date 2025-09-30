@@ -32,39 +32,70 @@ class EnhancedPortfolioManager:
 
     def _initialize_analysts(self, analyst_names: List[str], model_config: Dict[str, Any]) -> List[Any]:
         """
-        Initialize only the requested analysts from existing codebase
-        This wraps existing analyst classes without modifying them
+        Initialize all requested analysts from the analyst registry
+        Uses function-based agents with AgentState for full LLM-based analysis
         """
-        # Import analysts dynamically to avoid circular dependencies
-        # Note: Only importing analysts with class-based Agent interfaces
-        # Other analysts (druckenmiller, lynch, etc.) are function-based and require LangGraph state
         try:
-            from src.agents.fundamentals import FundamentalsAnalyst
-            from src.agents.warren_buffett import WarrenBuffettAgent
-            from src.agents.charlie_munger import CharlieMungerAgent
+            from src.utils.analysts import ANALYST_CONFIG
 
-            analyst_map = {
-                # Basic class-based analyst
-                "fundamentals": FundamentalsAnalyst,
-                # Famous investor personas with class-based interfaces
-                "warren_buffett": WarrenBuffettAgent,
-                "buffett": WarrenBuffettAgent,
-                "charlie_munger": CharlieMungerAgent,
-                "munger": CharlieMungerAgent,
+            # Map of friendly names to registry keys
+            name_aliases = {
+                # Famous investors
+                "warren_buffett": "warren_buffett",
+                "buffett": "warren_buffett",
+                "charlie_munger": "charlie_munger",
+                "munger": "charlie_munger",
+                "stanley_druckenmiller": "stanley_druckenmiller",
+                "druckenmiller": "stanley_druckenmiller",
+                "peter_lynch": "peter_lynch",
+                "lynch": "peter_lynch",
+                "ben_graham": "ben_graham",
+                "graham": "ben_graham",
+                "phil_fisher": "phil_fisher",
+                "fisher": "phil_fisher",
+                "bill_ackman": "bill_ackman",
+                "ackman": "bill_ackman",
+                "cathie_wood": "cathie_wood",
+                "wood": "cathie_wood",
+                "michael_burry": "michael_burry",
+                "burry": "michael_burry",
+                "mohnish_pabrai": "mohnish_pabrai",
+                "pabrai": "mohnish_pabrai",
+                "rakesh_jhunjhunwala": "rakesh_jhunjhunwala",
+                "jhunjhunwala": "rakesh_jhunjhunwala",
+                "aswath_damodaran": "aswath_damodaran",
+                "damodaran": "aswath_damodaran",
+                "jim_simons": "jim_simons",
+                "simons": "jim_simons",
+                # Core analysts
+                "fundamentals": "fundamentals_analyst",
+                "fundamentals_analyst": "fundamentals_analyst",
+                "technical": "technical_analyst",
+                "technical_analyst": "technical_analyst",
+                "sentiment": "sentiment_analyst",
+                "sentiment_analyst": "sentiment_analyst",
+                "valuation": "valuation_analyst",
+                "valuation_analyst": "valuation_analyst",
             }
 
             analysts = []
             for name in analyst_names:
                 name_lower = name.lower().strip()
-                if name_lower in analyst_map:
-                    # These are class-based analysts that can be instantiated
-                    analysts.append({"name": name_lower, "class": analyst_map[name_lower]})
+                registry_key = name_aliases.get(name_lower, name_lower)
+
+                if registry_key in ANALYST_CONFIG:
+                    config = ANALYST_CONFIG[registry_key]
+                    analysts.append({
+                        "name": registry_key,
+                        "display_name": config["display_name"],
+                        "func": config["agent_func"]
+                    })
                 else:
                     print(f"Warning: Unknown analyst '{name}' - skipping")
 
             return analysts
         except ImportError as e:
-            print(f"Warning: Could not import all analysts: {e}")
+            print(f"Warning: Could not import analyst registry: {e}")
             return []
 
     def generate_rebalancing_recommendations(self, max_holdings: int = 8, max_position: float = 0.25, min_position: float = 0.05, min_trade_size: float = 500) -> Dict[str, Any]:
@@ -134,22 +165,23 @@ class EnhancedPortfolioManager:
         # STEP 2: Set ticker market routing (Nordic vs Global API)
         set_ticker_markets(self.ticker_markets)
 
-        # STEP 3: Parallel data prefetching (same as main.py lines 114-128)
+        # STEP 3: Parallel data prefetching - fetch ALL data needed by analysts
         from src.data.parallel_api_wrapper import run_parallel_fetch_ticker_data
 
         end_date = datetime.now().strftime("%Y-%m-%d")
+        start_date = (datetime.now().replace(year=datetime.now().year - 1)).strftime("%Y-%m-%d")
 
-        print(f"Prefetching data for all {len(self.universe)} tickers in parallel...")
+        print(f"Prefetching comprehensive data for all {len(self.universe)} tickers in parallel...")
         try:
             prefetched_data = run_parallel_fetch_ticker_data(
                 tickers=self.universe,
                 end_date=end_date,
-                include_prices=False,
+                include_prices=True,
                 include_metrics=True,
-                include_line_items=False,
-                include_insider_trades=False,
-                include_events=False,
-                include_market_caps=False,
+                include_line_items=True,
+                include_insider_trades=True,
+                include_events=True,
+                include_market_caps=True,
                 ticker_markets=self.ticker_markets,
             )
             print(f"✅ Parallel prefetching completed for {len(prefetched_data)} tickers\n")
@@ -157,47 +189,91 @@ class EnhancedPortfolioManager:
             print(f"❌ Error during parallel prefetching: {e}")
             return signals
 
-        # STEP 4: Extract metrics and call analysts
+        # STEP 4: Call function-based analysts with AgentState for each ticker
+        from src.graph.state import AgentState
+
         for ticker in self.universe:
             ticker_data = prefetched_data.get(ticker, {})
-            metrics_list = ticker_data.get("metrics", [])
 
-            if not metrics_list or len(metrics_list) == 0:
-                if self.verbose:
-                    print(f"  No financial data for {ticker}")
-                continue
+            # Create AgentState with prefetched data (same pattern as main.py)
+            state: AgentState = {
+                "messages": [],
+                "data": {
+                    "tickers": [ticker],
+                    "ticker": ticker,
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "api_key": api_key,
+                    "model_config": self.model_config,
+                    "prefetched_financial_data": {
+                        ticker: ticker_data
+                    },
+                    "analyst_signals": {},  # Required by some analysts
+                },
+                "metadata": {
+                    "portfolio_manager_mode": True,
+                    "show_reasoning": self.verbose,  # Required by agents
+                }
+            }
 
-            # Use the most recent metrics
-            financial_data = metrics_list[0]
-
-            # Call each analyst with this data
+            # Call each analyst with this state
             for analyst_info in self.analysts:
                 analyst_name = analyst_info["name"]
-                analyst_class = analyst_info["class"]
+                analyst_func = analyst_info["func"]
+                display_name = analyst_info["display_name"]
 
                 try:
-                    # Instantiate analyst
-                    analyst_instance = analyst_class()
+                    # Call the function-based analyst
+                    result_state = analyst_func(state)
 
-                    # Call analyze with context
-                    context = {"financial_data": financial_data}
-                    result = analyst_instance.analyze(context)
+                    # Extract analysis from state - agents store in analyst_signals[agent_name_agent]
+                    agent_id = f"{analyst_name}_agent"
+                    analyst_signals = result_state.get("data", {}).get("analyst_signals", {})
+                    analysis = analyst_signals.get(agent_id, {})
+
+                    if not analysis or not isinstance(analysis, dict):
+                        if self.verbose:
+                            print(f"  Warning: No analysis returned by {display_name} for {ticker}")
+                        continue
+
+                    # Get the ticker's analysis
+                    ticker_analysis = analysis.get(ticker, {})
+                    if not ticker_analysis:
+                        if self.verbose:
+                            print(f"  Warning: No analysis for {ticker} from {display_name}")
+                        continue
+
+                    # Extract signal info (varies by analyst, but all have these fields)
+                    signal_str = ticker_analysis.get("signal", "neutral")
+                    confidence_val = ticker_analysis.get("confidence", 0)
+                    reasoning = ticker_analysis.get("reasoning", "No reasoning provided")
 
                     # Convert signal to numeric score (-1 to 1)
                     signal_map = {"bullish": 1.0, "neutral": 0.0, "bearish": -1.0}
-                    numeric_signal = signal_map.get(result.signal, 0.0)
+                    numeric_signal = signal_map.get(signal_str.lower(), 0.0)
 
-                    # Convert confidence to 0-1 scale
-                    confidence = result.confidence / 100.0
+                    # Normalize confidence to 0-1 scale
+                    if isinstance(confidence_val, (int, float)):
+                        confidence = confidence_val / 100.0 if confidence_val > 1 else confidence_val
+                    else:
+                        confidence = 0.5
 
-                    signals.append(AnalystSignal(ticker=ticker, analyst=analyst_name, signal=numeric_signal, confidence=confidence, reasoning=result.reasoning))
+                    signals.append(AnalystSignal(
+                        ticker=ticker,
+                        analyst=analyst_name,
+                        signal=numeric_signal,
+                        confidence=confidence,
+                        reasoning=reasoning
+                    ))
 
                     if self.verbose:
-                        print(f"  {ticker} - {analyst_name}: {result.signal} (confidence: {result.confidence}%)")
+                        print(f"  {ticker} - {display_name}: {signal_str} (confidence: {int(confidence * 100)}%)")
 
                 except Exception as e:
                     if self.verbose:
-                        print(f"  Warning: Analyst {analyst_name} failed for {ticker}: {e}")
+                        print(f"  Warning: Analyst {display_name} failed for {ticker}: {e}")
+                        import traceback
+                        traceback.print_exc()
                     continue
 
         print(f"\n✓ Collected {len(signals)} signals from {len(self.analysts)} analysts")
