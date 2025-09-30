@@ -240,12 +240,18 @@ poetry run python src/portfolio_manager.py \
 - `--portfolio`: Path to your current portfolio CSV file
 - `--universe-tickers`: Comma-separated global tickers to consider
 - `--universe-nordics`: Comma-separated Nordic tickers to consider
-- `--analysts`: Comma-separated analyst list or "all" for all available analysts
+- `--analysts`: Analyst selection (see options below)
+  - `"all"` - All 17 analysts with full LLM analysis (comprehensive consensus)
+  - `"famous"` - 13 famous investor personas (Buffett, Munger, Druckenmiller, etc.)
+  - `"core"` - 4 core analysts (Fundamentals, Technical, Sentiment, Valuation)
+  - `"basic"` - Fundamentals only (fast testing)
+  - Comma-separated list (e.g., `"warren_buffett,peter_lynch,fundamentals"`)
 - `--max-holdings`: Maximum number of positions (default: 8)
 - `--max-position`: Maximum position size as decimal (default: 0.25 = 25%)
 - `--min-position`: Minimum position size as decimal (default: 0.05 = 5%)
 - `--verbose`: Show detailed analysis from each analyst
 - `--dry-run`: Show recommendations without saving output file
+- `--test`: Quick test mode using fundamentals analyst only
 
 **Portfolio CSV Format:**
 ```csv

@@ -553,4 +553,33 @@ The system now operates efficiently at scale with comprehensive financial data i
   - Optional verbose mode displays individual analyst signals for each ticker
 - **System Status**: Portfolio management CLI feature complete and fully tested on branch `feature/portfolio-cli-management`. Ready for merge to main after final review.
 
+### Session 38 (All Analysts Integration)
+- **Issue Identified**: Initial implementation only supported 3 analysts (Warren Buffett, Charlie Munger, Fundamentals) when `--analysts all` should include ALL available analysts.
+- **Root Cause**: Was using limited class-based analyst wrappers instead of full function-based agents from the analyst registry.
+- **Solution Implemented**: Refactored `EnhancedPortfolioManager` to use function-based agents with AgentState:
+  - Import all 17 analysts from `src.utils.analysts.ANALYST_CONFIG`
+  - Create proper AgentState with prefetched data for each ticker
+  - Call analyst functions and extract results from `state["data"]["analyst_signals"][agent_id]`
+  - Added required metadata fields: `show_reasoning`, `analyst_signals`
+- **Comprehensive Data Prefetching**: Extended to include all data needed by analysts:
+  - prices, metrics, line_items, insider_trades, events, market_caps
+  - All prefetched in parallel before analyst calls (same pattern as main.py)
+- **Analyst Selection Presets Added**:
+  - `"all"` - All 17 analysts (13 famous investors + 4 core analysts)
+  - `"famous"` - 13 famous investor personas only
+  - `"core"` - 4 core analysts (Fundamentals, Technical, Sentiment, Valuation)
+  - `"basic"` - Fundamentals only (for fast testing)
+  - Custom comma-separated lists supported
+- **Name Aliases Implemented**: Friendly names map to registry keys (e.g., "buffett" → "warren_buffett", "druckenmiller" → "stanley_druckenmiller")
+- **All 17 Analysts Supported**:
+  - Famous Investors (13): Warren Buffett, Charlie Munger, Stanley Druckenmiller, Peter Lynch, Ben Graham, Phil Fisher, Bill Ackman, Cathie Wood, Michael Burry, Mohnish Pabrai, Rakesh Jhunjhunwala, Aswath Damodaran, Jim Simons
+  - Core Analysts (4): Fundamentals, Technical, Sentiment, Valuation
+- **Testing Results**:
+  - Single ticker with all 17 analysts: ~2 minutes (full LLM analysis)
+  - Single ticker with 13 famous analysts: ~1.5 minutes
+  - Single ticker with 3 analysts: ~30 seconds
+  - All signals extracted correctly with proper confidence scores
+- **Performance**: Uses full LLM-based analysis (not simple heuristics), providing same quality as main.py but aggregated for portfolio decisions.
+- **System Status**: Portfolio manager now supports complete analyst ecosystem with full LLM intelligence.
+
 **IMPORTANT**: Update this log at the end of each work session: note completed steps, new decisions, blockers, and refreshed next actions. Always use session numbers (Session X, Session X+1, etc.) for progress entries. Update the "Last updated" date at the top with the actual current date when making changes.
