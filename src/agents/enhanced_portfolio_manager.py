@@ -178,36 +178,29 @@ class EnhancedPortfolioManager:
         end_date = datetime.now().strftime("%Y-%m-%d")
         start_date = (datetime.now().replace(year=datetime.now().year - 1)).strftime("%Y-%m-%d")
 
-        # Suppress verbose API fetching output unless verbose mode
-        if not self.verbose:
-            # Capture stdout to suppress parallel fetching prints
-            old_stdout = sys.stdout
-            sys.stdout = io.StringIO()
+        # Let parallel fetching output show through (it shows ticker-by-ticker progress)
+        print(f"📥 Fetching data for {len(self.universe)} tickers...")
 
-        try:
-            prefetched_data = run_parallel_fetch_ticker_data(
-                tickers=self.universe,
-                end_date=end_date,
-                include_prices=True,
-                include_metrics=True,
-                include_line_items=True,
-                include_insider_trades=True,
-                include_events=True,
-                include_market_caps=True,
-                ticker_markets=self.ticker_markets,
-            )
-        finally:
-            if not self.verbose:
-                # Restore stdout
-                sys.stdout = old_stdout
+        prefetched_data = run_parallel_fetch_ticker_data(
+            tickers=self.universe,
+            end_date=end_date,
+            include_prices=True,
+            include_metrics=True,
+            include_line_items=True,
+            include_insider_trades=True,
+            include_events=True,
+            include_market_caps=True,
+            ticker_markets=self.ticker_markets,
+        )
 
         if not prefetched_data:
             if self.verbose:
                 print(f"❌ Error during parallel prefetching")
             return signals
 
-        # Start progress display now (after data fetching)
-        print("")  # Add blank line before progress
+        print(f"✓ Data fetching complete\n")
+
+        # Start progress display for analyst execution
         progress.start()
 
         # STEP 4: Call function-based analysts with AgentState for each ticker
