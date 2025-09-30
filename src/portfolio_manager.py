@@ -10,10 +10,14 @@ from datetime import datetime
 from pathlib import Path
 
 import click
+from dotenv import load_dotenv
 
 from src.agents.enhanced_portfolio_manager import EnhancedPortfolioManager
 from src.utils.output_formatter import display_results, format_as_portfolio_csv
 from src.utils.portfolio_loader import load_portfolio, load_universe
+
+# Load environment variables from .env file
+load_dotenv()
 
 
 @click.command()

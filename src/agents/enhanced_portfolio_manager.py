@@ -110,7 +110,6 @@ class EnhancedPortfolioManager:
 
         # Import financial data fetching
         from src.tools.api import get_financial_metrics
-        from src.utils.data_cache import get_cached_or_fetch_financial_metrics
         import os
 
         api_key = os.getenv("BORSDATA_API_KEY")
@@ -118,13 +117,19 @@ class EnhancedPortfolioManager:
             print("Warning: BORSDATA_API_KEY not found - using neutral signals")
             return signals
 
+        # Use today's date as end_date
+        end_date = datetime.now().strftime("%Y-%m-%d")
+
         # For each ticker, collect signals from all analysts
         for ticker in self.universe:
             try:
                 # Fetch financial metrics for this ticker
-                financial_data = get_cached_or_fetch_financial_metrics(api_key, ticker)
+                financial_data_list = get_financial_metrics(ticker=ticker, end_date=end_date, period="ttm", limit=10, api_key=api_key)
 
-                if financial_data:
+                if financial_data_list and len(financial_data_list) > 0:
+                    # Use the most recent metrics
+                    financial_data = financial_data_list[0]
+
                     # Call each analyst with this data
                     for analyst_info in self.analysts:
                         analyst_name = analyst_info["name"]
@@ -145,12 +150,14 @@ class EnhancedPortfolioManager:
                             # Convert confidence to 0-1 scale
                             confidence = result.confidence / 100.0
 
-                            signals.append(
-                                AnalystSignal(ticker=ticker, analyst=analyst_name, signal=numeric_signal, confidence=confidence, reasoning=result.reasoning)
-                            )
+                            signals.append(AnalystSignal(ticker=ticker, analyst=analyst_name, signal=numeric_signal, confidence=confidence, reasoning=result.reasoning))
+
+                            if self.verbose:
+                                print(f"  {ticker} - {analyst_name}: {result.signal} (confidence: {result.confidence}%)")
 
                         except Exception as e:
-                            print(f"Warning: Analyst {analyst_name} failed for {ticker}: {e}")
+                            if self.verbose:
+                                print(f"  Warning: Analyst {analyst_name} failed for {ticker}: {e}")
                             continue
                 else:
                     # No financial data available
@@ -158,7 +165,8 @@ class EnhancedPortfolioManager:
                         print(f"  No financial data for {ticker}")
 
             except Exception as e:
-                print(f"Warning: Could not fetch data for {ticker}: {e}")
+                if self.verbose:
+                    print(f"  Warning: Could not fetch data for {ticker}: {e}")
                 continue
 
         print(f"✓ Collected {len(signals)} signals from {len(self.analysts)} analysts")
