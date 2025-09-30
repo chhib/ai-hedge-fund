@@ -217,6 +217,7 @@ class CLIInputs:
     ticker_markets: dict[str, str] = None  # Map ticker -> "Nordic" or "Global"
     show_reasoning: bool = False
     show_agent_graph: bool = False
+    verbose: bool = False
     raw_args: Optional[argparse.Namespace] = None
 
 
@@ -258,6 +259,9 @@ def parse_cli_inputs(
         parser.add_argument("--show-reasoning", action="store_true", help="Show reasoning from each agent")
     if include_graph_flag:
         parser.add_argument("--show-agent-graph", action="store_true", help="Show the agent graph")
+
+    # Verbose logging flag
+    parser.add_argument("--verbose", action="store_true", help="Show detailed logging output")
 
     # Model selection flags
     parser.add_argument("--model-name", type=str, help="The name of the LLM model to use (e.g., gpt-4, claude-3-opus-20240229)")
@@ -329,6 +333,7 @@ def parse_cli_inputs(
         ticker_markets=ticker_markets,
         show_reasoning=getattr(args, "show_reasoning", False),
         show_agent_graph=getattr(args, "show_agent_graph", False),
+        verbose=getattr(args, "verbose", False),
         raw_args=args,
     )
 

@@ -50,6 +50,8 @@ from src.tools.api import (
     set_ticker_markets,
     search_line_items,
 )
+from src.utils.logger import vprint
+from src.utils.progress import progress
 
 
 async def _run_in_thread_pool(func, *args, **kwargs):
@@ -73,9 +75,9 @@ async def _timed_run_in_thread_pool(func, data_type, *args, **kwargs):
     
     # The result can be an exception if gather(return_exceptions=True) is used
     if isinstance(result, Exception):
-        print(f"  - [ ERROR ] Fetched {data_type:<15} for {ticker}: {type(result).__name__}")
+        vprint(f"  - [ ERROR ] Fetched {data_type:<15} for {ticker}: {type(result).__name__}")
     else:
-        print(f"  - [{duration:5.2f}s] Fetched {data_type:<15} for {ticker}")
+        vprint(f"  - [{duration:5.2f}s] Fetched {data_type:<15} for {ticker}")
     return result
 
 
@@ -283,6 +285,7 @@ async def parallel_fetch_ticker_data(
     ticker_markets: Dict[str, str] = None,
     price_days: int = 30,
     api_key: Optional[str] = None,
+    progress_callback: Optional[callable] = None,
 ) -> Dict[str, Dict[str, Any]]:
     """
     Fetch comprehensive data for multiple tickers in parallel.
@@ -351,20 +354,50 @@ async def parallel_fetch_ticker_data(
         # DO NOT include market_caps here, it will be derived from metrics
 
     # Execute all tasks in parallel
-    print(f"⚡ Executing {len(tasks)} parallel API calls for {len(tickers)} tickers...")
+    vprint(f"⚡ Executing {len(tasks)} parallel API calls for {len(tickers)} tickers...")
     start_time = time.time()
 
-    results = await asyncio.gather(*tasks, return_exceptions=True)
+    # Initialize progress for prefetching
+    total_tasks = len(tasks)
+    completed_tasks = 0
+
+    # Update progress as tasks complete
+    async def task_wrapper(ticker, data_type, coro):
+        nonlocal completed_tasks
+        try:
+            result = await coro
+            return (ticker, data_type, result)
+        finally:
+            completed_tasks += 1
+            if progress_callback:
+                progress_callback(completed_tasks, total_tasks, ticker)
+            else:
+                progress.update_prefetch_status(completed_tasks, total_tasks, ticker)
+
+    # Wrap tasks for progress tracking
+    progress_wrapped_tasks = []
+    for i, task in enumerate(tasks):
+        ticker, data_type = task_mapping[i]
+        progress_wrapped_tasks.append(task_wrapper(ticker, data_type, task))
+
+    results_with_info = await asyncio.gather(*progress_wrapped_tasks, return_exceptions=True)
 
     end_time = time.time()
-    print(f"✅ Total parallel fetch completed in {end_time - start_time:.2f} seconds")
+    vprint(f"✅ Total parallel fetch completed in {end_time - start_time:.2f} seconds")
 
     # Organize results by ticker
     ticker_data = {ticker: {} for ticker in tickers}
 
-    for (ticker, data_type), result in zip(task_mapping, results):
+    for item in results_with_info:
+        if isinstance(item, Exception):
+            # This case might be complex to handle if we don't know which task failed.
+            # For now, we log a general error.
+            vprint(f"⚠️  An error occurred during parallel fetching: {item}")
+            continue
+        
+        ticker, data_type, result = item
         if isinstance(result, Exception):
-            print(f"⚠️  Error fetching {data_type} for {ticker}: {result}")
+            vprint(f"⚠️  Error fetching {data_type} for {ticker}: {result}")
             ticker_data[ticker][data_type] = []
         else:
             ticker_data[ticker][data_type] = result
@@ -416,7 +449,7 @@ def run_parallel_fetch_market_caps(tickers: List[str], end_date: str, **kwargs) 
     return asyncio.run(parallel_fetch_market_caps(tickers, end_date, **kwargs))
 
 
-def run_parallel_fetch_ticker_data(tickers: List[str], end_date: str, **kwargs) -> Dict[str, Dict[str, Any]]:
+def run_parallel_fetch_ticker_data(tickers: List[str], end_date: str, progress_callback: Optional[callable] = None, **kwargs) -> Dict[str, Dict[str, Any]]:
     """
     Synchronous wrapper for parallel_fetch_ticker_data.
 
@@ -435,7 +468,7 @@ def run_parallel_fetch_ticker_data(tickers: List[str], end_date: str, **kwargs) 
         # data["MSFT"]["metrics"]  # List of FinancialMetrics objects
         # data["ERIC B"]["insider_trades"]  # List of InsiderTrade objects
     """
-    return asyncio.run(parallel_fetch_ticker_data(tickers, end_date, **kwargs))
+    return asyncio.run(parallel_fetch_ticker_data(tickers, end_date, progress_callback=progress_callback, **kwargs))
 
 
 __all__ = [

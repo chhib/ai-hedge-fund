@@ -25,6 +25,7 @@ def valuation_analyst_agent(state: AgentState, agent_id: str = "valuation_analys
     data = state["data"]
     end_date = data["end_date"]
     tickers = data["tickers"]
+    next_ticker = data.get("next_ticker")  # For progress tracking
     api_key = get_api_key_from_state(state, "BORSDATA_API_KEY")
     valuation_analysis: dict[str, dict] = {}
 
@@ -211,7 +212,7 @@ def valuation_analyst_agent(state: AgentState, agent_id: str = "valuation_analys
             "confidence": confidence,
             "reasoning": reasoning,
         }
-        progress.update_status(agent_id, ticker, "Done", analysis=json.dumps(reasoning, indent=4))
+        progress.update_status(agent_id, ticker, "Done", analysis=json.dumps(reasoning, indent=4), next_ticker=next_ticker)
 
     # ---- Emit message (for LLM tool chain) ----
     msg = HumanMessage(content=json.dumps(valuation_analysis), name=agent_id)

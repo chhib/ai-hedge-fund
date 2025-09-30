@@ -36,6 +36,7 @@ def michael_burry_agent(state: AgentState, agent_id: str = "michael_burry_agent"
     data = state["data"]
     end_date: str = data["end_date"]  # YYYY‑MM‑DD
     tickers: list[str] = data["tickers"]
+    next_ticker = data.get("next_ticker")  # For progress tracking
 
     # We look one year back for insider trades / calendar catalysts
     start_date = (datetime.fromisoformat(end_date) - timedelta(days=365)).date().isoformat()
@@ -143,7 +144,7 @@ def michael_burry_agent(state: AgentState, agent_id: str = "michael_burry_agent"
             "reasoning": burry_output.reasoning,
         }
 
-        progress.update_status(agent_id, ticker, "Done", analysis=burry_output.reasoning)
+        progress.update_status(agent_id, ticker, "Done", analysis=burry_output.reasoning, next_ticker=next_ticker)
 
     # ----------------------------------------------------------------------
     # Return to the graph

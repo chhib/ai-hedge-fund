@@ -45,6 +45,7 @@ def technical_analyst_agent(state: AgentState, agent_id: str = "technical_analys
     start_date = data["start_date"]
     end_date = data["end_date"]
     tickers = data["tickers"]
+    next_ticker = data.get("next_ticker")  # For progress tracking
     api_key = get_api_key_from_state(state, "BORSDATA_API_KEY")
     # Initialize analysis for each ticker
     technical_analysis = {}
@@ -136,7 +137,7 @@ def technical_analyst_agent(state: AgentState, agent_id: str = "technical_analys
                 },
             },
         }
-        progress.update_status(agent_id, ticker, "Done", analysis=json.dumps(technical_analysis, indent=4))
+        progress.update_status(agent_id, ticker, "Done", analysis=json.dumps(technical_analysis, indent=4), next_ticker=next_ticker)
         any_ticker_succeeded = True
 
     # Create the technical analyst message

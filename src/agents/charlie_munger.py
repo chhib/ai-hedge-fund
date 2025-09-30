@@ -104,6 +104,7 @@ def charlie_munger_agent(state: AgentState, agent_id: str = "charlie_munger_agen
     data = state["data"]
     end_date = data["end_date"]
     tickers = data["tickers"]
+    next_ticker = data.get("next_ticker")  # For progress tracking
     api_key = get_api_key_from_state(state, "BORSDATA_API_KEY")
     analysis_data = {}
     munger_analysis = {}
@@ -217,7 +218,7 @@ def charlie_munger_agent(state: AgentState, agent_id: str = "charlie_munger_agen
             "reasoning": munger_output.reasoning
         }
         
-        progress.update_status(agent_id, ticker, "Done", analysis=munger_output.reasoning)
+        progress.update_status(agent_id, ticker, "Done", analysis=munger_output.reasoning, next_ticker=next_ticker)
     
     # Wrap results in a single message for the chain
     message = HumanMessage(

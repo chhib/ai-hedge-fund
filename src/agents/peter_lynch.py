@@ -47,6 +47,7 @@ def peter_lynch_agent(state: AgentState, agent_id: str = "peter_lynch_agent"):
     data = state["data"]
     end_date = data["end_date"]
     tickers = data["tickers"]
+    next_ticker = data.get("next_ticker")  # For progress tracking
     api_key = get_api_key_from_state(state, "BORSDATA_API_KEY")
     analysis_data = {}
     lynch_analysis = {}
@@ -158,7 +159,7 @@ def peter_lynch_agent(state: AgentState, agent_id: str = "peter_lynch_agent"):
             "reasoning": lynch_output.reasoning,
         }
 
-        progress.update_status(agent_id, ticker, "Done", analysis=lynch_output.reasoning)
+        progress.update_status(agent_id, ticker, "Done", analysis=lynch_output.reasoning, next_ticker=next_ticker)
 
     # Wrap up results
     message = HumanMessage(content=json.dumps(lynch_analysis), name=agent_id)

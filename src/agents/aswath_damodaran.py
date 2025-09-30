@@ -37,6 +37,7 @@ def aswath_damodaran_agent(state: AgentState, agent_id: str = "aswath_damodaran_
     data      = state["data"]
     end_date  = data["end_date"]
     tickers   = data["tickers"]
+    next_ticker = data.get("next_ticker")  # For progress tracking
     api_key  = get_api_key_from_state(state, "BORSDATA_API_KEY")
 
     analysis_data: dict[str, dict] = {}
@@ -125,7 +126,7 @@ def aswath_damodaran_agent(state: AgentState, agent_id: str = "aswath_damodaran_
 
         damodaran_signals[ticker] = damodaran_output.model_dump()
 
-        progress.update_status(agent_id, ticker, "Done", analysis=damodaran_output.reasoning)
+        progress.update_status(agent_id, ticker, "Done", analysis=damodaran_output.reasoning, next_ticker=next_ticker)
 
     # ─── Push message back to graph state ──────────────────────────────────────
     message = HumanMessage(content=json.dumps(damodaran_signals), name=agent_id)

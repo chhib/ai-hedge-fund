@@ -10,6 +10,7 @@ from typing_extensions import Literal
 from src.tools.api import get_financial_metrics, get_market_cap, search_line_items
 from src.utils.llm import call_llm
 from src.utils.progress import progress
+from src.utils.logger import vprint
 
 class JimSimonsSignal(BaseModel):
     signal: Literal["bullish", "bearish", "neutral"]
@@ -21,13 +22,14 @@ def jim_simons_agent(state: AgentState):
     data = state["data"]
     end_date = data["end_date"]
     tickers = data["tickers"]
+    next_ticker = data.get("next_ticker")  # For progress tracking
 
     # Collect all analysis for systematic processing
     analysis_data = {}
     simons_analysis = {}
 
     for ticker in tickers:
-        print(f"{datetime.now()} - Starting Jim Simons agent for {ticker}")
+        vprint(f"{datetime.now()} - Starting Jim Simons agent for {ticker}")
 
         # Core Data Collection - use prefetched data instead of fresh API calls
         progress.update_status("jim_simons_agent", ticker, "Using prefetched financial data")
@@ -159,7 +161,7 @@ def jim_simons_agent(state: AgentState):
 
         simons_analysis[ticker] = simons_output.model_dump()
 
-        progress.update_status("jim_simons_agent", ticker, "Done", analysis=simons_output.reasoning)
+        progress.update_status("jim_simons_agent", ticker, "Done", analysis=simons_output.reasoning, next_ticker=next_ticker)
 
     # ─── Push message back to graph state ──────────────────────────────────────
     message = HumanMessage(content=json.dumps(simons_analysis), name="jim_simons_agent")
@@ -169,7 +171,7 @@ def jim_simons_agent(state: AgentState):
 
     state["data"]["analyst_signals"]["jim_simons_agent"] = simons_analysis
     progress.update_status("jim_simons_agent", None, "Done")
-    print(f"{datetime.now()} - Finished Jim Simons agent for {ticker}")
+    vprint(f"{datetime.now()} - Finished Jim Simons agent for {ticker}")
 
     return {"messages": [message], "data": state["data"]}
 

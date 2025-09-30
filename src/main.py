@@ -16,6 +16,7 @@ from src.utils.display import print_trading_output
 from src.utils.analysts import ANALYST_ORDER, get_analyst_nodes
 from src.utils.progress import progress
 from src.utils.visualize import save_graph_as_png
+from src.utils.logger import set_verbose, vprint
 from src.tools.api import set_ticker_markets, get_financial_metrics, get_market_cap, search_line_items
 from src.utils.api_key import get_api_key_from_state
 from src.data.parallel_api_wrapper import run_parallel_fetch_ticker_data
@@ -66,7 +67,11 @@ def run_hedge_fund(
     exchange_rate_service: "ExchangeRateService" = None,
     target_currency: str = "USD",
     ticker_markets: dict[str, str] = None,
+    verbose: bool = False,
 ):
+    # Set verbose logging
+    set_verbose(verbose)
+
     # Start progress tracking
     progress.start()
 
@@ -80,35 +85,35 @@ def run_hedge_fund(
         # PERFORMANCE OPTIMIZATION: Pre-initialize expensive shared resources
         import time
         init_start = time.time()
-        print(f"[{time.strftime('%H:%M:%S')}] Pre-initializing shared resources...")
+        vprint(f"[{time.strftime('%H:%M:%S')}] Pre-initializing shared resources...")
 
         # Pre-initialize currency service and BorsdataClient caches to avoid redundant API calls
         from src.tools.api import _borsdata_client
 
         # Pre-populate instrument caches (both Nordic and Global) to avoid repeated fetches
-        print(f"[{time.strftime('%H:%M:%S')}] Pre-populating instrument caches...")
+        vprint(f"[{time.strftime('%H:%M:%S')}] Pre-populating instrument caches...")
         try:
             # Pre-populate Nordic instruments cache
             _borsdata_client.get_instruments(force_refresh=False)
-            print(f"[{time.strftime('%H:%M:%S')}] ✓ Nordic instruments cache populated")
+            vprint(f"[{time.strftime('%H:%M:%S')}] ✓ Nordic instruments cache populated")
 
             # Pre-populate Global instruments cache
             _borsdata_client.get_all_instruments(force_refresh=False)
-            print(f"[{time.strftime('%H:%M:%S')}] ✓ Global instruments cache populated")
+            vprint(f"[{time.strftime('%H:%M:%S')}] ✓ Global instruments cache populated")
         except Exception as e:
-            print(f"[{time.strftime('%H:%M:%S')}] ⚠️ Warning: Could not pre-populate instrument caches: {e}")
+            vprint(f"[{time.strftime('%H:%M:%S')}] ⚠️ Warning: Could not pre-populate instrument caches: {e}")
 
         if exchange_rate_service:
-            print(f"[{time.strftime('%H:%M:%S')}] Initializing currency mapping...")
+            vprint(f"[{time.strftime('%H:%M:%S')}] Initializing currency mapping...")
             exchange_rate_service._initialize_currency_map()  # Do this once globally
-            print(f"[{time.strftime('%H:%M:%S')}] ✓ Currency mapping initialized")
+            vprint(f"[{time.strftime('%H:%M:%S')}] ✓ Currency mapping initialized")
 
         init_end = time.time()
-        print(f"[{time.strftime('%H:%M:%S')}] ✅ Shared resources initialized ({init_end - init_start:.2f}s)")
+        vprint(f"[{time.strftime('%H:%M:%S')}] ✅ Shared resources initialized ({init_end - init_start:.2f}s)")
 
         # Now prefetch ALL data for ALL tickers in parallel
         prefetch_start = time.time()
-        print(f"[{time.strftime('%H:%M:%S')}] Prefetching data for all tickers in parallel...")
+        vprint(f"[{time.strftime('%H:%M:%S')}] Prefetching data for all tickers in parallel...")
 
         # Use the new parallel fetcher
         all_prefetched_data = run_parallel_fetch_ticker_data(
@@ -125,12 +130,23 @@ def run_hedge_fund(
         )
 
         prefetch_end = time.time()
-        print(f"[{time.strftime('%H:%M:%S')}] ✅ Parallel prefetching completed for {len(all_prefetched_data)} tickers ({prefetch_end - prefetch_start:.2f}s total)")
+        vprint(f"[{time.strftime('%H:%M:%S')}] ✅ Parallel prefetching completed for {len(all_prefetched_data)} tickers ({prefetch_end - prefetch_start:.2f}s total)")
+
+        # Initialize progress tracking for analysts
+        actual_selected_analysts = selected_analysts if selected_analysts else ["jim_simons", "stanley_druckenmiller"]
+        agent_names = [f"{analyst}_agent" for analyst in actual_selected_analysts]
+        agent_names.extend(["risk_management_agent", "portfolio_management_agent"])
+        progress.initialize_agents(agent_names, len(tickers))
+
+        # Thread-safe tracking of per-analyst completion
+        import threading
+        analyst_completion_lock = threading.Lock()
+        analyst_completion_counts = {analyst: 0 for analyst in actual_selected_analysts}
 
         def process_single_analyst_ticker(analyst_key: str, ticker: str, prefetched_data: dict):
             """Process a single analyst for a single ticker - maximum parallelization"""
             analyst_start = time.time()
-            print(f"[{time.strftime('%H:%M:%S')}] Processing {analyst_key} for {ticker}", flush=True)
+            vprint(f"[{time.strftime('%H:%M:%S')}] Processing {analyst_key} for {ticker}", flush=True)
 
             # Get the specific analyst function
             from src.utils.analysts import get_analyst_nodes
@@ -140,6 +156,12 @@ def run_hedge_fund(
                 return None
 
             node_name, node_func = analyst_nodes[analyst_key]
+
+            # Calculate next ticker for this analyst
+            with analyst_completion_lock:
+                current_completion = analyst_completion_counts[analyst_key]
+                ticker_idx = tickers.index(ticker)
+                next_ticker = tickers[ticker_idx + 1] if ticker_idx + 1 < len(tickers) else None
 
             # Create minimal state for this specific analyst×ticker combination
             state = {
@@ -155,7 +177,9 @@ def run_hedge_fund(
                     "exchange_rate_service": exchange_rate_service,
                     "target_currency": target_currency,
                     # Use the pre-fetched data for ALL tickers
-                    "prefetched_financial_data": prefetched_data
+                    "prefetched_financial_data": prefetched_data,
+                    # Add next_ticker for progress tracking
+                    "next_ticker": next_ticker,
                 },
                 "metadata": {
                     "show_reasoning": show_reasoning,
@@ -168,15 +192,21 @@ def run_hedge_fund(
             try:
                 result_state = node_func(state)
                 analyst_end = time.time()
-                print(f"[{time.strftime('%H:%M:%S')}] ✓ {analyst_key} completed for {ticker} ({analyst_end - analyst_start:.2f}s)")
+                vprint(f"[{time.strftime('%H:%M:%S')}] ✓ {analyst_key} completed for {ticker} ({analyst_end - analyst_start:.2f}s)")
+
+                # Update completion count
+                with analyst_completion_lock:
+                    analyst_completion_counts[analyst_key] += 1
+
                 return {
                     "analyst_key": analyst_key,
                     "ticker": ticker,
                     "signals": result_state["data"]["analyst_signals"],
+                    "next_ticker": next_ticker,
                 }
             except Exception as e:
                 analyst_end = time.time()
-                print(f"[{time.strftime('%H:%M:%S')}] ❌ Error in {analyst_key} for {ticker} ({analyst_end - analyst_start:.2f}s): {e}")
+                vprint(f"[{time.strftime('%H:%M:%S')}] ❌ Error in {analyst_key} for {ticker} ({analyst_end - analyst_start:.2f}s): {e}")
                 return None
 
         # Create all analyst×ticker combinations for maximum parallelization
@@ -186,7 +216,7 @@ def run_hedge_fund(
             for ticker in tickers
         ]
 
-        print(f"Running {len(analyst_ticker_combinations)} analyst×ticker combinations in parallel...")
+        vprint(f"Running {len(analyst_ticker_combinations)} analyst×ticker combinations in parallel...")
 
         # Process all combinations in parallel with rate limiting consideration
         max_workers = min(len(analyst_ticker_combinations), 8)  # Limit to avoid overwhelming APIs
@@ -207,10 +237,10 @@ def run_hedge_fund(
                                 all_analyst_signals[agent_name] = {}
                             all_analyst_signals[agent_name].update(signals)
                 except Exception as exc:
-                    print(f'{analyst_key} for {ticker} generated an exception: {exc}')
+                    vprint(f'{analyst_key} for {ticker} generated an exception: {exc}')
 
         # Now run portfolio and risk management on the collected signals
-        print("Running portfolio and risk management...")
+        vprint("Running portfolio and risk management...")
         portfolio_state = {
             "messages": [
                 HumanMessage(content="Analyze collected analyst signals and make portfolio decisions")
@@ -378,6 +408,7 @@ if __name__ == "__main__":
         exchange_rate_service=exchange_rate_service,
         target_currency="USD",
         ticker_markets=inputs.ticker_markets,
+        verbose=inputs.verbose,
     )
 
     # Display the results

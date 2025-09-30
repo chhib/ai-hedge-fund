@@ -131,6 +131,7 @@ def fundamentals_analyst_agent(state: AgentState, agent_id: str = "fundamentals_
     data = state["data"]
     end_date = data["end_date"]
     tickers = data["tickers"]
+    next_ticker = data.get("next_ticker")  # For progress tracking
     api_key = get_api_key_from_state(state, "BORSDATA_API_KEY")
     # Initialize fundamental analysis for each ticker
     fundamental_analysis = {}
@@ -253,7 +254,7 @@ def fundamentals_analyst_agent(state: AgentState, agent_id: str = "fundamentals_
             "reasoning": reasoning,
         }
 
-        progress.update_status(agent_id, ticker, "Done", analysis=json.dumps(reasoning, indent=4))
+        progress.update_status(agent_id, ticker, "Done", analysis=json.dumps(reasoning, indent=4), next_ticker=next_ticker)
         any_ticker_succeeded = True
 
     # Create the fundamental analysis message

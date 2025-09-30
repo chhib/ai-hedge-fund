@@ -8,6 +8,7 @@ import json
 from src.tools.api import get_financial_metrics, get_market_cap, get_company_events, get_insider_trades, search_line_items, get_prices
 from src.utils.llm import call_llm
 from src.utils.progress import progress
+from src.utils.logger import vprint
 import statistics
 
 class StanleyDruckenmillerSignal(BaseModel):
@@ -21,6 +22,7 @@ def stanley_druckenmiller_agent(state: AgentState):
     end_date = data["end_date"]
     tickers = data["tickers"]
     start_date = data["start_date"]
+    next_ticker = data.get("next_ticker")  # For progress tracking
 
     api_key = None
     try:
@@ -33,7 +35,7 @@ def stanley_druckenmiller_agent(state: AgentState):
     agent_name = "stanley_druckenmiller_agent"
 
     for ticker in tickers:
-        print(f"{datetime.now()} - Starting Stanley Druckenmiller agent for {ticker}")
+        vprint(f"{datetime.now()} - Starting Stanley Druckenmiller agent for {ticker}")
 
         # Core Data Collection - use prefetched data where available
         progress.update_status(agent_name, ticker, "Using prefetched financial data")
@@ -172,7 +174,7 @@ def stanley_druckenmiller_agent(state: AgentState):
             "reasoning": druck_output.reasoning,
         }
 
-        progress.update_status(agent_name, ticker, "Done", analysis=druck_output.reasoning)
+        progress.update_status(agent_name, ticker, "Done", analysis=druck_output.reasoning, next_ticker=next_ticker)
 
     # ─── Push message back to graph state ──────────────────────────────────────
     message = HumanMessage(content=json.dumps(druckenmiller_analysis), name=agent_name)
@@ -182,7 +184,7 @@ def stanley_druckenmiller_agent(state: AgentState):
 
     state["data"]["analyst_signals"][agent_name] = druckenmiller_analysis
     progress.update_status(agent_name, None, "Done")
-    print(f"{datetime.now()} - Finished Stanley Druckenmiller agent for {ticker}")
+    vprint(f"{datetime.now()} - Finished Stanley Druckenmiller agent for {ticker}")
 
     return {"messages": [message], "data": state["data"]}
 

@@ -179,7 +179,7 @@ class EnhancedPortfolioManager:
         start_date = (datetime.now().replace(year=datetime.now().year - 1)).strftime("%Y-%m-%d")
 
         # Let parallel fetching output show through (it shows ticker-by-ticker progress)
-        print(f"📥 Fetching data for {len(self.universe)} tickers...")
+        progress.start()
 
         prefetched_data = run_parallel_fetch_ticker_data(
             tickers=self.universe,
@@ -191,14 +191,10 @@ class EnhancedPortfolioManager:
             include_events=True,
             include_market_caps=True,
             ticker_markets=self.ticker_markets,
+            progress_callback=progress.update_prefetch_status,
         )
 
-        if not prefetched_data:
-            if self.verbose:
-                print(f"❌ Error during parallel prefetching")
-            return signals
-
-        print(f"✓ Data fetching complete\n")
+        progress.stop()
 
         # Initialize progress tracking
         agent_names = [f"{a['name']}_agent" for a in self.analysts]

@@ -28,6 +28,7 @@ def cathie_wood_agent(state: AgentState, agent_id: str = "cathie_wood_agent"):
     data = state["data"]
     end_date = data["end_date"]
     tickers = data["tickers"]
+    next_ticker = data.get("next_ticker")  # For progress tracking
     api_key = get_api_key_from_state(state, "BORSDATA_API_KEY")
     analysis_data = {}
     cw_analysis = {}
@@ -86,7 +87,7 @@ def cathie_wood_agent(state: AgentState, agent_id: str = "cathie_wood_agent"):
 
         analysis_data[ticker] = {"signal": signal, "score": total_score, "max_score": max_possible_score, "disruptive_analysis": disruptive_analysis, "innovation_analysis": innovation_analysis, "valuation_analysis": valuation_analysis}
 
-        progress.update_status(agent_id, ticker, "Generating Cathie Wood analysis")
+        progress.update_status(agent_id, ticker, f"Generating analysis {ticker}")
         cw_output = generate_cathie_wood_output(
             ticker=ticker,
             analysis_data=analysis_data,
@@ -96,7 +97,7 @@ def cathie_wood_agent(state: AgentState, agent_id: str = "cathie_wood_agent"):
 
         cw_analysis[ticker] = {"signal": cw_output.signal, "confidence": cw_output.confidence, "reasoning": cw_output.reasoning}
 
-        progress.update_status(agent_id, ticker, "Done", analysis=cw_output.reasoning)
+        progress.update_status(agent_id, ticker, "Done.", analysis=cw_output.reasoning, next_ticker=next_ticker)
 
     message = HumanMessage(content=json.dumps(cw_analysis), name=agent_id)
 

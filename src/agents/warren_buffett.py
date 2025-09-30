@@ -107,6 +107,7 @@ def warren_buffett_agent(state: AgentState, agent_id: str = "warren_buffett_agen
     data = state["data"]
     end_date = data["end_date"]
     tickers = data["tickers"]
+    next_ticker = data.get("next_ticker")  # For progress tracking
     api_key = get_api_key_from_state(state, "BORSDATA_API_KEY")
     # Collect all analysis for LLM reasoning
     analysis_data = {}
@@ -221,7 +222,7 @@ def warren_buffett_agent(state: AgentState, agent_id: str = "warren_buffett_agen
             "reasoning": buffett_output.reasoning,
         }
 
-        progress.update_status(agent_id, ticker, "Done", analysis=buffett_output.reasoning)
+        progress.update_status(agent_id, ticker, "Done", analysis=buffett_output.reasoning, next_ticker=next_ticker)
 
     # Create the message
     message = HumanMessage(content=json.dumps(buffett_analysis), name=agent_id)

@@ -4,6 +4,7 @@ Service for fetching and caching exchange rates.
 from typing import Dict, Optional
 
 from .borsdata_client import BorsdataClient
+from src.utils.logger import vprint
 
 
 class ExchangeRateService:
@@ -23,9 +24,9 @@ class ExchangeRateService:
         if self._currency_map is not None:
             return
 
-        print("Initializing currency map...")
+        vprint("Initializing currency map...")
         instruments = self.client.get_all_instruments()
-        print(f"Found {len(instruments)} total instruments.")
+        vprint(f"Found {len(instruments)} total instruments.")
 
         self._currency_map = {}
         for instrument in instruments:
@@ -33,7 +34,7 @@ class ExchangeRateService:
                 ticker = instrument.get('ticker')
                 if ticker:
                     self._currency_map[ticker] = instrument.get('insId')
-        print(f"Found {len(self._currency_map)} potential currency instruments.")
+        vprint(f"Found {len(self._currency_map)} potential currency instruments.")
 
     def get_rate(self, from_currency: str, to_currency: str) -> Optional[float]:
         """
