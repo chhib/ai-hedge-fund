@@ -53,7 +53,7 @@ def test_results_builder_builds_rows_and_summary(monkeypatch, portfolio):
 
     printed = {"called": False, "rows": None, "context": None}
 
-    def fake_print_backtest_results(rows, context=None):
+    def fake_print_backtest_results(rows, context=None, currency=None):
         printed["called"] = True
         printed["rows"] = rows
         printed["context"] = context
@@ -62,7 +62,7 @@ def test_results_builder_builds_rows_and_summary(monkeypatch, portfolio):
     monkeypatch.setattr("src.backtesting.output.format_backtest_row", fake_format_backtest_row)
     monkeypatch.setattr("src.backtesting.output.print_backtest_results", fake_print_backtest_results)
 
-    rb = OutputBuilder(initial_capital=100_000.0)
+    rb = OutputBuilder(initial_capital=100_000.0, initial_currency="SEK")
 
     # Prepare state: own 10 TTWO @100, no shorts
     portfolio.apply_long_buy("TTWO", 10, 100.0)

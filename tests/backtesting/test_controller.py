@@ -1,4 +1,13 @@
 from src.backtesting.controller import AgentController
+from src.data.exchange_rate_service import ExchangeRateService
+
+
+class MockBorsdataClient:
+    def get_all_instruments(self):
+        return []
+
+    def get_stock_prices(self, instrument_id):
+        return []
 
 
 def dummy_agent(**kwargs):
@@ -12,6 +21,8 @@ def dummy_agent(**kwargs):
 
 def test_agent_controller_normalizes_and_snapshots(portfolio):
     ctrl = AgentController()
+    mock_client = MockBorsdataClient()
+    exchange_rate_service = ExchangeRateService(mock_client)
     out = ctrl.run_agent(
         dummy_agent,
         tickers=["TTWO", "LUG"],
@@ -21,6 +32,8 @@ def test_agent_controller_normalizes_and_snapshots(portfolio):
         model_name="m",
         model_provider="p",
         selected_analysts=["x"],
+        exchange_rate_service=exchange_rate_service,
+        target_currency="SEK",
     )
 
     # Decisions normalized for all tickers

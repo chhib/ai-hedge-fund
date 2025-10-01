@@ -8,6 +8,7 @@ from colorama import Fore, Style
 from src.utils.analysts import ANALYST_ORDER
 from src.llm.models import LLM_ORDER, OLLAMA_LLM_ORDER, get_model_info, ModelProvider
 from src.utils.ollama import ensure_ollama_and_model
+from src.data.borsdata_ticker_mapping import get_ticker_market
 
 from dataclasses import dataclass
 from typing import Optional
@@ -24,12 +25,12 @@ def add_common_args(
     parser.add_argument(
         "--tickers-nordics",
         type=str,
-        help="Comma-separated list of Nordic/European stock ticker symbols (e.g., TELIA,VOLV-B,ADVT)",
+        help="Comma-separated list of Nordic/European stock ticker symbols (for backward compatibility)",
     )
     parser.add_argument(
         "--tickers",
         type=str,
-        help="Comma-separated list of global stock ticker symbols (e.g., AAPL,MSFT,GOOGL)",
+        help="Comma-separated list of stock ticker symbols (auto-detects Nordic/Global, e.g., AAPL,MSFT,TELIA)",
     )
     if include_analyst_flags:
         parser.add_argument(
@@ -269,19 +270,45 @@ def parse_cli_inputs(
 
     args = parser.parse_args()
 
-    # Normalize parsed values
-    nordic_tickers = parse_tickers(getattr(args, "tickers_nordics", None))
-    global_tickers = parse_tickers(getattr(args, "tickers", None))
-    tickers = nordic_tickers + global_tickers
-    use_global = bool(global_tickers)
-    
-    # Create ticker to market mapping
+    # Parse ticker arguments
+    explicit_nordic_tickers = parse_tickers(getattr(args, "tickers_nordics", None))
+    raw_tickers = parse_tickers(getattr(args, "tickers", None))
+
+    # Build ticker to market mapping
     ticker_markets = {}
-    for ticker in nordic_tickers:
+    unknown_tickers = []
+
+    # First, handle explicitly specified Nordic tickers (backward compatibility)
+    for ticker in explicit_nordic_tickers:
         ticker_markets[ticker] = "Nordic"
-    for ticker in global_tickers:
-        ticker_markets[ticker] = "global"
-    
+
+    # For --tickers, automatically detect market using the mapping
+    for ticker in raw_tickers:
+        # Skip if already classified as Nordic
+        if ticker in ticker_markets:
+            continue
+
+        # Look up the ticker in the global mapping
+        market = get_ticker_market(ticker)
+        if market:
+            ticker_markets[ticker] = market
+        else:
+            # Unknown ticker - we'll add it to global as fallback and warn
+            ticker_markets[ticker] = "global"
+            unknown_tickers.append(ticker)
+
+    # Show warning for unknown tickers
+    if unknown_tickers:
+        print(f"\n{Fore.YELLOW}⚠️  Warning: The following tickers are not in the Borsdata mapping:{Style.RESET_ALL}")
+        for ticker in unknown_tickers:
+            print(f"   • {ticker}")
+        print(f"\n{Fore.CYAN}💡 Tip: Run this command to refresh the ticker mapping:{Style.RESET_ALL}")
+        print(f"   poetry run python scripts/refresh_borsdata_mapping.py\n")
+
+    # Combine all tickers
+    tickers = list(ticker_markets.keys())
+    use_global = any(m == "global" for m in ticker_markets.values())
+
     # Validate that at least one ticker is provided if required
     if require_tickers and not tickers:
         parser.error("At least one of --tickers or --tickers-nordics must be provided.")

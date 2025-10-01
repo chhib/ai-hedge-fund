@@ -40,6 +40,7 @@ def test_long_only_strategy_buys_and_sells():
         start_date=start_date,
         end_date=end_date,
         initial_capital=initial_capital,
+        initial_currency="SEK",
         model_name="test-model",
         model_provider="test-provider",
         selected_analysts=None,
@@ -137,13 +138,13 @@ def test_long_only_strategy_full_liquidation_cycle():
     # Create configurable agent with explicit trading plan
     agent = MockConfigurableAgent(decision_sequence, tickers)
     
-    # Create and run backtest
     engine = BacktestEngine(
         agent=agent,
         tickers=tickers,
         start_date=start_date,
         end_date=end_date,
         initial_capital=initial_capital,
+        initial_currency="SEK",
         model_name="test-model",
         model_provider="test-provider",
         selected_analysts=None,
@@ -249,6 +250,7 @@ def test_long_only_strategy_portfolio_rebalancing():
         start_date=start_date,
         end_date=end_date,
         initial_capital=initial_capital,
+        initial_currency="SEK",
         model_name="test-model",
         model_provider="test-provider",
         selected_analysts=None,
@@ -357,6 +359,7 @@ def test_long_only_strategy_multiple_entry_exit_cycles():
         start_date=start_date,
         end_date=end_date,
         initial_capital=initial_capital,
+        initial_currency="SEK",
         model_name="test-model",
         model_provider="test-provider",
         selected_analysts=None,
@@ -442,6 +445,7 @@ def test_cli_output_ordering_and_benchmark_validation(monkeypatch, capsys):
         start_date=start_date,
         end_date=end_date,
         initial_capital=initial_capital,
+        initial_currency="SEK",
         model_name="test-model",
         model_provider="test-provider", 
         selected_analysts=None,

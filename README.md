@@ -1,39 +1,45 @@
-# AI Hedge Fund - Enhanced Börsdata Edition
+# AI Hedge Fund - Börsdata Edition
 
-This is a proof of concept for an AI-powered hedge fund with **comprehensive financial data integration**.  The goal of this project is to explore the use of AI to make trading decisions using institutional-grade financial metrics.  This project is for **educational** purposes only and is not intended for real trading or investment.
+This is a proof of concept for an AI-powered hedge fund with **comprehensive financial data integration**. The goal of this project is to explore the use of AI to make trading decisions using institutional-grade financial metrics.
 
-## 🚀 Major Enhancement: Börsdata Integration
+**Fork Information**: Enhanced version of [virattt/ai-hedge-fund](https://github.com/virattt/ai-hedge-fund) with Börsdata API integration for Nordic + Global market support and portfolio management capabilities.
 
-**This fork represents a significant upgrade from the original FinancialDatasets implementation:**
+This project is for **educational** purposes only and is not intended for real trading or investment.
 
-### 🔢 **Data Coverage Expansion**
+## 🚀 Major Enhancements
+
+### Börsdata API Integration
 - **5.2x more financial metrics**: 17 → 89 comprehensive KPI mappings
-- **Nordic + Global market support**: European tickers (ATCO B) + US tickers (AAPL)
+- **Nordic + Global market support**: European tickers (TELIA, "HM B") + US tickers (AAPL, MSFT)
 - **Institutional-grade metrics**: 73 unique KPI IDs covering all major financial categories
-- **Advanced ratios**: Beta, Alpha, Cash Flow Stability, Enterprise Value metrics
+- **Multi-currency support**: SEK, DKK, NOK, USD, GBP with automatic currency detection
 
-### 🐛 **Critical Bug Fixes**
-- **Fixed percentage inflation**: ROE correctly shows ~151% (vs previous 15,081% bug)
-- **Accurate metric conversion**: 33 metrics with proper percentage handling
-- **Multi-endpoint validation**: Comprehensive data accuracy across multiple API sources
+### Portfolio Management
+- **Long-only portfolio rebalancing** for concentrated positions (5-10 holdings)
+- **Multi-currency portfolios** with automatic currency normalization (GBX/GBP, etc.)
+- **Analyst aggregation** - 17 analysts (13 famous investors + 4 core analysts)
+- **Automatic portfolio tracking** with cost basis and acquisition dates
 
-### 📊 **Trading Decision Impact**
-Comparison testing revealed **dramatically different investment strategies**:
-- **Enhanced Börsdata**: BUY AAPL (78 shares, 50% confidence)
-- **Original FinancialDatasets**: SHORT AAPL (60 shares, 82% confidence)
+### System Capabilities
+- **Command-line interface**: ✅ **Production Ready** - 3 CLI tools for analysis, backtesting, and portfolio management
+- **Web interface**: ✅ **Operational** - Full-stack web application with streaming UI components
 
-This demonstrates the critical importance of comprehensive, accurate financial data in algorithmic trading.
+## 🎯 Three Main CLI Tools
 
-## 🚧 System Overview
+### 1. **Analysis CLI** (`src/main.py`)
+Real-time market analysis using AI agents to generate trading signals.
 
-**This is an enhanced AI hedge fund system with comprehensive market data integration.**
+### 2. **Backtester CLI** (`src/backtester.py`)
+Historical backtesting to evaluate strategy performance over time.
 
-- **Command-line interface**: ✅ **Production Ready** - Full CLI experience with Börsdata data integration for Nordic/European and Global markets
-- **Web interface**: ✅ **Operational** - Full-stack web application with streaming UI components and Börsdata integration
+### 3. **Portfolio Manager CLI** (`src/portfolio_manager.py`)
+Rebalance existing portfolios using AI analyst consensus.
 
-The system provides both command-line and web interfaces with comprehensive market analysis capabilities.
+---
 
-This system employs several agents working together:
+## 🤖 System Overview
+
+The system employs 17 AI agents working together:
 
 ### Core Analysis Agents
 - **Fundamentals Analyst** - Evaluates company health through financial thresholds (ROE, margins, growth metrics)
@@ -42,18 +48,18 @@ This system employs several agents working together:
 - **Valuation Analyst** - Calculates intrinsic value using DCF, Owner Earnings, EV/EBITDA, and Residual Income models
 - **Risk Manager** - Sets position limits based on volatility and correlation analysis
 
-### Legendary Investor Agents
-- **Warren Buffett** - Value investing with 30% margin of safety using conservative DCF
+### Legendary Investor Agents (13 personas)
+- **Warren Buffett** - Value investing with 30% margin of safety
 - **Ben Graham** - Father of value investing, Graham Number and net-net analysis
-- **Charlie Munger** - Quality businesses with economic moats and predictable earnings
+- **Charlie Munger** - Quality businesses with economic moats
 - **Peter Lynch** - Growth at reasonable price (PEG ratio) with "ten-bagger" potential
-- **Phil Fisher** - Growth investing through "scuttlebutt" research and R&D analysis
-- **Bill Ackman** - Activist investing targeting operational improvement opportunities
-- **Cathie Wood** - Disruptive innovation focus with aggressive growth assumptions
-- **Michael Burry** - Contrarian deep value with high free cash flow yields
+- **Phil Fisher** - Growth investing through "scuttlebutt" research
+- **Bill Ackman** - Activist investing targeting operational improvements
+- **Cathie Wood** - Disruptive innovation focus
+- **Michael Burry** - Contrarian deep value with high FCF yields
 - **Mohnish Pabrai** - "Heads I win, tails I don't lose much" with downside protection
 - **Stanley Druckenmiller** - Macro momentum with growth and risk/reward analysis
-- **Rakesh Jhunjhunwala** - High-quality growth with ROE > 20% requirements
+- **Rakesh Jhunjhunwala** - High-quality growth with ROE > 20%
 - **Aswath Damodaran** - Academic valuation using CAPM and sophisticated DCF models
 - **Jim Simons** - Quantitative agent based on multi-factor models
 
@@ -62,13 +68,27 @@ This system employs several agents working together:
 
 For detailed strategy implementations and thresholds, see [Trading Agent Strategies](docs/trading_agent_strategies.md).
 
-<img width="1042" alt="Screenshot 2025-03-22 at 6 19 07 PM" src="https://github.com/user-attachments/assets/cbae3dcf-b571-490d-b0ad-3f0f035ac0d4" />
-
-Note: the system does not actually make any trades.
+**Note**: The system does not actually make any trades - all outputs are for educational purposes only.
 
 [![Twitter Follow](https://img.shields.io/twitter/follow/virattt?style=social)](https://twitter.com/virattt)
 
-## Disclaimer
+---
+
+## 📋 Table of Contents
+- [Disclaimer](#disclaimer)
+- [How to Install](#how-to-install)
+- [How to Run](#how-to-run)
+  - [1. Analysis CLI](#1-analysis-cli)
+  - [2. Backtester CLI](#2-backtester-cli)
+  - [3. Portfolio Manager CLI](#3-portfolio-manager-cli)
+  - [Web Application](#web-application)
+- [Documentation](#documentation)
+- [Contributing](#contributing)
+- [License](#license)
+
+---
+
+## ⚠️ Disclaimer
 
 This project is for **educational and research purposes only**.
 
@@ -80,18 +100,9 @@ This project is for **educational and research purposes only**.
 
 By using this software, you agree to use it solely for learning purposes.
 
-## Table of Contents
-- [How to Install](#how-to-install)
-- [How to Run](#how-to-run)
-  - [⌨️ Command Line Interface](#️-command-line-interface)
-  - [🖥️ Web Application](#️-web-application)
-- [How to Contribute](#how-to-contribute)
-- [Feature Requests](#feature-requests)
-- [License](#license)
+---
 
-## How to Install
-
-Before you can run the AI Hedge Fund, you'll need to install it and set up your API keys. These steps are common to both the full-stack web application and command line interface.
+## 📦 How to Install
 
 ### 1. Clone the Repository
 
@@ -117,43 +128,37 @@ OPENAI_API_KEY=your-openai-api-key
 BORSDATA_API_KEY=your-borsdata-api-key
 ```
 
-**Important**: You must set at least one LLM API key (e.g. `OPENAI_API_KEY`, `GROQ_API_KEY`, `ANTHROPIC_API_KEY`, or `DEEPSEEK_API_KEY`) for the hedge fund to work. 
+**Important**: You must set at least one LLM API key (e.g. `OPENAI_API_KEY`, `GROQ_API_KEY`, `ANTHROPIC_API_KEY`, or `DEEPSEEK_API_KEY`) for the hedge fund to work.
 
-**Financial Data**: All Börsdata endpoints require the `BORSDATA_API_KEY`. Set this value in your `.env` file before running the application.
+**Financial Data**: All Börsdata endpoints require the `BORSDATA_API_KEY`. Get yours at https://borsdata.se/en/mypage/api
 
-## How to Run
+### 3. Install Dependencies
 
-### ⌨️ Command Line Interface
-
-You can run the AI Hedge Fund directly via terminal. This approach offers more granular control and is useful for automation, scripting, and integration purposes.
-
-<img width="992" alt="Screenshot 2025-01-06 at 5 50 17 PM" src="https://github.com/user-attachments/assets/e8ca04bf-9989-4a7d-a8b4-34e04666663b" />
-
-#### Quick Start
-
-1. Install Poetry (if not already installed):
 ```bash
+# Install Poetry (if not already installed)
 curl -sSL https://install.python-poetry.org | python3 -
-```
 
-2. Install dependencies:
-```bash
+# Install dependencies
 poetry install
 ```
 
-#### Run the AI Hedge Fund
+---
 
-The system supports both Nordic/European and global company analysis:
+## 🚀 How to Run
 
-**Important**: Use exact ticker symbols as they appear in Börsdata. Nordic tickers with spaces (like "HM B", "MTG B") must be quoted.
+## 1. Analysis CLI
+
+Real-time market analysis using AI agents to generate trading signals for specific tickers.
+
+### Basic Usage
 
 **Nordic/European companies** (via Börsdata Nordic instruments):
 ```bash
 # Swedish companies (note the space in ticker symbols like "HM B", "MTG B")
-poetry run python src/main.py --tickers-nordics "HM B,MTG B,TELIA,ADVT"
+poetry run python src/main.py --tickers "HM B,MTG B,TELIA,ADVT"
 
 # Norwegian/Danish companies
-poetry run python src/main.py --tickers-nordics "FRO,ZAL,TRMD A"
+poetry run python src/main.py --tickers "FRO,ZAL,TRMD A"
 ```
 
 **Global companies** (via Börsdata Global instruments):
@@ -165,49 +170,91 @@ poetry run python src/main.py --tickers AAPL,MSFT,NVDA,META,TSLA
 poetry run python src/main.py --tickers AAPL,UBI,BABA
 ```
 
-**Mixed analysis** (both Nordic and global companies in one command):
+**Mixed analysis** (both Nordic and global - auto-detected):
 ```bash
-poetry run python src/main.py --tickers-nordics "HM B,TELIA" --tickers "AAPL,META"
+poetry run python src/main.py --tickers "HM B,TELIA,AAPL,META"
 ```
 
-**Quick test mode** (uses gpt-5 with fundamentals, technical, and sentiment analysts):
+**Quick test mode** (uses gpt-5-nano with fundamentals, technical, and sentiment analysts):
 ```bash
-# Test with Nordic company
-poetry run python src/main.py --tickers-nordics "HM B" --test
-
-# Test with global company
 poetry run python src/main.py --tickers AAPL --test
-
-# Test with mixed tickers
-poetry run python src/main.py --tickers-nordics "BAHN B,TELIA" --tickers "AAPL,TSLA" --test
 ```
 
-You can also specify a `--ollama` flag to run the AI hedge fund using local LLMs.
+### All CLI Options
+
+```bash
+poetry run python src/main.py \
+  --tickers AAPL,MSFT \                    # Comma-separated tickers (auto-detects Nordic/Global)
+  --analysts warren_buffett,peter_lynch \  # Specific analysts to use
+  --analysts-all \                         # Use all 17 analysts
+  --test \                                 # Quick test mode (gpt-5-nano, 3 analysts)
+  --start-date 2024-01-01 \               # Analysis start date
+  --end-date 2024-03-01 \                 # Analysis end date
+  --initial-cash 100000 \                 # Starting capital
+  --margin-requirement 0.5 \              # Margin requirement for shorts (50%)
+  --show-reasoning \                      # Display agent reasoning
+  --verbose \                             # Detailed logging
+  --model-name gpt-4o \                   # Specific LLM model
+  --model-provider openai                 # LLM provider (openai, anthropic, groq, ollama)
+```
+
+### Using Local LLMs (Ollama)
 
 ```bash
 poetry run python src/main.py --tickers AAPL,MSFT,NVDA --ollama
 ```
 
-You can optionally specify the start and end dates to make decisions over a specific time period.
+---
 
+## 2. Backtester CLI
+
+Historical backtesting to evaluate strategy performance over time.
+
+### Basic Usage
+
+**Nordic/European companies:**
 ```bash
-poetry run python src/main.py --tickers AAPL,MSFT,NVDA --start-date 2024-01-01 --end-date 2024-03-01
+poetry run backtester --tickers TELIA,VOLV-B,ADVT
 ```
 
-#### Additional CLI Arguments
+**Global companies:**
+```bash
+poetry run backtester --tickers AAPL,MSFT,NVDA
+```
 
--   **`--model-name` and `--model-provider`**: Allows non-interactive selection of the LLM model.
-    ```bash
-    poetry run python src/main.py --tickers AAPL --model-name gpt-4o --model-provider openai
-    ```
--   **`--initial-currency`**: Specifies the target currency for all monetary values in the backtester.
-    ```bash
-    poetry run python src/backtester.py --tickers-nordics TELIA --initial-currency SEK
-    ```
+**Mixed analysis:**
+```bash
+poetry run backtester --tickers "TELIA,ADVT,AAPL,META"
+```
 
-#### Run the Portfolio Manager
+### All CLI Options
 
-The Portfolio Manager provides long-only portfolio rebalancing for concentrated positions (5-10 holdings). It analyzes your current portfolio and investment universe using selected analysts, then generates rebalancing recommendations.
+```bash
+poetry run backtester \
+  --tickers AAPL,MSFT \                    # Comma-separated tickers (auto-detects Nordic/Global)
+  --analysts fundamentals,technical \      # Specific analysts
+  --analysts-all \                         # Use all analysts
+  --test \                                 # Quick test mode
+  --start-date 2024-01-01 \               # Backtest start date
+  --end-date 2024-12-31 \                 # Backtest end date
+  --initial-cash 100000 \                 # Starting capital
+  --margin-requirement 0.5 \              # Margin for shorts
+  --verbose \                             # Detailed output
+  --model-name gpt-4o \                   # LLM model
+  --model-provider openai                 # LLM provider
+```
+
+**Example Output:**
+
+<img width="941" alt="Backtester Output" src="https://github.com/user-attachments/assets/00e794ea-8628-44e6-9a84-8f8a31ad3b47" />
+
+---
+
+## 3. Portfolio Manager CLI
+
+Rebalance existing portfolios using AI analyst consensus for long-only concentrated positions (5-10 holdings).
+
+### Basic Usage
 
 **Starting from scratch (empty portfolio):**
 ```bash
@@ -227,7 +274,7 @@ poetry run python src/portfolio_manager.py \
   --model-provider openai
 ```
 
-**Output:**
+**Output Example:**
 ```
 ticker   shares  cost_basis  currency  date_acquired
 TRMD A   77      500.0       DKK       2025-01-15
@@ -239,7 +286,7 @@ META     5       514.57      USD       2025-01-15
 STNG     74      56.05       USD       2025-10-01
 ```
 
-Note: The system automatically fetches correct currencies (GBP, DKK, SEK, USD) from Börsdata and rounds share quantities to whole numbers.
+**Note**: The system automatically fetches correct currencies (GBP, DKK, SEK, USD) from Börsdata and rounds share quantities to whole numbers.
 
 **Quick test with limited analysts:**
 ```bash
@@ -249,24 +296,36 @@ poetry run python src/portfolio_manager.py \
   --test
 ```
 
-**Key CLI Options:**
-- `--portfolio`: Path to your current portfolio CSV file
-- `--universe-tickers`: Comma-separated global tickers to consider
-- `--universe-nordics`: Comma-separated Nordic tickers to consider
-- `--analysts`: Analyst selection (see options below)
-  - `"all"` - All 17 analysts with full LLM analysis (comprehensive consensus)
-  - `"famous"` - 13 famous investor personas (Buffett, Munger, Druckenmiller, etc.)
-  - `"core"` - 4 core analysts (Fundamentals, Technical, Sentiment, Valuation)
-  - `"basic"` - Fundamentals only (fast testing)
-  - Comma-separated list (e.g., `"warren_buffett,peter_lynch,fundamentals"`)
-- `--max-holdings`: Maximum number of positions (default: 8)
-- `--max-position`: Maximum position size as decimal (default: 0.25 = 25%)
-- `--min-position`: Minimum position size as decimal (default: 0.05 = 5%)
-- `--verbose`: Show detailed analysis from each analyst
-- `--dry-run`: Show recommendations without saving output file
-- `--test`: Quick test mode using fundamentals analyst only
+### All CLI Options
 
-**Portfolio CSV Format:**
+```bash
+poetry run python src/portfolio_manager.py \
+  --portfolio portfolio.csv \                # Path to current portfolio CSV
+  --universe-tickers "AAPL,MSFT,TELIA" \    # Tickers to consider (auto-detected)
+  --universe portfolio_universe.txt \       # Or path to universe file
+  --analysts all \                          # Analyst selection (see below)
+  --model gpt-4o \                          # LLM model
+  --model-provider openai \                 # LLM provider
+  --max-holdings 8 \                        # Maximum positions (default: 8)
+  --max-position 0.25 \                     # Max position size (25%)
+  --min-position 0.05 \                     # Min position size (5%)
+  --min-trade 500 \                         # Min trade size in USD
+  --verbose \                               # Show detailed analysis
+  --dry-run \                               # Preview without saving
+  --test                                    # Quick test mode (fundamentals only)
+```
+
+### Analyst Selection Options
+
+- `"all"` - All 17 analysts with full LLM analysis (comprehensive consensus)
+- `"famous"` - 13 famous investor personas (Buffett, Munger, Druckenmiller, etc.)
+- `"core"` - 4 core analysts (Fundamentals, Technical, Sentiment, Valuation)
+- `"basic"` - Fundamentals only (fast testing)
+- Comma-separated list: `"warren_buffett,peter_lynch,fundamentals_analyst"`
+
+### Portfolio CSV Format
+
+**Input Portfolio:**
 ```csv
 ticker,shares,cost_basis,currency,date_acquired
 AAPL,100,150.50,USD,2024-01-15
@@ -274,81 +333,45 @@ MSFT,50,350.00,USD,2024-02-20
 CASH,50000,,USD,
 ```
 
-The system automatically saves rebalanced portfolios to `portfolio_YYYYMMDD.csv` for iterative rebalancing.
-
-#### Run the Backtester
-
-**Nordic/European companies:**
-```bash
-poetry run python src/backtester.py --tickers-nordics TELIA,VOLV-B,ADVT
+**Output** (automatically saved to `portfolio_YYYYMMDD.csv`):
+```csv
+ticker,shares,cost_basis,currency,date_acquired
+AAPL,120,152.25,USD,2024-01-15
+MSFT,50,350.00,USD,2024-02-20
+NVDA,25,580.00,USD,2025-10-01
+CASH,10000,,USD,
 ```
 
-**Global companies:**
-```bash
-poetry run python src/backtester.py --tickers AAPL,MSFT,NVDA
-```
+The system automatically saves rebalanced portfolios with today's date for iterative rebalancing.
 
-**Mixed analysis:**
-```bash
-poetry run python src/backtester.py --tickers-nordics TELIA,ADVT --tickers AAPL,META
-```
+---
 
-**Example Output:**
-<img width="941" alt="Screenshot 2025-01-06 at 5 47 52 PM" src="https://github.com/user-attachments/assets/00e794ea-8628-44e6-9a84-8f8a31ad3b47" />
+## 🖥️ Web Application
 
-
-Note: The `--ollama`, `--start-date`, and `--end-date` flags work for the backtester, as well!
-
-### 🖥️ Web Application
-
-The new way to run the AI Hedge Fund is through our web application that provides a user-friendly interface. This is recommended for users who prefer visual interfaces over command line tools.
+The web application provides a user-friendly interface for those who prefer visual tools over command line.
 
 Please see detailed instructions on how to install and run the web application [here](https://github.com/chhib/ai-hedge-fund/tree/main/app).
 
-<img width="1721" alt="Screenshot 2025-06-28 at 6 41 03 PM" src="https://github.com/user-attachments/assets/b95ab696-c9f4-416c-9ad1-51feb1f5374b" />
+<img width="1721" alt="Web Interface" src="https://github.com/user-attachments/assets/b95ab696-c9f4-416c-9ad1-51feb1f5374b" />
 
+---
 
-## 🔧 Technical Architecture: Enhanced KPI System
+## 📚 Documentation
 
-### Multi-Endpoint Data Strategy
+### Börsdata API
+- [Börsdata Documentation](docs/borsdata/) - Complete API reference, metrics mappings, and integration guide
+- [Börsdata Swagger](docs/reference/swagger_v1.json) - OpenAPI specification
 
-The enhanced system uses a hierarchical approach to maximize financial data coverage:
+### Trading Strategies
+- [Trading Agent Strategies](docs/trading_agent_strategies.md) - Detailed strategy implementations and thresholds for all 17 agents
 
-1. **KPI Summary Endpoint** (Primary): Fast bulk retrieval of core metrics
-2. **Bulk Screener Values** (Secondary): Comprehensive KPI collection via `get_all_kpi_screener_values()`  
-3. **Individual Screener Calls** (Tertiary): Targeted retrieval for missing KPIs
-4. **Holdings Endpoint** (Fallback): Final attempt for comprehensive coverage
+### Project Documentation
+- [docs/README.md](docs/README.md) - Full documentation index
+- [docs/archive/](docs/archive/) - Historical migration documents
 
-### Financial Metrics Coverage
+---
 
-| Category | Before | After | Examples |
-|----------|--------|-------|----------|
-| Valuation | 4 | 12 | P/E, EV/EBITDA, PEG |
-| Profitability | 3 | 10 | ROE, ROA, EBITDA margin |
-| Liquidity | 0 | 8 | Current ratio, Debt/Equity |
-| Efficiency | 2 | 6 | Asset turnover, DSO |
-| Growth | 3 | 8 | Revenue growth, FCF growth |
-| Per-Share | 3 | 8 | EPS, BVPS, FCF/share |
-| Cash Flow | 1 | 7 | FCF, OCF, Cash stability |
-| Risk/Market | 0 | 4 | Beta, Volatility |
-
-### Key Files Enhanced
-
-- **`src/data/borsdata_client.py`**: Added 4 new API endpoints for comprehensive data retrieval
-- **`src/data/borsdata_metrics_mapping.py`**: 89 KPI mappings with proper percentage conversion flags
-- **`src/data/models.py`**: Extended FinancialMetrics model with 25+ new fields
-- **`src/data/borsdata_kpis.py`**: Enhanced assembly logic with multi-endpoint fallback strategy
-
-### Validation & Testing
-
-The system has been validated with both Nordic (ATCO B) and Global (AAPL) tickers, showing:
-- 50+ non-null metrics retrieved per ticker
-- Correct percentage conversion (fixed 100x inflation bug)
-- Multi-market support for diverse portfolio strategies
-
-This comprehensive financial analysis system provides institutional-grade capabilities for algorithmic trading research and education.
-
-## How to Contribute
+## 🤝 Contributing
 
 1. Fork the repository
 2. Create a feature branch
@@ -356,12 +379,16 @@ This comprehensive financial analysis system provides institutional-grade capabi
 4. Push to the branch
 5. Create a Pull Request
 
-**Important**: Please keep your pull requests small and focused.  This will make it easier to review and merge.
+**Important**: Please keep your pull requests small and focused. This will make it easier to review and merge.
 
-## Feature Requests
+---
+
+## 💡 Feature Requests
 
 If you have a feature request, please open an [issue](https://github.com/chhib/ai-hedge-fund/issues) and make sure it is tagged with `enhancement`.
 
-## License
+---
+
+## 📄 License
 
 This project is licensed under the MIT License - see the LICENSE file for details.

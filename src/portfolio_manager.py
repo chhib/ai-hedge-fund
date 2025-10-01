@@ -190,6 +190,11 @@ def main(portfolio, universe, universe_tickers, analysts, model, model_provider,
         df.to_csv(output_file, index=False)
         print(f"\n✅ Rebalanced portfolio saved to: {output_file}")
         print(f"   Next run: python src/portfolio_manager.py --portfolio {output_file} --universe ...")
+        if not df.empty:
+            print("\n📄 Portfolio snapshot:")
+            print(df.to_string(index=False))
+        else:
+            print("\n📄 Portfolio snapshot: (no positions)")
     else:
         print("\n⚠️  Dry-run mode - no files saved")
 

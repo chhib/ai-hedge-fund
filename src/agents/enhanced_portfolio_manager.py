@@ -3,6 +3,11 @@ from datetime import datetime
 from typing import Any, Dict, List
 
 from src.utils.portfolio_loader import Portfolio
+from src.utils.currency import (
+    normalize_currency_code,
+    normalize_price_and_currency,
+    compute_cost_basis_after_rebalance,
+)
 
 
 @dataclass
@@ -460,7 +465,7 @@ class EnhancedPortfolioManager:
             instrument = _borsdata_client.get_instrument(ticker, api_key=api_key, use_global=use_global)
             currency = instrument.get("stockPriceCurrency")
             if currency:
-                return currency
+                return normalize_currency_code(currency)
         except Exception as e:
             if self.verbose:
                 print(f"Warning: Could not fetch currency for {ticker}: {e}")
@@ -490,7 +495,7 @@ class EnhancedPortfolioManager:
 
             # Get instrument for currency info
             instrument = _borsdata_client.get_instrument(ticker, api_key=api_key, use_global=use_global)
-            currency = instrument.get("stockPriceCurrency", "USD")
+            raw_currency = instrument.get("stockPriceCurrency", "USD")
             instrument_id = instrument.get("insId")
 
             # Fetch recent prices (last 5 days to handle weekends)
@@ -508,12 +513,15 @@ class EnhancedPortfolioManager:
                 # Get most recent price
                 latest = prices[-1]
                 close_price = latest.get("c")  # close price
-                if close_price:
-                    return float(close_price), currency
+                if close_price is not None:
+                    normalized_price, normalized_currency = normalize_price_and_currency(float(close_price), raw_currency)
+                    if self.verbose and normalized_price != float(close_price):
+                        print(f"Normalized {raw_currency} quote {close_price} -> {normalized_price:.4f} {normalized_currency}")
+                    return normalized_price, normalized_currency
 
             if self.verbose:
                 print(f"Warning: No recent prices for {ticker}, using default")
-            return 100.0, currency
+            return 100.0, normalize_currency_code(raw_currency)
 
         except Exception as e:
             if self.verbose:
@@ -586,9 +594,9 @@ class EnhancedPortfolioManager:
                 elif currency != current_pos.currency and self.verbose:
                     print(f"⚠️  Currency update for {ticker}: {current_pos.currency} → {currency}")
 
-            # Calculate target shares
             target_value = target_weight * total_value
             target_shares = target_value / current_price if current_price > 0 else 0
+            value_delta = (target_shares - current_shares) * current_price
 
             recommendations.append(
                 {
@@ -598,7 +606,7 @@ class EnhancedPortfolioManager:
                     "current_weight": current_weight,
                     "target_shares": target_shares,
                     "target_weight": target_weight,
-                    "value_delta": weight_delta * total_value,
+                    "value_delta": value_delta,
                     "confidence": 0.75,  # Simplified
                     "reasoning": f"Target allocation: {target_weight:.1%}",
                     "current_price": current_price,
@@ -608,6 +616,15 @@ class EnhancedPortfolioManager:
 
         # Validate and adjust for cash constraints per currency
         recommendations = self._validate_cash_constraints(recommendations)
+
+        for rec in recommendations:
+            if rec["ticker"].upper() != "CASH":
+                rec["target_shares"] = max(0, round(rec["target_shares"]))
+            delta_shares = rec["target_shares"] - rec["current_shares"]
+            rec["value_delta"] = delta_shares * rec["current_price"]
+            rec["target_weight"] = (
+                (rec["target_shares"] * rec["current_price"]) / total_value if total_value > 0 else 0.0
+            )
 
         return recommendations
 
@@ -745,23 +762,41 @@ class EnhancedPortfolioManager:
                         purchase_value = delta_shares * rec["current_price"]
                         updated_cash[currency] -= purchase_value
 
-                        # Calculate weighted average cost basis
-                        old_value = existing.shares * existing.cost_basis
-                        new_value = delta_shares * rec["current_price"]
-                        total_value = old_value + new_value
-                        total_shares = rec["target_shares"]
-                        new_cost_basis = total_value / total_shares if total_shares > 0 else 0
+                        # Calculate updated cost basis
+                        new_cost_basis = compute_cost_basis_after_rebalance(
+                            existing_shares=existing.shares,
+                            existing_cost_basis=existing.cost_basis,
+                            existing_currency=existing.currency,
+                            current_price=rec["current_price"],
+                            target_currency=rec["currency"],
+                            target_shares=rec["target_shares"],
+                            action=rec["action"],
+                        )
                     elif rec["action"] == "DECREASE":
                         # Add cash back from partial sale
                         delta_shares = existing.shares - rec["target_shares"]
                         sale_value = delta_shares * rec["current_price"]
                         updated_cash[currency] += sale_value
 
-                        # Keep existing cost basis
-                        new_cost_basis = existing.cost_basis
+                        new_cost_basis = compute_cost_basis_after_rebalance(
+                            existing_shares=existing.shares,
+                            existing_cost_basis=existing.cost_basis,
+                            existing_currency=existing.currency,
+                            current_price=rec["current_price"],
+                            target_currency=rec["currency"],
+                            target_shares=rec["target_shares"],
+                            action=rec["action"],
+                        )
                     else:
-                        # HOLD - keep existing cost basis, no cash change
-                        new_cost_basis = existing.cost_basis
+                        new_cost_basis = compute_cost_basis_after_rebalance(
+                            existing_shares=existing.shares,
+                            existing_cost_basis=existing.cost_basis,
+                            existing_currency=existing.currency,
+                            current_price=rec["current_price"],
+                            target_currency=rec["currency"],
+                            target_shares=rec["target_shares"],
+                            action=rec["action"],
+                        )
 
                     updated_positions.append({"ticker": ticker, "shares": rec["target_shares"], "cost_basis": new_cost_basis, "currency": rec["currency"], "date_acquired": existing.date_acquired.strftime("%Y-%m-%d") if existing.date_acquired else ""})
 

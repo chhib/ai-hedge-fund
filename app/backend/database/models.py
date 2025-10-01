@@ -135,3 +135,24 @@ class AnalystAnalysis(Base):
     model_provider = Column(String(50), nullable=True)  # openai, anthropic, etc.
 
 
+class LLMResponseCache(Base):
+    """Table to cache LLM responses with 7-day freshness check"""
+    __tablename__ = "llm_response_cache"
+
+    id = Column(Integer, primary_key=True, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    # Cache key components
+    ticker = Column(String(20), nullable=False, index=True)
+    analyst_name = Column(String(100), nullable=False, index=True)
+    prompt_hash = Column(String(64), nullable=False)  # SHA256 hash for efficient lookup
+
+    # Cached data
+    prompt_text = Column(Text, nullable=False)  # Full prompt for debugging
+    response_json = Column(Text, nullable=False)  # Structured LLM output as JSON
+
+    # Metadata
+    model_name = Column(String(100), nullable=True)
+    model_provider = Column(String(50), nullable=True)
+
+

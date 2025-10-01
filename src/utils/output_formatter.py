@@ -55,10 +55,27 @@ def display_results(results: Dict, verbose: bool):
             action = rec["action"]
             emoji = {"ADD": "🟢", "INCREASE": "⬆️", "HOLD": "⏸️", "DECREASE": "⬇️", "SELL": "🔴"}.get(action, "")
 
+            def _format_shares(value: float) -> str:
+                try:
+                    if value is None:
+                        return "0"
+                    return f"{int(value)}"
+                except (ValueError, TypeError):
+                    return f"{value:.0f}"
+
+            current_shares_display = _format_shares(rec["current_shares"])
+            target_shares_display = _format_shares(rec.get("target_shares", 0.0))
+
+            change_value = rec.get("value_delta", 0.0)
+            currency = rec.get("currency") or ""
+            change_formatted = f"{change_value:+,.0f}"
+            if currency:
+                change_formatted = f"{change_formatted} {currency}"
+
             print(f"\n{emoji} {rec['ticker']}: {action}")
-            print(f"   Current: {rec['current_shares']:.1f} shares ({rec['current_weight']:.1%})")
-            print(f"   Target:  {rec.get('target_shares', 0):.1f} shares ({rec['target_weight']:.1%})")
-            print(f"   Change:  ${rec['value_delta']:+,.0f}")
+            print(f"   Current: {current_shares_display} shares ({rec['current_weight']:.1%})")
+            print(f"   Target:  {target_shares_display} shares ({rec['target_weight']:.1%})")
+            print(f"   Change:  {change_formatted}")
             print(f"   Confidence: {rec['confidence']:.1%}")
 
             if verbose:

@@ -1,2 +1,3 @@
 ticker,shares,cost_basis,currency,date_acquired
 CASH,10000.0,,SEK,
+AXS,25.0,100.0,USD,2025-09-30

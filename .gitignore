@@ -65,3 +65,11 @@ outputs/
 
 # Alembic (keep migration files, but ignore generated/cache files)
 app/backend/alembic/versions/__pycache__/individual_analyst_test_results.json
+
+# Generated analyst transcripts
+analyst_transcript_*.md
+
+# Generated portfolio files (user-specific)
+portfolio_*.csv
+!portfolios/example_portfolio.csv
+!portfolios/empty_portfolio.csv

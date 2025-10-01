@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from src.llm.models import get_model, get_model_info
 from src.utils.progress import progress
 from src.graph.state import AgentState
+from src.data.llm_response_cache import get_llm_cache
 
 
 def call_llm(
@@ -17,6 +18,7 @@ def call_llm(
 ) -> BaseModel:
     """
     Makes an LLM call with retry logic, handling both JSON supported and non-JSON supported models.
+    Uses persistent cache with 7-day freshness check to avoid redundant API calls.
 
     Args:
         prompt: The prompt to send to the LLM
@@ -29,7 +31,7 @@ def call_llm(
     Returns:
         An instance of the specified Pydantic model
     """
-    
+
     # Extract model configuration if state is provided and agent_name is available
     if state and agent_name:
         model_name, model_provider = get_agent_model_config(state, agent_name)
@@ -58,6 +60,34 @@ def call_llm(
     else:
         model_provider_enum = model_provider
 
+    # Check cache before making LLM call
+    ticker = None
+    if state and "data" in state:
+        tickers = state["data"].get("tickers", [])
+        if tickers:
+            ticker = tickers[0]  # Use first ticker as cache key
+
+    if ticker and agent_name:
+        try:
+            cache = get_llm_cache()
+            # Convert prompt to string for hashing
+            prompt_str = str(prompt) if not isinstance(prompt, str) else prompt
+
+            # Try to get cached response
+            cached_response = cache.get_cached_response(
+                ticker=ticker,
+                analyst_name=agent_name,
+                prompt=prompt_str,
+            )
+
+            if cached_response:
+                # Reconstruct pydantic model from cached dict
+                return pydantic_model(**cached_response)
+        except Exception as e:
+            # Cache miss or error - proceed with LLM call
+            if agent_name:
+                progress.update_status(agent_name, ticker, f"Cache miss - calling LLM")
+
     model_info = get_model_info(model_name, model_provider)
     llm = get_model(model_name, model_provider_enum, api_keys)
 
@@ -78,9 +108,30 @@ def call_llm(
             if model_info and not model_info.has_json_mode():
                 parsed_result = extract_json_from_response(result.content)
                 if parsed_result:
-                    return pydantic_model(**parsed_result)
+                    response_model = pydantic_model(**parsed_result)
+                else:
+                    raise ValueError("Failed to extract JSON from response")
             else:
-                return result
+                response_model = result
+
+            # Store successful response in cache
+            if ticker and agent_name:
+                try:
+                    cache = get_llm_cache()
+                    prompt_str = str(prompt) if not isinstance(prompt, str) else prompt
+                    cache.store_response(
+                        ticker=ticker,
+                        analyst_name=agent_name,
+                        prompt=prompt_str,
+                        response=response_model,
+                        model_name=model_name,
+                        model_provider=model_provider,
+                    )
+                except Exception as cache_error:
+                    # Log cache storage error but don't fail the request
+                    pass
+
+            return response_model
 
         except Exception as e:
             if agent_name:

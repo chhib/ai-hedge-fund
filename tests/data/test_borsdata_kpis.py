@@ -83,6 +83,9 @@ class StubBorsdataClient:
     def get_kpi_screener_value(self, instrument_id: int, kpi_id: int, calc_group: str, calc: str, *, api_key=None):
         return self.screener.get((kpi_id, calc_group, calc), {})
 
+    def get_kpi_all_instruments(self, kpi_id: int, calc_group: str, calc: str, *, use_global: bool = False, api_key=None):
+        return {}
+
 
 def test_financial_metrics_assembler_builds_metrics_from_summary_and_reports():
     client = StubBorsdataClient()

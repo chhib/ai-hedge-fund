@@ -1,6 +1,6 @@
 # Börsdata Integration Project Log
 
-_Last updated: 2025-10-01_
+_Last updated: 2025-10-01 (Session 45)_
 
 ## End Goal
 Rebuild the data ingestion and processing pipeline so the application relies on Börsdata's REST API (per `README_Borsdata_API.md` and https://apidoc.borsdata.se/swagger/index.html). The system should let a user set a `BORSDATA_API_KEY` in `.env`, accept Börsdata-native tickers, and otherwise preserve the current user-facing workflows and capabilities.
@@ -672,5 +672,52 @@ The system now operates efficiently at scale with comprehensive financial data i
   - STNG: 74 shares @ USD ✓
 - **Documentation**: Updated README.md with realistic multi-currency portfolio example showing automatic currency detection and whole share quantities.
 - **System Status**: Portfolio manager now handles multi-currency portfolios correctly with accurate price and currency data from Börsdata.
+
+### Session 44 (GBX Normalisation)
+- **Bug Fix**: Normalised London-listed prices quoted in GBX/GBp to GBP in `EnhancedPortfolioManager`, ensuring FDEV-style allocations use pound-denominated cost bases.
+- **Refactor**: Introduced `src/utils/currency.py` with shared helpers (`normalize_currency_code`, `normalize_price_and_currency`) and wired the portfolio manager to use them, keeping currency logic reusable.
+- **Bug Fix**: Rebased legacy portfolio entries when detected currency mismatches (e.g., TRMD A stored in SEK) so cost bases align with the instrument's actual currency.
+- **Feature Improvement**: Recommendation output now displays whole-share targets (rounded down like the persisted CSV) and includes currency denominations on value deltas (e.g., `-5,000 SEK`).
+- **Feature Improvement**: Rounded target share counts to whole units (except cash) before executing trades so generated portfolios never include fractional share holdings.
+- **Feature Improvement**: CLI now prints the freshly saved portfolio snapshot immediately after writing the CSV, avoiding a separate viewer step.
+- **Testing**: Added `tests/test_currency_utils.py` coverage for currency normalisation and rebalance cost-basis logic; `poetry run pytest tests/test_currency_utils.py` passes locally.
+- **Validation**: Verified that normalisation only adjusts when minor-unit currencies are detected and logs adjustments when verbose mode is enabled.
+
+### Session 45 (Documentation Consolidation & Repository Cleanup)
+- **Documentation Audit**: Conducted comprehensive review of all documentation, root files, and repository structure following completion of Börsdata migration and portfolio manager features.
+- **Root Directory Cleanup**:
+  - Deleted `portfolio-cli-implementation.md` (34KB implementation notes superseded by README)
+  - Deleted `analyst_transcript_20251001_071553.md` (205KB generated output file)
+  - Kept `AGENTS.md` (user-requested), `CLAUDE.md` (project guidelines), `PROJECT_LOG.md` (session history)
+- **Börsdata Documentation Organization**:
+  - Created `docs/borsdata/` directory to centralize all Börsdata API documentation
+  - Moved `README_Borsdata_API.md` → `docs/borsdata/API.md`
+  - Moved `docs/financial_metrics_borsdata_mapping.md` → `docs/borsdata/metrics_mapping.md`
+  - Moved `docs/reference/borsdata_endpoint_mapping.md` → `docs/borsdata/endpoint_mapping.md`
+  - Moved `docs/reference/financial_metrics_borsdata_mapping.md` → `docs/borsdata/metrics_mapping_detailed.md`
+  - Created `docs/borsdata/README.md` as comprehensive index with quick start guide
+- **Legacy Documentation Archive**:
+  - Created `docs/archive/` directory for historical migration documents
+  - Moved `FD_BD_COMPARISON_ANALYSIS.md`, `CURRENCY_HARMONIZATION_PLAN.md`, `borsdata_financial_metrics_mapping_analysis.md`
+  - Created `docs/archive/README.md` explaining historical context and migration timeline
+- **README Rewrite**: Completely rewrote main `README.md` (367 → 395 lines) with:
+  - Clear fork information and major enhancements section
+  - **Comprehensive CLI examples** for all 3 tools (main.py, backtester.py, portfolio_manager.py)
+  - Every CLI option documented with explanations
+  - Nordic + Global ticker examples throughout showing auto-detection
+  - Multi-currency portfolio examples with actual output
+  - All analyst selection options documented
+  - Updated links to new `docs/borsdata/` structure
+- **Documentation Index Update**: Rewrote `docs/README.md` to reflect new structure:
+  - Quick navigation to Börsdata docs, trading strategies, and archive
+  - Clear distinction between active vs archived documentation
+  - Contributing guidelines for documentation
+  - Cross-references to all major docs
+- **Gitignore Update**: Added patterns to ignore generated files:
+  - `analyst_transcript_*.md` (generated transcripts)
+  - `portfolio_*.csv` (user-specific portfolios)
+  - Exceptions for `portfolios/example_portfolio.csv` and `portfolios/empty_portfolio.csv`
+- **Testing**: All 72 tests continue to pass; no code functionality changed
+- **System Status**: Repository now has professional documentation organization with clear paths to Börsdata API info, comprehensive CLI examples, and archived migration history for reference.
 
 **IMPORTANT**: Update this log at the end of each work session: note completed steps, new decisions, blockers, and refreshed next actions. Always use session numbers (Session X, Session X+1, etc.) for progress entries. Update the "Last updated" date at the top with the actual current date when making changes.
