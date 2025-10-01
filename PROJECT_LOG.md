@@ -757,4 +757,10 @@ The system now operates efficiently at scale with comprehensive financial data i
   - `src/data/parallel_api_wrapper.py` - Cache bypass support
 - **System Status**: Portfolio manager now handles multi-currency portfolios with proper FX conversion, path-independent target allocation, and optional cache bypass for fresh data.
 
+### Session 47 (Analyst Parallelism Review)
+- **Analysis**: Reviewed analyst execution flow in `src/main.py` to verify reported parallelism bottlenecks and inspected slow-agent logic for Jim Simons and Stanley Druckenmiller.
+- **Findings**: Confirmed `ThreadPoolExecutor` already launches up to eight analyst×ticker workers (`src/main.py:146-240`). Slow analysts spend most time inside synchronous numpy/pandas calculations and blocking LLM calls (`src/agents/jim_simons.py:31-166`, `src/utils/llm.py:63-148`). Switching to `asyncio` would still require running those blocking steps in threads, so no net gain without rewriting to async-friendly APIs.
+- **Next Steps**: Explore per-analyst worker throttles or chunking heavy analysts separately if further tuning is needed; consider profiling to spot CPU hotspots before attempting architectural changes.
+- **Documentation**: Reformatted portfolio CSV examples in `README.md:320-347` using Markdown tables for clearer presentation.
+
 **IMPORTANT**: Update this log at the end of each work session: note completed steps, new decisions, blockers, and refreshed next actions. Always use session numbers (Session X, Session X+1, etc.) for progress entries. Update the "Last updated" date at the top with the actual current date when making changes.

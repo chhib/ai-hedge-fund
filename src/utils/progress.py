@@ -130,7 +130,14 @@ class AgentProgress:
         elif status == "fetching" or (total > 0 and completed < total):
             # Still fetching from API
             bar_length = 20
-            filled = int(bar_length * completed / total) if total > 0 else 0
+            # If we have cached items and total represents initial ticker count (not API tasks yet),
+            # show cached progress in the bar
+            if cached > 0 and completed == 0 and total > 0:
+                # Before API tasks start reporting, show cache progress
+                filled = int(bar_length * cached / total) if total > 0 else 0
+            else:
+                # Normal API task progress
+                filled = int(bar_length * completed / total) if total > 0 else 0
             empty = bar_length - filled
             bar = "█" * filled + "░" * empty
 
@@ -145,7 +152,11 @@ class AgentProgress:
             progress_text.append(f"[{bar}] ")
             if ticker:
                 progress_text.append(f"[{ticker}] ")
-            percentage = (completed / total) * 100 if total > 0 else 0
+            # Calculate percentage including cached items
+            if cached > 0 and completed == 0 and total > 0:
+                percentage = (cached / total) * 100
+            else:
+                percentage = (completed / total) * 100 if total > 0 else 0
             progress_text.append(f"{percentage:.0f}%")
             self.table.add_row(progress_text)
         elif status == "done" and total > 0 and completed >= total:

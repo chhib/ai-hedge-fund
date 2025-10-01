@@ -318,24 +318,24 @@ poetry run python src/portfolio_manager.py \
 
 ### Portfolio CSV Format
 
-**Input Portfolio:**
-```csv
-ticker,shares,cost_basis,currency,date_acquired
-AAPL,100,150.50,USD,2024-01-15
-MSFT,50,350.00,USD,2024-02-20
-CASH,50000,,USD,
-```
+**Input Portfolio (`.csv`):**
 
-**Output** (automatically saved to `portfolio_YYYYMMDD.csv`):
-```csv
-ticker,shares,cost_basis,currency,date_acquired
-AAPL,120,152.25,USD,2024-01-15
-MSFT,50,350.00,USD,2024-02-20
-NVDA,25,580.00,USD,2025-10-01
-CASH,10000,,USD,
-```
+| ticker | shares | cost_basis | currency | date_acquired |
+| --- | ---: | ---: | --- | --- |
+| AAPL | 100 | 150.50 | USD | 2024-01-15 |
+| MSFT | 50 | 350.00 | USD | 2024-02-20 |
+| CASH | 50000 | N/A | USD | N/A |
 
-The system automatically saves rebalanced portfolios with today's date for iterative rebalancing.
+**Output (`portfolio_YYYYMMDD.csv`):**
+
+| ticker | shares | cost_basis | currency | date_acquired |
+| --- | ---: | ---: | --- | --- |
+| AAPL | 120 | 152.25 | USD | 2024-01-15 |
+| MSFT | 50 | 350.00 | USD | 2024-02-20 |
+| NVDA | 25 | 580.00 | USD | 2025-10-01 |
+| CASH | 10000 | N/A | USD | N/A |
+
+The system automatically saves rebalanced portfolios with today's date so you can iterate on successive runs without manual bookkeeping.
 
 ---
 
