@@ -684,9 +684,11 @@ class EnhancedPortfolioManager:
                 rec["target_shares"] = max(0, round(rec["target_shares"]))
             delta_shares = rec["target_shares"] - rec["current_shares"]
             rec["value_delta"] = delta_shares * rec["current_price"]
-            rec["target_weight"] = (
-                (rec["target_shares"] * rec["current_price"]) / total_value if total_value > 0 else 0.0
-            )
+
+            # Recalculate target_weight after rounding shares (must convert to home currency)
+            fx_rate = self.exchange_rates.get(rec["currency"], 1.0)
+            position_value_home = rec["target_shares"] * rec["current_price"] * fx_rate
+            rec["target_weight"] = position_value_home / total_value if total_value > 0 else 0.0
 
         return recommendations
 
@@ -778,21 +780,19 @@ class EnhancedPortfolioManager:
             ticker = rec["ticker"]
             currency = rec["currency"]
 
-            # Ensure currency exists in cash holdings
-            if currency not in updated_cash:
-                updated_cash[currency] = 0.0
-
             if rec["action"] == "SELL":
-                # Add cash back from sale
+                # Add cash back from sale (in home currency)
                 sale_value = rec["current_shares"] * rec["current_price"]
-                updated_cash[currency] += sale_value
+                fx_rate = self.exchange_rates.get(currency, 1.0)
+                updated_cash[self.home_currency] += sale_value * fx_rate
                 # Position sold, not included in output
                 continue
 
             elif rec["action"] == "ADD":
-                # Deduct cash for purchase
+                # Deduct cash for purchase (in home currency)
                 purchase_value = rec["target_shares"] * rec["current_price"]
-                updated_cash[currency] -= purchase_value
+                fx_rate = self.exchange_rates.get(currency, 1.0)
+                updated_cash[self.home_currency] -= purchase_value * fx_rate
 
                 # New position - use today's date
                 updated_positions.append({"ticker": ticker, "shares": rec["target_shares"], "cost_basis": rec["current_price"], "currency": rec["currency"], "date_acquired": datetime.now().strftime("%Y-%m-%d")})
@@ -803,10 +803,11 @@ class EnhancedPortfolioManager:
 
                 if existing and rec["target_shares"] > 0:
                     if rec["action"] == "INCREASE":
-                        # Deduct cash for additional shares
+                        # Deduct cash for additional shares (in home currency)
                         delta_shares = rec["target_shares"] - existing.shares
                         purchase_value = delta_shares * rec["current_price"]
-                        updated_cash[currency] -= purchase_value
+                        fx_rate = self.exchange_rates.get(currency, 1.0)
+                        updated_cash[self.home_currency] -= purchase_value * fx_rate
 
                         # Calculate updated cost basis
                         new_cost_basis = compute_cost_basis_after_rebalance(
@@ -819,10 +820,11 @@ class EnhancedPortfolioManager:
                             action=rec["action"],
                         )
                     elif rec["action"] == "DECREASE":
-                        # Add cash back from partial sale
+                        # Add cash back from partial sale (in home currency)
                         delta_shares = existing.shares - rec["target_shares"]
                         sale_value = delta_shares * rec["current_price"]
-                        updated_cash[currency] += sale_value
+                        fx_rate = self.exchange_rates.get(currency, 1.0)
+                        updated_cash[self.home_currency] += sale_value * fx_rate
 
                         new_cost_basis = compute_cost_basis_after_rebalance(
                             existing_shares=existing.shares,
