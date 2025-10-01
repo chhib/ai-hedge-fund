@@ -1,17 +1,11 @@
 # AI Hedge Fund - Börsdata Edition
 
-This is a proof of concept for an AI-powered hedge fund with **comprehensive financial data integration**. The goal of this project is to explore the use of AI to make trading decisions using institutional-grade financial metrics.
+Enhanced version of [virattt/ai-hedge-fund](https://github.com/virattt/ai-hedge-fund) with Börsdata API integration for Nordic + Global market support and portfolio management capabilities.
 
-**Fork Information**: Enhanced version of [virattt/ai-hedge-fund](https://github.com/virattt/ai-hedge-fund) with Börsdata API integration for Nordic + Global market support and portfolio management capabilities.
-
-This project is for **educational** purposes only and is not intended for real trading or investment.
-
-## 🚀 Major Enhancements
+## 🚀 Enhancements
 
 ### Börsdata API Integration
-- **5.2x more financial metrics**: 17 → 89 comprehensive KPI mappings
-- **Nordic + Global market support**: European tickers (TELIA, "HM B") + US tickers (AAPL, MSFT)
-- **Institutional-grade metrics**: 73 unique KPI IDs covering all major financial categories
+- **Nordic + Global market support**: Nordic tickers ("NOVO B", "HM B") + global tickers (SAP, AAPL) US, CA, UK, DE, FR, ES, PT, IT, CH, BE, NL, PL, EE, LV, LT
 - **Multi-currency support**: SEK, DKK, NOK, USD, GBP with automatic currency detection
 
 ### Portfolio Management
@@ -21,8 +15,7 @@ This project is for **educational** purposes only and is not intended for real t
 - **Automatic portfolio tracking** with cost basis and acquisition dates
 
 ### System Capabilities
-- **Command-line interface**: ✅ **Production Ready** - 3 CLI tools for analysis, backtesting, and portfolio management
-- **Web interface**: ✅ **Operational** - Full-stack web application with streaming UI components
+- **Command-line interface**: 3 CLI tools for analysis, backtesting, and portfolio management
 
 ## 🎯 Three Main CLI Tools
 
@@ -61,7 +54,7 @@ The system employs 17 AI agents working together:
 - **Stanley Druckenmiller** - Macro momentum with growth and risk/reward analysis
 - **Rakesh Jhunjhunwala** - High-quality growth with ROE > 20%
 - **Aswath Damodaran** - Academic valuation using CAPM and sophisticated DCF models
-- **Jim Simons** - Quantitative agent based on multi-factor models
+- **Jim Simons** - Quantitative agent based on multi-factor models. [From fork made by **ak4631**](https://github.com/ak4631/ai-hedge-fund/tree/feature/jim_simons).
 
 ### Portfolio Management
 - **Portfolio Manager** - Aggregates all signals and makes final trading decisions within risk limits
