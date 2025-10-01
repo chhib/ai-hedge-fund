@@ -26,15 +26,18 @@ class EnhancedPortfolioManager:
     Maintains concentrated portfolio of 5-10 positions
     """
 
-    def __init__(self, portfolio: Portfolio, universe: List[str], analysts: List[str], model_config: Dict[str, Any], ticker_markets: Dict[str, str] = None, verbose: bool = False, session_id: str = None):
+    def __init__(self, portfolio: Portfolio, universe: List[str], analysts: List[str], model_config: Dict[str, Any], ticker_markets: Dict[str, str] = None, home_currency: str = "SEK", no_cache: bool = False, verbose: bool = False, session_id: str = None):
         self.portfolio = portfolio
         self.universe = universe
         self.analyst_names = analysts
         self.model_config = model_config
         self.ticker_markets = ticker_markets or {}
+        self.home_currency = home_currency.upper()
+        self.no_cache = no_cache
         self.verbose = verbose
         self.session_id = session_id
         self.analysts = self._initialize_analysts(analysts, model_config)
+        self.exchange_rates: Dict[str, float] = {}  # Currency -> rate (e.g., {"USD": 10.5, "GBP": 13.2})
 
     def _initialize_analysts(self, analyst_names: List[str], model_config: Dict[str, Any]) -> List[Any]:
         """
@@ -160,13 +163,17 @@ class EnhancedPortfolioManager:
         # STEP 1: Pre-populate instrument caches (silent unless verbose)
         from src.tools.api import _borsdata_client, set_ticker_markets
 
+        force_refresh = self.no_cache
         if self.verbose:
-            print("Pre-populating instrument caches...")
+            if force_refresh:
+                print("Pre-populating instrument caches (bypassing cache)...")
+            else:
+                print("Pre-populating instrument caches...")
         try:
-            _borsdata_client.get_instruments(force_refresh=False)
+            _borsdata_client.get_instruments(force_refresh=force_refresh)
             if self.verbose:
                 print("✓ Nordic instruments cache populated")
-            _borsdata_client.get_all_instruments(force_refresh=False)
+            _borsdata_client.get_all_instruments(force_refresh=force_refresh)
             if self.verbose:
                 print("✓ Global instruments cache populated")
         except Exception as e:
@@ -198,9 +205,13 @@ class EnhancedPortfolioManager:
             include_market_caps=True,
             ticker_markets=self.ticker_markets,
             progress_callback=progress.update_prefetch_status,
+            no_cache=self.no_cache,
         )
 
         progress.stop()
+
+        # STEP 3.5: Fetch exchange rates for all currencies in the universe
+        self._fetch_exchange_rates(api_key)
 
         # Initialize progress tracking
         agent_names = [f"{a['name']}_agent" for a in self.analysts]
@@ -340,6 +351,58 @@ class EnhancedPortfolioManager:
         print(f"\n✓ Collected {len(signals)} signals from {len(self.analysts)} analysts across {len(self.universe)} tickers\n")
         return signals
 
+    def _fetch_exchange_rates(self, api_key: str) -> None:
+        """
+        Fetch exchange rates for all currencies in the universe relative to home currency.
+        Uses Börsdata's instrument type 6 (currencies) to get FX rates.
+        """
+        from src.data.exchange_rate_service import ExchangeRateService
+        from src.data.borsdata_client import BorsdataClient
+
+        # Identify all currencies needed from the universe
+        currencies_needed = set()
+        for ticker in self.universe:
+            currency = self._get_ticker_currency(ticker)
+            if currency and currency != self.home_currency:
+                currencies_needed.add(currency)
+
+        # Always include home currency (rate = 1.0)
+        self.exchange_rates[self.home_currency] = 1.0
+
+        if not currencies_needed:
+            if self.verbose:
+                print(f"✓ All tickers in home currency ({self.home_currency}), no FX rates needed\n")
+            return
+
+        # Initialize exchange rate service
+        client = BorsdataClient()
+        fx_service = ExchangeRateService(client)
+
+        # Fetch rates for each currency
+        if self.verbose:
+            print(f"Fetching exchange rates to {self.home_currency}...")
+
+        for currency in currencies_needed:
+            try:
+                rate = fx_service.get_rate(currency, self.home_currency)
+                if rate:
+                    self.exchange_rates[currency] = rate
+                    if self.verbose:
+                        print(f"  ✓ {currency}/{self.home_currency} = {rate:.4f}")
+                else:
+                    # Fallback to 1.0 if rate not found (with warning)
+                    self.exchange_rates[currency] = 1.0
+                    if self.verbose:
+                        print(f"  ⚠️  {currency}/{self.home_currency} rate not found, using 1.0")
+            except Exception as e:
+                # Fallback to 1.0 on error
+                self.exchange_rates[currency] = 1.0
+                if self.verbose:
+                    print(f"  ⚠️  Error fetching {currency}/{self.home_currency}: {e}, using 1.0")
+
+        if self.verbose:
+            print()
+
     def _aggregate_signals(self, signals: List[AnalystSignal]) -> Dict[str, float]:
         """
         Aggregate multiple analyst signals per ticker
@@ -385,27 +448,18 @@ class EnhancedPortfolioManager:
     def _select_top_positions(self, scores: Dict[str, float], max_holdings: int) -> List[str]:
         """
         Select top N positions for concentrated portfolio
-        Prioritizes: current holdings (unless score very low) + highest scoring new positions
+        Path-independent: selects best positions regardless of current holdings
         """
-        current_tickers = {p.ticker for p in self.portfolio.positions}
+        MIN_SCORE_THRESHOLD = 0.5  # Minimum score to be considered (0.5 = neutral)
 
-        # Separate current holdings and new opportunities
-        current_scores = {t: s for t, s in scores.items() if t in current_tickers}
-        new_scores = {t: s for t, s in scores.items() if t not in current_tickers}
+        # Filter tickers that meet minimum threshold
+        qualified_tickers = {t: s for t, s in scores.items() if s >= MIN_SCORE_THRESHOLD}
 
-        # Keep current holdings unless score is very low
-        SELL_THRESHOLD = 0.3  # Below this, consider selling even current holdings
-        holdings_to_keep = [t for t, score in current_scores.items() if score >= SELL_THRESHOLD]
+        # Sort by score and select top N
+        sorted_tickers = sorted(qualified_tickers.items(), key=lambda x: x[1], reverse=True)
+        selected = [t for t, score in sorted_tickers[:max_holdings]]
 
-        # How many new positions can we add?
-        slots_available = max_holdings - len(holdings_to_keep)
-
-        # Get best new opportunities
-        sorted_new = sorted(new_scores.items(), key=lambda x: x[1], reverse=True)
-        MIN_SCORE_FOR_NEW = 0.6  # Higher bar for new positions
-        new_additions = [t for t, score in sorted_new[:slots_available] if score >= MIN_SCORE_FOR_NEW]
-
-        return holdings_to_keep + new_additions
+        return selected
 
     def _calculate_target_positions(self, selected_tickers: List[str], scores: Dict[str, float], max_position: float, min_position: float) -> Dict[str, float]:
         """
@@ -537,22 +591,21 @@ class EnhancedPortfolioManager:
         current_tickers = {p.ticker for p in self.portfolio.positions}
         all_tickers = set(list(target_positions.keys()) + list(current_tickers))
 
-        # Calculate total portfolio value PER CURRENCY to avoid mixing SEK+USD
-        currency_totals = {}
+        # Calculate total portfolio value in HOME CURRENCY
+        total_value_home = 0.0
+
+        # Convert position values to home currency
         for pos in self.portfolio.positions:
-            if pos.currency not in currency_totals:
-                currency_totals[pos.currency] = 0.0
-            currency_totals[pos.currency] += pos.shares * pos.cost_basis
+            fx_rate = self.exchange_rates.get(pos.currency, 1.0)
+            position_value_home = pos.shares * pos.cost_basis * fx_rate
+            total_value_home += position_value_home
 
-        # Add cash holdings to currency totals
+        # Convert cash holdings to home currency
         for currency, cash in self.portfolio.cash_holdings.items():
-            if currency not in currency_totals:
-                currency_totals[currency] = 0.0
-            currency_totals[currency] += cash
+            fx_rate = self.exchange_rates.get(currency, 1.0)
+            total_value_home += cash * fx_rate
 
-        # For weight calculations, use the dominant currency total or sum (legacy behavior)
-        # This maintains backward compatibility while we fix the core issue
-        total_value = sum(currency_totals.values())
+        total_value = total_value_home
 
         for ticker in all_tickers:
             # Current position
@@ -560,8 +613,10 @@ class EnhancedPortfolioManager:
             current_weight = 0.0
             current_shares = 0.0
             if current_pos:
-                current_value = current_pos.shares * current_pos.cost_basis
-                current_weight = current_value / total_value if total_value > 0 else 0
+                # Convert to home currency for weight calculation
+                fx_rate = self.exchange_rates.get(current_pos.currency, 1.0)
+                current_value_home = current_pos.shares * current_pos.cost_basis * fx_rate
+                current_weight = current_value_home / total_value if total_value > 0 else 0
                 current_shares = current_pos.shares
 
             # Target position
@@ -594,8 +649,15 @@ class EnhancedPortfolioManager:
                 elif currency != current_pos.currency and self.verbose:
                     print(f"⚠️  Currency update for {ticker}: {current_pos.currency} → {currency}")
 
-            target_value = target_weight * total_value
-            target_shares = target_value / current_price if current_price > 0 else 0
+            # Convert price to home currency for weight calculations
+            fx_rate = self.exchange_rates.get(currency, 1.0)
+            current_price_home = current_price * fx_rate
+
+            # Calculate target shares using home currency values
+            target_value_home = target_weight * total_value
+            target_shares = target_value_home / current_price_home if current_price_home > 0 else 0
+
+            # Calculate value delta in native currency for display
             value_delta = (target_shares - current_shares) * current_price
 
             recommendations.append(
@@ -630,92 +692,76 @@ class EnhancedPortfolioManager:
 
     def _validate_cash_constraints(self, recommendations: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
-        Validate that recommendations don't exceed available cash per currency.
-        Scale down purchases if needed to respect cash limits.
+        Validate that recommendations don't exceed available cash.
+        All calculations in HOME CURRENCY to handle multi-currency portfolios.
+        Scale down ALL purchases proportionally if total cash insufficient.
         """
-        # Calculate net cash flow per currency
-        cash_flows = {}
-        for currency in self.portfolio.cash_holdings.keys():
-            cash_flows[currency] = self.portfolio.cash_holdings[currency]
+        # Calculate total cash available in HOME CURRENCY
+        total_cash_available = 0.0
+        for currency, cash in self.portfolio.cash_holdings.items():
+            fx_rate = self.exchange_rates.get(currency, 1.0)
+            total_cash_available += cash * fx_rate
 
-        # Calculate net cash needed per currency
+        # Calculate net cash needed (in home currency) from purchases and sales
+        net_cash_needed = 0.0
+
         for rec in recommendations:
-            currency = rec["currency"]
-            if currency not in cash_flows:
-                cash_flows[currency] = 0.0
+            fx_rate = self.exchange_rates.get(rec["currency"], 1.0)
 
             if rec["action"] == "SELL":
-                # Selling adds cash
-                cash_flows[currency] += rec["current_shares"] * rec["current_price"]
+                # Selling adds cash (convert to home currency)
+                net_cash_needed -= rec["current_shares"] * rec["current_price"] * fx_rate
 
             elif rec["action"] == "ADD":
-                # Buying deducts cash
-                cash_flows[currency] -= rec["target_shares"] * rec["current_price"]
+                # Buying deducts cash (convert to home currency)
+                net_cash_needed += rec["target_shares"] * rec["current_price"] * fx_rate
 
             elif rec["action"] == "INCREASE":
-                # Get existing position to calculate delta
+                # Get existing position to calculate delta (convert to home currency)
                 existing = next((p for p in self.portfolio.positions if p.ticker == rec["ticker"]), None)
                 if existing:
                     delta_shares = rec["target_shares"] - existing.shares
-                    cash_flows[currency] -= delta_shares * rec["current_price"]
+                    net_cash_needed += delta_shares * rec["current_price"] * fx_rate
 
             elif rec["action"] == "DECREASE":
-                # Decreasing adds cash back
+                # Decreasing adds cash back (convert to home currency)
                 existing = next((p for p in self.portfolio.positions if p.ticker == rec["ticker"]), None)
                 if existing:
                     delta_shares = existing.shares - rec["target_shares"]
-                    cash_flows[currency] += delta_shares * rec["current_price"]
+                    net_cash_needed -= delta_shares * rec["current_price"] * fx_rate
 
-        # Check for violations and scale down if needed
-        for currency, final_cash in cash_flows.items():
-            if final_cash < 0:
-                # We're over-allocated in this currency - need to scale down purchases
-                deficit = abs(final_cash)
-                available = self.portfolio.cash_holdings.get(currency, 0)
+        # Check if we need to scale down purchases
+        if net_cash_needed > total_cash_available:
+            # Calculate total value of all purchases (in home currency)
+            total_purchases = 0.0
+            for rec in recommendations:
+                fx_rate = self.exchange_rates.get(rec["currency"], 1.0)
 
-                # Calculate total purchases in this currency
-                purchase_value = 0.0
+                if rec["action"] == "ADD":
+                    total_purchases += rec["target_shares"] * rec["current_price"] * fx_rate
+                elif rec["action"] == "INCREASE":
+                    existing = next((p for p in self.portfolio.positions if p.ticker == rec["ticker"]), None)
+                    if existing:
+                        delta_shares = rec["target_shares"] - existing.shares
+                        total_purchases += delta_shares * rec["current_price"] * fx_rate
+
+            if total_purchases > 0:
+                # Scale factor to fit within available cash (99% to leave buffer)
+                scale_factor = (total_cash_available * 0.99) / total_purchases
+
+                # Apply scaling to ALL purchases proportionally
                 for rec in recommendations:
-                    if rec["currency"] == currency:
+                    if rec["action"] in ["ADD", "INCREASE"]:
                         if rec["action"] == "ADD":
-                            purchase_value += rec["target_shares"] * rec["current_price"]
+                            rec["target_shares"] *= scale_factor
+                            rec["target_weight"] *= scale_factor
                         elif rec["action"] == "INCREASE":
                             existing = next((p for p in self.portfolio.positions if p.ticker == rec["ticker"]), None)
                             if existing:
                                 delta_shares = rec["target_shares"] - existing.shares
-                                purchase_value += delta_shares * rec["current_price"]
-
-                # Also factor in cash from sales
-                sales_value = 0.0
-                for rec in recommendations:
-                    if rec["currency"] == currency:
-                        if rec["action"] == "SELL":
-                            sales_value += rec["current_shares"] * rec["current_price"]
-                        elif rec["action"] == "DECREASE":
-                            existing = next((p for p in self.portfolio.positions if p.ticker == rec["ticker"]), None)
-                            if existing:
-                                delta_shares = existing.shares - rec["target_shares"]
-                                sales_value += delta_shares * rec["current_price"]
-
-                # Calculate scaling factor - add 1% buffer to avoid rounding errors
-                total_available = available + sales_value
-                if purchase_value > 0:
-                    scale_factor = (total_available * 0.99) / purchase_value  # 99% to leave cash buffer
-
-                    # Scale down all purchases in this currency
-                    for rec in recommendations:
-                        if rec["currency"] == currency and rec["action"] in ["ADD", "INCREASE"]:
-                            if rec["action"] == "ADD":
-                                rec["target_shares"] *= scale_factor
+                                scaled_delta = delta_shares * scale_factor
+                                rec["target_shares"] = existing.shares + scaled_delta
                                 rec["target_weight"] *= scale_factor
-                            elif rec["action"] == "INCREASE":
-                                existing = next((p for p in self.portfolio.positions if p.ticker == rec["ticker"]), None)
-                                if existing:
-                                    delta_shares = rec["target_shares"] - existing.shares
-                                    scaled_delta = delta_shares * scale_factor
-                                    rec["target_shares"] = existing.shares + scaled_delta
-                                    # Recalculate weight (approximation)
-                                    rec["target_weight"] *= scale_factor
 
         return recommendations
 
@@ -803,7 +849,22 @@ class EnhancedPortfolioManager:
         return {"positions": updated_positions, "cash": updated_cash}
 
     def _portfolio_summary(self) -> Dict[str, Any]:
-        """Generate summary of current portfolio"""
-        total_value = sum(p.shares * p.cost_basis for p in self.portfolio.positions) + sum(self.portfolio.cash_holdings.values())
+        """Generate summary of current portfolio in HOME CURRENCY"""
+        # Convert position values to home currency
+        total_value = 0.0
+        for p in self.portfolio.positions:
+            fx_rate = self.exchange_rates.get(p.currency, 1.0)
+            total_value += p.shares * p.cost_basis * fx_rate
 
-        return {"total_value": total_value, "num_positions": len(self.portfolio.positions), "cash_holdings": self.portfolio.cash_holdings}
+        # Convert cash holdings to home currency
+        for currency, cash in self.portfolio.cash_holdings.items():
+            fx_rate = self.exchange_rates.get(currency, 1.0)
+            total_value += cash * fx_rate
+
+        return {
+            "total_value": total_value,
+            "num_positions": len(self.portfolio.positions),
+            "cash_holdings": self.portfolio.cash_holdings,
+            "home_currency": self.home_currency,
+            "exchange_rates": self.exchange_rates,
+        }

@@ -1,6 +1,6 @@
 # Börsdata Integration Project Log
 
-_Last updated: 2025-10-01 (Session 45)_
+_Last updated: 2025-10-01 (Session 46)_
 
 ## End Goal
 Rebuild the data ingestion and processing pipeline so the application relies on Börsdata's REST API (per `README_Borsdata_API.md` and https://apidoc.borsdata.se/swagger/index.html). The system should let a user set a `BORSDATA_API_KEY` in `.env`, accept Börsdata-native tickers, and otherwise preserve the current user-facing workflows and capabilities.
@@ -719,5 +719,42 @@ The system now operates efficiently at scale with comprehensive financial data i
   - Exceptions for `portfolios/example_portfolio.csv` and `portfolios/empty_portfolio.csv`
 - **Testing**: All 72 tests continue to pass; no code functionality changed
 - **System Status**: Repository now has professional documentation organization with clear paths to Börsdata API info, comprehensive CLI examples, and archived migration history for reference.
+
+### Session 46 (Home Currency & Cache Bypass)
+- **Feature Implementation**: Added home currency support to portfolio manager for proper multi-currency portfolio handling.
+- **CLI Option**: Added `--home-currency SEK` flag (default: SEK) to `src/portfolio_manager.py` for specifying the reporting/calculation currency.
+- **Exchange Rate Integration**:
+  - Implemented `_fetch_exchange_rates()` method in `EnhancedPortfolioManager` that fetches FX rates from Börsdata currency instruments (type 6)
+  - Utilizes existing `ExchangeRateService` to query rates like USDSEK, GBPSEK, DKKSEK, CADSEK
+  - Stores rates in `self.exchange_rates` dictionary for reuse across calculations
+  - Fetches rates during data prefetch phase to minimize API calls
+- **Path-Independent Calculations**: Removed portfolio path dependency that caused different outcomes based on starting positions:
+  - **Before**: Existing positions kept if score ≥ 0.3, new positions added if score ≥ 0.6 (asymmetric thresholds)
+  - **After**: All positions treated equally - top N selected if score ≥ 0.5 (symmetric threshold)
+  - Modified `_select_top_positions()` to use single threshold and score-based ranking
+  - Updated `_generate_recommendations()` to convert all prices to home currency for weight calculations
+  - Modified `_validate_cash_constraints()` to treat all cash as fungible via home currency conversion
+  - Updated `_portfolio_summary()` to report total value in home currency with FX rates used
+- **Display Enhancement**: Updated `src/utils/output_formatter.py` to:
+  - Show portfolio total in home currency (e.g., "10,000.00 SEK")
+  - Display exchange rates used: "1 USD = 9.4163 SEK"
+  - Preserve native currencies in position changes (e.g., "+224 USD", "+1,649 SEK")
+- **Cache Bypass Feature**: Implemented `--no-cache` flag for forcing fresh data from Börsdata:
+  - Added `--no-cache` CLI option to `src/portfolio_manager.py`
+  - Passed `no_cache` flag through `EnhancedPortfolioManager` to data fetchers
+  - Modified `src/data/parallel_api_wrapper.py` to bypass prefetch cache when `no_cache=True`
+  - Forces refresh of Börsdata instrument caches (Nordic and Global)
+  - Useful for testing, post-market-event updates, and debugging
+- **Testing**: Validated with multi-currency portfolios (SEK, USD, GBP, DKK, CAD):
+  - Empty 10,000 SEK portfolio now correctly allocates across all currencies
+  - Existing multi-currency portfolio produces same target allocation
+  - Exchange rates displayed: USD=9.42, GBP=12.66, DKK=1.48, CAD=6.76 (to SEK)
+  - `--no-cache` flag confirmed to bypass caches and fetch fresh data
+- **Files Modified**:
+  - `src/portfolio_manager.py` - Added CLI flags
+  - `src/agents/enhanced_portfolio_manager.py` - Core FX logic and path-independent calculations
+  - `src/utils/output_formatter.py` - Enhanced display with home currency
+  - `src/data/parallel_api_wrapper.py` - Cache bypass support
+- **System Status**: Portfolio manager now handles multi-currency portfolios with proper FX conversion, path-independent target allocation, and optional cache bypass for fresh data.
 
 **IMPORTANT**: Update this log at the end of each work session: note completed steps, new decisions, blockers, and refreshed next actions. Always use session numbers (Session X, Session X+1, etc.) for progress entries. Update the "Last updated" date at the top with the actual current date when making changes.

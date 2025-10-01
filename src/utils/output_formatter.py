@@ -41,8 +41,19 @@ def display_results(results: Dict, verbose: bool):
 
     # Current portfolio summary
     current = results.get("current_portfolio", {})
-    print(f"\nCurrent Portfolio Value: ${current.get('total_value', 0):,.2f}")
+    home_currency = current.get("home_currency", "USD")
+    total_value = current.get("total_value", 0)
+
+    print(f"\nCurrent Portfolio Value: {total_value:,.2f} {home_currency}")
     print(f"Number of Positions: {current.get('num_positions', 0)}")
+
+    # Show exchange rates if available
+    exchange_rates = current.get("exchange_rates", {})
+    if exchange_rates and len(exchange_rates) > 1:
+        print(f"\nExchange Rates (to {home_currency}):")
+        for currency, rate in sorted(exchange_rates.items()):
+            if currency != home_currency:
+                print(f"   1 {currency} = {rate:.4f} {home_currency}")
 
     # Recommendations table
     recs = results.get("recommendations", [])

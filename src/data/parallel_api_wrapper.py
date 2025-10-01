@@ -287,6 +287,7 @@ async def parallel_fetch_ticker_data(
     price_days: int = 30,
     api_key: Optional[str] = None,
     progress_callback: Optional[callable] = None,
+    no_cache: bool = False,
 ) -> Dict[str, Dict[str, Any]]:
     """
     Fetch comprehensive data for multiple tickers in parallel.
@@ -342,19 +343,26 @@ async def parallel_fetch_ticker_data(
     )
 
     with PrefetchStore() as store:
-        cached_payloads = store.load_batch(tickers, params)
-        tickers_to_fetch = [ticker for ticker in tickers if ticker not in cached_payloads]
-        num_cached = len(cached_payloads)
+        # Bypass cache if no_cache flag is set
+        if no_cache:
+            cached_payloads = {}
+            tickers_to_fetch = tickers
+            num_cached = 0
+            vprint(f"🔄 Bypassing cache, fetching fresh data for {len(tickers)} ticker(s)")
+        else:
+            cached_payloads = store.load_batch(tickers, params)
+            tickers_to_fetch = [ticker for ticker in tickers if ticker not in cached_payloads]
+            num_cached = len(cached_payloads)
 
-        if cached_payloads:
-            vprint(
-                f"💾 Loaded cached prefetched data for {num_cached} ticker(s) on {end_date}"
-            )
-            # Report cache hit immediately
-            if progress_callback:
-                progress_callback(0, 0, "", cached=num_cached, status="fetching" if tickers_to_fetch else "done")
-            else:
-                progress.update_prefetch_status(0, 0, "", cached=num_cached, status="fetching" if tickers_to_fetch else "done")
+            if cached_payloads:
+                vprint(
+                    f"💾 Loaded cached prefetched data for {num_cached} ticker(s) on {end_date}"
+                )
+                # Report cache hit immediately
+                if progress_callback:
+                    progress_callback(0, 0, "", cached=num_cached, status="fetching" if tickers_to_fetch else "done")
+                else:
+                    progress.update_prefetch_status(0, 0, "", cached=num_cached, status="fetching" if tickers_to_fetch else "done")
 
         # Create all parallel tasks for uncached tickers only
         tasks = []
