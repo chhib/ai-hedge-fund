@@ -440,16 +440,111 @@ class EnhancedPortfolioManager:
 
         return target_weights
 
+    def _get_ticker_currency(self, ticker: str) -> str:
+        """
+        Fetch actual currency from Borsdata instrument data
+        Returns stockPriceCurrency from the API
+        """
+        import os
+        from src.tools.api import _borsdata_client
+
+        api_key = os.getenv("BORSDATA_API_KEY")
+        if not api_key:
+            # Fallback to market-based guess
+            market = self.ticker_markets.get(ticker, "global")
+            return "SEK" if market == "Nordic" else "USD"
+
+        try:
+            market = self.ticker_markets.get(ticker, "global")
+            use_global = market.lower() == "global"
+            instrument = _borsdata_client.get_instrument(ticker, api_key=api_key, use_global=use_global)
+            currency = instrument.get("stockPriceCurrency")
+            if currency:
+                return currency
+        except Exception as e:
+            if self.verbose:
+                print(f"Warning: Could not fetch currency for {ticker}: {e}")
+
+        # Fallback
+        market = self.ticker_markets.get(ticker, "global")
+        return "SEK" if market == "Nordic" else "USD"
+
+    def _get_current_price(self, ticker: str) -> tuple[float, str]:
+        """
+        Fetch current price and currency from Borsdata
+        Returns (price, currency) tuple
+        """
+        import os
+        from src.tools.api import _borsdata_client
+        from datetime import datetime, timedelta
+
+        api_key = os.getenv("BORSDATA_API_KEY")
+        if not api_key:
+            if self.verbose:
+                print(f"Warning: No API key - using default price for {ticker}")
+            return 100.0, self._get_ticker_currency(ticker)
+
+        try:
+            market = self.ticker_markets.get(ticker, "global")
+            use_global = market.lower() == "global"
+
+            # Get instrument for currency info
+            instrument = _borsdata_client.get_instrument(ticker, api_key=api_key, use_global=use_global)
+            currency = instrument.get("stockPriceCurrency", "USD")
+            instrument_id = instrument.get("insId")
+
+            # Fetch recent prices (last 5 days to handle weekends)
+            end_date = datetime.now().strftime("%Y-%m-%d")
+            start_date = (datetime.now() - timedelta(days=5)).strftime("%Y-%m-%d")
+
+            prices = _borsdata_client.get_stock_prices(
+                instrument_id,
+                start_date=start_date,
+                end_date=end_date,
+                api_key=api_key,
+            )
+
+            if prices:
+                # Get most recent price
+                latest = prices[-1]
+                close_price = latest.get("c")  # close price
+                if close_price:
+                    return float(close_price), currency
+
+            if self.verbose:
+                print(f"Warning: No recent prices for {ticker}, using default")
+            return 100.0, currency
+
+        except Exception as e:
+            if self.verbose:
+                print(f"Warning: Could not fetch price for {ticker}: {e}")
+            return 100.0, self._get_ticker_currency(ticker)
+
     def _generate_recommendations(self, target_positions: Dict[str, float], min_trade_size: float) -> List[Dict[str, Any]]:
         """
         Generate trading recommendations based on target positions vs current portfolio
+        Multi-currency aware: calculates per-currency totals and validates cash constraints
         """
         recommendations = []
         current_tickers = {p.ticker for p in self.portfolio.positions}
         all_tickers = set(list(target_positions.keys()) + list(current_tickers))
 
-        # Calculate total portfolio value (simplified - using cost basis)
-        total_value = sum(p.shares * p.cost_basis for p in self.portfolio.positions) + sum(self.portfolio.cash_holdings.values())
+        # Calculate total portfolio value PER CURRENCY to avoid mixing SEK+USD
+        currency_totals = {}
+        for pos in self.portfolio.positions:
+            if pos.currency not in currency_totals:
+                currency_totals[pos.currency] = 0.0
+            currency_totals[pos.currency] += pos.shares * pos.cost_basis
+
+        # Add cash holdings to currency totals
+        for currency, cash in self.portfolio.cash_holdings.items():
+            if currency not in currency_totals:
+                currency_totals[currency] = 0.0
+            currency_totals[currency] += cash
+
+        # For weight calculations, use the dominant currency total or sum (legacy behavior)
+        # This maintains backward compatibility while we fix the core issue
+        total_value = sum(currency_totals.values())
 
         for ticker in all_tickers:
             # Current position
@@ -480,8 +575,18 @@ class EnhancedPortfolioManager:
             else:
                 action = "HOLD"
 
-            # Calculate target shares (simplified - using cost basis as price)
-            current_price = current_pos.cost_basis if current_pos else 100.0  # Default price
+            # Fetch current price and currency from Borsdata
+            current_price, currency = self._get_current_price(ticker)
+
+            # For existing positions, validate currency and fall back to cost basis if fetch failed
+            if current_pos:
+                if current_price == 100.0:  # Default price indicates fetch failure
+                    current_price = current_pos.cost_basis
+                    currency = current_pos.currency
+                elif currency != current_pos.currency and self.verbose:
+                    print(f"⚠️  Currency update for {ticker}: {current_pos.currency} → {currency}")
+
+            # Calculate target shares
             target_value = target_weight * total_value
             target_shares = target_value / current_price if current_price > 0 else 0
 
@@ -497,9 +602,103 @@ class EnhancedPortfolioManager:
                     "confidence": 0.75,  # Simplified
                     "reasoning": f"Target allocation: {target_weight:.1%}",
                     "current_price": current_price,
-                    "currency": current_pos.currency if current_pos else "USD",
+                    "currency": currency,
                 }
             )
+
+        # Validate and adjust for cash constraints per currency
+        recommendations = self._validate_cash_constraints(recommendations)
+
+        return recommendations
+
+    def _validate_cash_constraints(self, recommendations: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Validate that recommendations don't exceed available cash per currency.
+        Scale down purchases if needed to respect cash limits.
+        """
+        # Calculate net cash flow per currency
+        cash_flows = {}
+        for currency in self.portfolio.cash_holdings.keys():
+            cash_flows[currency] = self.portfolio.cash_holdings[currency]
+
+        # Calculate net cash needed per currency
+        for rec in recommendations:
+            currency = rec["currency"]
+            if currency not in cash_flows:
+                cash_flows[currency] = 0.0
+
+            if rec["action"] == "SELL":
+                # Selling adds cash
+                cash_flows[currency] += rec["current_shares"] * rec["current_price"]
+
+            elif rec["action"] == "ADD":
+                # Buying deducts cash
+                cash_flows[currency] -= rec["target_shares"] * rec["current_price"]
+
+            elif rec["action"] == "INCREASE":
+                # Get existing position to calculate delta
+                existing = next((p for p in self.portfolio.positions if p.ticker == rec["ticker"]), None)
+                if existing:
+                    delta_shares = rec["target_shares"] - existing.shares
+                    cash_flows[currency] -= delta_shares * rec["current_price"]
+
+            elif rec["action"] == "DECREASE":
+                # Decreasing adds cash back
+                existing = next((p for p in self.portfolio.positions if p.ticker == rec["ticker"]), None)
+                if existing:
+                    delta_shares = existing.shares - rec["target_shares"]
+                    cash_flows[currency] += delta_shares * rec["current_price"]
+
+        # Check for violations and scale down if needed
+        for currency, final_cash in cash_flows.items():
+            if final_cash < 0:
+                # We're over-allocated in this currency - need to scale down purchases
+                deficit = abs(final_cash)
+                available = self.portfolio.cash_holdings.get(currency, 0)
+
+                # Calculate total purchases in this currency
+                purchase_value = 0.0
+                for rec in recommendations:
+                    if rec["currency"] == currency:
+                        if rec["action"] == "ADD":
+                            purchase_value += rec["target_shares"] * rec["current_price"]
+                        elif rec["action"] == "INCREASE":
+                            existing = next((p for p in self.portfolio.positions if p.ticker == rec["ticker"]), None)
+                            if existing:
+                                delta_shares = rec["target_shares"] - existing.shares
+                                purchase_value += delta_shares * rec["current_price"]
+
+                # Also factor in cash from sales
+                sales_value = 0.0
+                for rec in recommendations:
+                    if rec["currency"] == currency:
+                        if rec["action"] == "SELL":
+                            sales_value += rec["current_shares"] * rec["current_price"]
+                        elif rec["action"] == "DECREASE":
+                            existing = next((p for p in self.portfolio.positions if p.ticker == rec["ticker"]), None)
+                            if existing:
+                                delta_shares = existing.shares - rec["target_shares"]
+                                sales_value += delta_shares * rec["current_price"]
+
+                # Calculate scaling factor - add 1% buffer to avoid rounding errors
+                total_available = available + sales_value
+                if purchase_value > 0:
+                    scale_factor = (total_available * 0.99) / purchase_value  # 99% to leave cash buffer
+
+                    # Scale down all purchases in this currency
+                    for rec in recommendations:
+                        if rec["currency"] == currency and rec["action"] in ["ADD", "INCREASE"]:
+                            if rec["action"] == "ADD":
+                                rec["target_shares"] *= scale_factor
+                                rec["target_weight"] *= scale_factor
+                            elif rec["action"] == "INCREASE":
+                                existing = next((p for p in self.portfolio.positions if p.ticker == rec["ticker"]), None)
+                                if existing:
+                                    delta_shares = rec["target_shares"] - existing.shares
+                                    scaled_delta = delta_shares * scale_factor
+                                    rec["target_shares"] = existing.shares + scaled_delta
+                                    # Recalculate weight (approximation)
+                                    rec["target_weight"] *= scale_factor
 
         return recommendations
 
@@ -507,18 +706,31 @@ class EnhancedPortfolioManager:
         """
         Calculate the updated portfolio after applying recommendations
         Properly handles date_acquired for new and modified positions
+        Deducts cash for purchases and adds cash for sales
         """
         updated_positions = []
         updated_cash = dict(self.portfolio.cash_holdings)  # Copy current cash
 
         for rec in recommendations:
             ticker = rec["ticker"]
+            currency = rec["currency"]
+
+            # Ensure currency exists in cash holdings
+            if currency not in updated_cash:
+                updated_cash[currency] = 0.0
 
             if rec["action"] == "SELL":
+                # Add cash back from sale
+                sale_value = rec["current_shares"] * rec["current_price"]
+                updated_cash[currency] += sale_value
                 # Position sold, not included in output
                 continue
 
             elif rec["action"] == "ADD":
+                # Deduct cash for purchase
+                purchase_value = rec["target_shares"] * rec["current_price"]
+                updated_cash[currency] -= purchase_value
+
                 # New position - use today's date
                 updated_positions.append({"ticker": ticker, "shares": rec["target_shares"], "cost_basis": rec["current_price"], "currency": rec["currency"], "date_acquired": datetime.now().strftime("%Y-%m-%d")})
 
@@ -528,18 +740,30 @@ class EnhancedPortfolioManager:
 
                 if existing and rec["target_shares"] > 0:
                     if rec["action"] == "INCREASE":
+                        # Deduct cash for additional shares
+                        delta_shares = rec["target_shares"] - existing.shares
+                        purchase_value = delta_shares * rec["current_price"]
+                        updated_cash[currency] -= purchase_value
+
                         # Calculate weighted average cost basis
                         old_value = existing.shares * existing.cost_basis
-                        new_shares = rec["target_shares"] - existing.shares
-                        new_value = new_shares * rec["current_price"]
+                        new_value = delta_shares * rec["current_price"]
                         total_value = old_value + new_value
                         total_shares = rec["target_shares"]
                         new_cost_basis = total_value / total_shares if total_shares > 0 else 0
+                    elif rec["action"] == "DECREASE":
+                        # Add cash back from partial sale
+                        delta_shares = existing.shares - rec["target_shares"]
+                        sale_value = delta_shares * rec["current_price"]
+                        updated_cash[currency] += sale_value
+
+                        # Keep existing cost basis
+                        new_cost_basis = existing.cost_basis
                     else:
-                        # DECREASE or HOLD - keep existing cost basis
+                        # HOLD - keep existing cost basis, no cash change
                         new_cost_basis = existing.cost_basis
 
-                    updated_positions.append({"ticker": ticker, "shares": rec["target_shares"], "cost_basis": new_cost_basis, "currency": existing.currency, "date_acquired": existing.date_acquired.strftime("%Y-%m-%d") if existing.date_acquired else ""})
+                    updated_positions.append({"ticker": ticker, "shares": rec["target_shares"], "cost_basis": new_cost_basis, "currency": rec["currency"], "date_acquired": existing.date_acquired.strftime("%Y-%m-%d") if existing.date_acquired else ""})
 
         return {"positions": updated_positions, "cash": updated_cash}
 

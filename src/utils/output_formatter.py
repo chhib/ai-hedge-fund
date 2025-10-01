@@ -15,7 +15,7 @@ def format_as_portfolio_csv(results: Dict) -> pd.DataFrame:
     # Process updated positions from recommendations
     for rec in results.get("updated_portfolio", {}).get("positions", []):
         if rec["shares"] > 0:  # Only include non-zero positions
-            portfolio_data.append({"ticker": rec["ticker"], "shares": rec["shares"], "cost_basis": round(rec["cost_basis"], 2), "currency": rec["currency"], "date_acquired": rec["date_acquired"]})
+            portfolio_data.append({"ticker": rec["ticker"], "shares": int(rec["shares"]), "cost_basis": round(rec["cost_basis"], 2), "currency": rec["currency"], "date_acquired": rec["date_acquired"]})
 
     # Add cash positions
     for currency, amount in results.get("updated_portfolio", {}).get("cash", {}).items():

@@ -217,16 +217,29 @@ poetry run python src/portfolio_manager.py \
   --analysts all
 ```
 
-**Rebalancing existing portfolio with mixed markets:**
+**Multi-currency portfolio with automatic market detection:**
 ```bash
 poetry run python src/portfolio_manager.py \
-  --portfolio portfolio_20250930.csv \
-  --universe-tickers "AAPL,MSFT,NVDA,META" \
-  --universe-nordics "HM B,ERIC B,VOLV B,ABB" \
-  --analysts warren_buffett,charlie_munger,fundamentals \
-  --max-holdings 8 \
-  --verbose
+  --portfolio example_portfolio.csv \
+  --universe-tickers "FDEV,TRMD A,AAPL,META,STNG,SBOK,HIVE,MKO" \
+  --analysts stanley_druckenmiller,technical_analyst,jim_simons,fundamentals_analyst \
+  --model gpt-5-nano \
+  --model-provider openai
 ```
+
+**Output:**
+```
+ticker   shares  cost_basis  currency  date_acquired
+TRMD A   77      500.0       DKK       2025-01-15
+FDEV     2228    250.0       GBP       2025-01-15
+CASH     100.0               SEK
+SBOK     228     43.4        SEK       2025-10-01
+CASH     48.19               USD
+META     5       514.57      USD       2025-01-15
+STNG     74      56.05       USD       2025-10-01
+```
+
+Note: The system automatically fetches correct currencies (GBP, DKK, SEK, USD) from Börsdata and rounds share quantities to whole numbers.
 
 **Quick test with limited analysts:**
 ```bash

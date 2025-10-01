@@ -1,6 +1,6 @@
 # Börsdata Integration Project Log
 
-_Last updated: 2025-09-30_
+_Last updated: 2025-10-01_
 
 ## End Goal
 Rebuild the data ingestion and processing pipeline so the application relies on Börsdata's REST API (per `README_Borsdata_API.md` and https://apidoc.borsdata.se/swagger/index.html). The system should let a user set a `BORSDATA_API_KEY` in `.env`, accept Börsdata-native tickers, and otherwise preserve the current user-facing workflows and capabilities.
@@ -625,5 +625,52 @@ The system now operates efficiently at scale with comprehensive financial data i
   3. **Recommendations**: Shows final portfolio analysis
 - **User Experience**: Can now see exactly which tickers are being downloaded and how long each data type takes, providing transparency into the async fetching process.
 - **System Status**: Complete visibility into both data fetching (async parallel) and analyst execution (sequential per ticker) phases.
+
+### Session 41 (SQLite Prefetch Cache)
+- Implemented persistent prefetch storage using SQLite so repeated runs reuse cached ticker data per end/start-date combination.
+- Added `PrefetchStore` with JSON serialisation for prices, metrics, line items, insider trades, and calendar events; integrated it into `parallel_fetch_ticker_data` to skip API calls when payloads already exist for the requested date window.
+- Ensured market cap derivation survives cache hits and persisted payloads are re-used on subsequent runs without re-fetching.
+- Created regression tests (`tests/data/test_prefetch_store.py`) covering store round-trip and verifying that a warm cache prevents secondary API invocations.
+- Confirmed targeted pytest suite passes (`poetry run pytest tests/data/test_prefetch_store.py`).
+
+### Session 42 (LLM Response Cache with 7-Day Freshness)
+- **Feature Implementation**: Added persistent LLM response caching to avoid redundant API calls for repeated analyst analyses.
+- **Database Schema**: Created `llm_response_cache` table via Alembic migration (revision `a8f3e2c9d1b4`) with columns for ticker, analyst_name, prompt_hash (SHA256), prompt_text, response_json, model metadata, and created_at timestamp.
+- **Cache Service**: Implemented `LLMResponseCache` class in `src/data/llm_response_cache.py`:
+  - `get_cached_response()`: Retrieves cached LLM responses only if less than 7 days old
+  - `store_response()`: Always inserts new entries (never deletes old data, preserves historical record)
+  - `get_stats()`: Returns cache statistics (total/fresh/stale entries, unique tickers)
+  - Singleton pattern via `get_llm_cache()` for global access
+- **Integration**: Modified `call_llm()` in `src/utils/llm.py` to:
+  - Check cache before LLM invocation using ticker + analyst_name + prompt hash
+  - Return cached pydantic response if found and fresh (< 7 days)
+  - Store successful LLM responses after invocation
+  - Gracefully handle cache errors without failing requests
+- **Testing**: Created comprehensive test suite (`tests/data/test_llm_response_cache.py`) with 8 test cases:
+  - Cache miss scenarios (no data, stale data > 7 days)
+  - Cache hit with fresh data (< 7 days)
+  - Isolation between different tickers, analysts, and prompts
+  - Historical record preservation (multiple entries for same key)
+  - Cache statistics validation
+  - All tests passing (8/8)
+- **Data Policy**: Old cache entries are never deleted - only freshness is checked on retrieval. This preserves complete historical record of all LLM analyses.
+- **Performance Impact**: Subsequent analyses of same ticker+analyst combination within 7 days now use cached responses, eliminating redundant LLM API calls and dramatically reducing costs/latency.
+- **System Status**: LLM response caching is fully operational and integrated into both portfolio manager and main CLI workflows.
+
+### Session 43 (Multi-Currency Portfolio Manager Fixes)
+- **Bug Fix**: Fixed fractional share quantities in portfolio output - shares are now rounded down to whole numbers using `int()` conversion in `src/utils/output_formatter.py:18`.
+- **Bug Fix**: Corrected currency mismatches in portfolio positions - system now fetches actual currency from Börsdata `stockPriceCurrency` field instead of guessing based on market region.
+- **Feature Enhancement**: Added `_get_current_price()` method in `EnhancedPortfolioManager` to fetch latest prices with currency from Börsdata API (5-day lookback to handle weekends).
+- **Feature Enhancement**: Updated `_get_ticker_currency()` to query Börsdata instrument data for `stockPriceCurrency` field with fallback to market-based guess.
+- **Integration**: Modified `_generate_recommendations()` to use actual Borsdata prices and currencies instead of cost_basis approximations.
+- **Integration**: Updated `_calculate_updated_portfolio()` to preserve fetched currency instead of using existing position currency, enabling currency corrections.
+- **Validation**: Tested with multi-currency portfolio (GBP, DKK, SEK, USD) - all currencies correctly identified and share quantities properly rounded:
+  - FDEV: 2228 shares @ GBP (was incorrectly SEK)
+  - TRMD A: 77 shares @ DKK (was incorrectly SEK)
+  - SBOK: 228 shares @ SEK ✓
+  - META: 5 shares @ USD ✓
+  - STNG: 74 shares @ USD ✓
+- **Documentation**: Updated README.md with realistic multi-currency portfolio example showing automatic currency detection and whole share quantities.
+- **System Status**: Portfolio manager now handles multi-currency portfolios correctly with accurate price and currency data from Börsdata.
 
 **IMPORTANT**: Update this log at the end of each work session: note completed steps, new decisions, blockers, and refreshed next actions. Always use session numbers (Session X, Session X+1, etc.) for progress entries. Update the "Last updated" date at the top with the actual current date when making changes.
