@@ -219,7 +219,7 @@ def run_hedge_fund(
         vprint(f"Running {len(analyst_ticker_combinations)} analyst×ticker combinations in parallel...")
 
         # Process all combinations in parallel with rate limiting consideration
-        max_workers = min(len(analyst_ticker_combinations), 8)  # Limit to avoid overwhelming APIs
+        max_workers = min(len(analyst_ticker_combinations), 32)  # Increased for better parallelization since data is prefetched
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
             future_to_combo = {
                 executor.submit(process_single_analyst_ticker, analyst_key, ticker, all_prefetched_data): (analyst_key, ticker)
