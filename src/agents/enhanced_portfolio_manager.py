@@ -21,13 +21,14 @@ class EnhancedPortfolioManager:
     Maintains concentrated portfolio of 5-10 positions
     """
 
-    def __init__(self, portfolio: Portfolio, universe: List[str], analysts: List[str], model_config: Dict[str, Any], ticker_markets: Dict[str, str] = None, verbose: bool = False):
+    def __init__(self, portfolio: Portfolio, universe: List[str], analysts: List[str], model_config: Dict[str, Any], ticker_markets: Dict[str, str] = None, verbose: bool = False, session_id: str = None):
         self.portfolio = portfolio
         self.universe = universe
         self.analyst_names = analysts
         self.model_config = model_config
         self.ticker_markets = ticker_markets or {}
         self.verbose = verbose
+        self.session_id = session_id
         self.analysts = self._initialize_analysts(analysts, model_config)
 
     def _initialize_analysts(self, analyst_names: List[str], model_config: Dict[str, Any]) -> List[Any]:
@@ -268,13 +269,27 @@ class EnhancedPortfolioManager:
                 # Update progress: done (next_ticker is already set from before)
                 progress.update_status(agent_id, ticker, "Done", next_ticker=next_ticker)
 
-                return AnalystSignal(
-                    ticker=ticker,
-                    analyst=analyst_name,
-                    signal=numeric_signal,
-                    confidence=confidence,
-                    reasoning=reasoning
-                )
+                # Save to database if session_id is provided
+                if self.session_id:
+                    try:
+                        from src.data.analysis_storage import save_analyst_analysis
+
+                        save_analyst_analysis(
+                            session_id=self.session_id,
+                            ticker=ticker,
+                            analyst_name=analyst_name,
+                            signal=signal_str,
+                            signal_numeric=numeric_signal,
+                            confidence=confidence,
+                            reasoning=reasoning,
+                            model_name=self.model_config.get("name"),
+                            model_provider=self.model_config.get("provider"),
+                        )
+                    except Exception as e:
+                        if self.verbose:
+                            print(f"  Warning: Failed to save analysis to database: {e}")
+
+                return AnalystSignal(ticker=ticker, analyst=analyst_name, signal=numeric_signal, confidence=confidence, reasoning=reasoning)
 
             except Exception as e:
                 progress.update_status(agent_id, ticker, "Error", next_ticker=next_ticker)

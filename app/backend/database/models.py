@@ -97,19 +97,41 @@ class HedgeFundFlowRunCycle(Base):
 class ApiKey(Base):
     """Table to store API keys for various services"""
     __tablename__ = "api_keys"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    
+
     # API key details
     provider = Column(String(100), nullable=False, unique=True, index=True)  # e.g., "ANTHROPIC_API_KEY"
     key_value = Column(Text, nullable=False)  # The actual API key (encrypted in production)
     is_active = Column(Boolean, default=True)  # Enable/disable without deletion
-    
+
     # Optional metadata
     description = Column(Text, nullable=True)  # Human-readable description
     last_used = Column(DateTime(timezone=True), nullable=True)  # Track usage
 
 
- 
+class AnalystAnalysis(Base):
+    """Table to store individual analyst analyses from portfolio manager runs"""
+    __tablename__ = "analyst_analyses"
+
+    id = Column(Integer, primary_key=True, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Session tracking
+    session_id = Column(String(100), nullable=False, index=True)  # UUID to group analyses from a single run
+
+    # Analysis details
+    ticker = Column(String(20), nullable=False, index=True)
+    analyst_name = Column(String(100), nullable=False)
+    signal = Column(String(20), nullable=False)  # "bullish", "neutral", "bearish"
+    signal_numeric = Column(String(20), nullable=True)  # -1.0 to 1.0 as string for flexibility
+    confidence = Column(String(20), nullable=True)  # 0.0 to 1.0 as string
+    reasoning = Column(Text, nullable=False)  # Full analyst explanation
+
+    # Optional metadata
+    model_name = Column(String(100), nullable=True)  # LLM model used
+    model_provider = Column(String(50), nullable=True)  # openai, anthropic, etc.
+
+

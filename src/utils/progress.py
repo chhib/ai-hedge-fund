@@ -26,7 +26,7 @@ class AgentProgress:
         )
         self.started = False
         self.update_handlers: List[Callable[[str, Optional[str], str], None]] = []
-        self.prefetch_progress = {"completed": 0, "total": 0, "current_ticker": None}
+        self.prefetch_progress = {"completed": 0, "total": 0, "current_ticker": None, "cached": 0, "status": "pending"}
 
     def register_handler(self, handler: Callable[[str, Optional[str], str], None]):
         self.update_handlers.append(handler)
@@ -52,10 +52,22 @@ class AgentProgress:
             self.live.stop()
             self.started = False
 
-    def update_prefetch_status(self, completed: int, total: int, ticker: str):
+    def update_prefetch_status(self, completed: int, total: int, ticker: str, cached: int = 0, status: str = "fetching"):
+        """
+        Update prefetch progress.
+
+        Args:
+            completed: Number of API tasks completed
+            total: Total number of API tasks
+            ticker: Current ticker being processed
+            cached: Number of tickers loaded from cache
+            status: Status of prefetch ('pending', 'fetching', 'done')
+        """
         self.prefetch_progress["completed"] = completed
         self.prefetch_progress["total"] = total
         self.prefetch_progress["current_ticker"] = ticker
+        self.prefetch_progress["cached"] = cached
+        self.prefetch_progress["status"] = status
         self._refresh_display()
         sys.stderr.flush()
 
@@ -101,23 +113,49 @@ class AgentProgress:
         self.table.add_column(width=100)
 
         # Prefetching progress
-        if self.prefetch_progress["total"] > 0 and self.prefetch_progress["completed"] < self.prefetch_progress["total"]:
-            completed = self.prefetch_progress["completed"]
-            total = self.prefetch_progress["total"]
-            ticker = self.prefetch_progress["current_ticker"]
-            
+        status = self.prefetch_progress.get("status", "pending")
+        cached = self.prefetch_progress.get("cached", 0)
+        completed = self.prefetch_progress["completed"]
+        total = self.prefetch_progress["total"]
+        ticker = self.prefetch_progress["current_ticker"]
+
+        # Show prefetch status
+        if status == "done" and total == 0 and cached > 0:
+            # All tickers from cache
+            progress_text = Text()
+            progress_text.append("✓ ", style=Style(color="green", bold=True))
+            progress_text.append(f"Loaded {cached} ticker(s) from cache ", style=Style(color="green"))
+            progress_text.append("(today's data)", style=Style(color="white", dim=True))
+            self.table.add_row(progress_text)
+        elif status == "fetching" or (total > 0 and completed < total):
+            # Still fetching from API
             bar_length = 20
-            filled = int(bar_length * completed / total)
+            filled = int(bar_length * completed / total) if total > 0 else 0
             empty = bar_length - filled
             bar = "█" * filled + "░" * empty
-            
+
             progress_text = Text()
-            progress_text.append("⋯ Prefetching tickers ", style=Style(color="yellow"))
+            if cached > 0:
+                progress_text.append("⋯ ", style=Style(color="yellow"))
+                progress_text.append(f"Fetching {total} ticker(s)", style=Style(color="yellow"))
+                progress_text.append(f" ({cached} cached) ", style=Style(color="white", dim=True))
+            else:
+                progress_text.append("⋯ Prefetching tickers ", style=Style(color="yellow"))
+
             progress_text.append(f"[{bar}] ")
             if ticker:
                 progress_text.append(f"[{ticker}] ")
             percentage = (completed / total) * 100 if total > 0 else 0
             progress_text.append(f"{percentage:.0f}%")
+            self.table.add_row(progress_text)
+        elif status == "done" and total > 0 and completed >= total:
+            # Just completed fetching
+            progress_text = Text()
+            progress_text.append("✓ ", style=Style(color="green", bold=True))
+            if cached > 0:
+                progress_text.append(f"Fetched {total} ticker(s), {cached} from cache", style=Style(color="green"))
+            else:
+                progress_text.append(f"Fetched {total} ticker(s)", style=Style(color="green"))
             self.table.add_row(progress_text)
 
         # Agent progress

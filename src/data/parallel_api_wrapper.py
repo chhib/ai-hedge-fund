@@ -52,6 +52,7 @@ from src.tools.api import (
 )
 from src.utils.logger import vprint
 from src.utils.progress import progress
+from src.data.prefetch_store import PrefetchParameters, PrefetchStore
 
 
 async def _run_in_thread_pool(func, *args, **kwargs):
@@ -320,106 +321,227 @@ async def parallel_fetch_ticker_data(
 
     set_ticker_markets(ticker_markets or {})
 
-    # Create all parallel tasks
-    tasks = []
-    task_mapping = []  # Track which task corresponds to which ticker and data type
-
-    for ticker in tickers:
-        if include_prices and start_date:
-            tasks.append(_timed_run_in_thread_pool(get_prices, "prices", ticker, start_date, end_date, api_key))
-            task_mapping.append((ticker, "prices"))
-
-        if include_metrics:
-            tasks.append(_timed_run_in_thread_pool(get_financial_metrics, "metrics", ticker, end_date, "ttm", 1, api_key))
-            task_mapping.append((ticker, "metrics"))
-
-        if include_line_items:
-            tasks.append(_timed_run_in_thread_pool(search_line_items, "line_items", ticker, [
-                "capital_expenditure", "depreciation_and_amortization", "net_income",
-                "outstanding_shares", "total_assets", "total_liabilities",
-                "shareholders_equity", "dividends_and_other_cash_distributions",
-                "issuance_or_purchase_of_equity_shares", "gross_profit", "revenue",
-                "free_cash_flow", "current_assets", "current_liabilities",
-            ], end_date, "ttm", 10, api_key))
-            task_mapping.append((ticker, "line_items"))
-
-        if include_insider_trades:
-            tasks.append(_timed_run_in_thread_pool(get_insider_trades, "insider_trades", ticker, end_date, start_date, 1000, api_key))
-            task_mapping.append((ticker, "insider_trades"))
-
-        if include_events:
-            tasks.append(_timed_run_in_thread_pool(get_company_events, "events", ticker, end_date, start_date, 1000, api_key))
-            task_mapping.append((ticker, "events"))
-
-        # DO NOT include market_caps here, it will be derived from metrics
-
-    # Execute all tasks in parallel
-    vprint(f"⚡ Executing {len(tasks)} parallel API calls for {len(tickers)} tickers...")
-    start_time = time.time()
-
-    # Initialize progress for prefetching
-    total_tasks = len(tasks)
-    completed_tasks = 0
-
-    # Update progress as tasks complete
-    async def task_wrapper(ticker, data_type, coro):
-        nonlocal completed_tasks
-        try:
-            result = await coro
-            return (ticker, data_type, result)
-        finally:
-            completed_tasks += 1
-            if progress_callback:
-                progress_callback(completed_tasks, total_tasks, ticker)
-            else:
-                progress.update_prefetch_status(completed_tasks, total_tasks, ticker)
-
-    # Wrap tasks for progress tracking
-    progress_wrapped_tasks = []
-    for i, task in enumerate(tasks):
-        ticker, data_type = task_mapping[i]
-        progress_wrapped_tasks.append(task_wrapper(ticker, data_type, task))
-
-    results_with_info = await asyncio.gather(*progress_wrapped_tasks, return_exceptions=True)
-
-    end_time = time.time()
-    vprint(f"✅ Total parallel fetch completed in {end_time - start_time:.2f} seconds")
-
-    # Organize results by ticker
-    ticker_data = {ticker: {} for ticker in tickers}
-
-    for item in results_with_info:
-        if isinstance(item, Exception):
-            # This case might be complex to handle if we don't know which task failed.
-            # For now, we log a general error.
-            vprint(f"⚠️  An error occurred during parallel fetching: {item}")
-            continue
-        
-        ticker, data_type, result = item
-        if isinstance(result, Exception):
-            vprint(f"⚠️  Error fetching {data_type} for {ticker}: {result}")
-            ticker_data[ticker][data_type] = []
-        else:
-            ticker_data[ticker][data_type] = result
-
-    # Post-process to extract market_cap from metrics if requested
+    requested_fields = set()
+    if include_prices:
+        requested_fields.add("prices")
+    if include_metrics:
+        requested_fields.add("metrics")
+    if include_line_items:
+        requested_fields.add("line_items")
+    if include_insider_trades:
+        requested_fields.add("insider_trades")
+    if include_events:
+        requested_fields.add("events")
     if include_market_caps:
-        for ticker in tickers:
-            # Ensure metrics data exists and is not empty
-            if ticker_data.get(ticker) and ticker_data[ticker].get("metrics"):
-                first_metric = ticker_data[ticker]["metrics"][0]
-                # It could be a Pydantic model or a dict, handle both
-                if hasattr(first_metric, 'market_cap'):
-                    ticker_data[ticker]["market_cap"] = first_metric.market_cap
-                elif isinstance(first_metric, dict) and 'market_cap' in first_metric:
-                    ticker_data[ticker]["market_cap"] = first_metric['market_cap']
-                else:
-                    ticker_data[ticker]["market_cap"] = None
-            elif ticker_data.get(ticker):
-                 ticker_data[ticker]["market_cap"] = None
-            # If ticker is not in ticker_data, something went very wrong before, but we avoid a crash
+        requested_fields.add("market_cap")
 
-    return ticker_data
+    params = PrefetchParameters.build(
+        end_date=end_date,
+        start_date=start_date,
+        required_fields=requested_fields,
+    )
+
+    with PrefetchStore() as store:
+        cached_payloads = store.load_batch(tickers, params)
+        tickers_to_fetch = [ticker for ticker in tickers if ticker not in cached_payloads]
+        num_cached = len(cached_payloads)
+
+        if cached_payloads:
+            vprint(
+                f"💾 Loaded cached prefetched data for {num_cached} ticker(s) on {end_date}"
+            )
+            # Report cache hit immediately
+            if progress_callback:
+                progress_callback(0, 0, "", cached=num_cached, status="fetching" if tickers_to_fetch else "done")
+            else:
+                progress.update_prefetch_status(0, 0, "", cached=num_cached, status="fetching" if tickers_to_fetch else "done")
+
+        # Create all parallel tasks for uncached tickers only
+        tasks = []
+        task_mapping = []  # Track which task corresponds to which ticker and data type
+
+        for ticker in tickers_to_fetch:
+            if include_prices and start_date:
+                tasks.append(
+                    _timed_run_in_thread_pool(
+                        get_prices,
+                        "prices",
+                        ticker,
+                        start_date,
+                        end_date,
+                        api_key,
+                    )
+                )
+                task_mapping.append((ticker, "prices"))
+
+            if include_metrics:
+                tasks.append(
+                    _timed_run_in_thread_pool(
+                        get_financial_metrics,
+                        "metrics",
+                        ticker,
+                        end_date,
+                        "ttm",
+                        1,
+                        api_key,
+                    )
+                )
+                task_mapping.append((ticker, "metrics"))
+
+            if include_line_items:
+                tasks.append(
+                    _timed_run_in_thread_pool(
+                        search_line_items,
+                        "line_items",
+                        ticker,
+                        [
+                            "capital_expenditure",
+                            "depreciation_and_amortization",
+                            "net_income",
+                            "outstanding_shares",
+                            "total_assets",
+                            "total_liabilities",
+                            "shareholders_equity",
+                            "dividends_and_other_cash_distributions",
+                            "issuance_or_purchase_of_equity_shares",
+                            "gross_profit",
+                            "revenue",
+                            "free_cash_flow",
+                            "current_assets",
+                            "current_liabilities",
+                        ],
+                        end_date,
+                        "ttm",
+                        10,
+                        api_key,
+                    )
+                )
+                task_mapping.append((ticker, "line_items"))
+
+            if include_insider_trades:
+                tasks.append(
+                    _timed_run_in_thread_pool(
+                        get_insider_trades,
+                        "insider_trades",
+                        ticker,
+                        end_date,
+                        start_date,
+                        1000,
+                        api_key,
+                    )
+                )
+                task_mapping.append((ticker, "insider_trades"))
+
+            if include_events:
+                tasks.append(
+                    _timed_run_in_thread_pool(
+                        get_company_events,
+                        "events",
+                        ticker,
+                        end_date,
+                        start_date,
+                        1000,
+                        api_key,
+                    )
+                )
+                task_mapping.append((ticker, "events"))
+
+        if tasks:
+            vprint(
+                f"⚡ Executing {len(tasks)} parallel API calls for {len(tickers_to_fetch)} ticker(s)..."
+            )
+        else:
+            vprint("⚡ No new tickers to fetch; using cached data")
+            # All tickers were cached, update progress to done state
+            if not cached_payloads:  # Edge case: no tasks and nothing cached
+                if progress_callback:
+                    progress_callback(0, 0, "", cached=0, status="done")
+                else:
+                    progress.update_prefetch_status(0, 0, "", cached=0, status="done")
+
+        start_time = time.time()
+
+        # Initialize progress for prefetching
+        total_tasks = len(tasks)
+        completed_tasks = 0
+
+        # Update progress as tasks complete
+        async def task_wrapper(ticker, data_type, coro):
+            nonlocal completed_tasks
+            try:
+                result = await coro
+                return (ticker, data_type, result)
+            finally:
+                completed_tasks += 1
+                status = "done" if completed_tasks >= total_tasks else "fetching"
+                if progress_callback:
+                    progress_callback(completed_tasks, total_tasks, ticker, cached=num_cached, status=status)
+                else:
+                    progress.update_prefetch_status(completed_tasks, total_tasks, ticker, cached=num_cached, status=status)
+
+        # Wrap tasks for progress tracking
+        progress_wrapped_tasks = []
+        for i, task in enumerate(tasks):
+            ticker, data_type = task_mapping[i]
+            progress_wrapped_tasks.append(task_wrapper(ticker, data_type, task))
+
+        if progress_wrapped_tasks:
+            results_with_info = await asyncio.gather(
+                *progress_wrapped_tasks, return_exceptions=True
+            )
+        else:
+            results_with_info = []
+
+        end_time = time.time()
+        vprint(f"✅ Total parallel fetch completed in {end_time - start_time:.2f} seconds")
+
+        # Organize results by ticker, pre-populating with cached payloads
+        ticker_data: Dict[str, Dict[str, Any]] = {ticker: {} for ticker in tickers}
+        for ticker, payload in cached_payloads.items():
+            ticker_data[ticker] = dict(payload)
+
+        for item in results_with_info:
+            if isinstance(item, Exception):
+                # This case might be complex to handle if we don't know which task failed.
+                # For now, we log a general error.
+                vprint(f"⚠️  An error occurred during parallel fetching: {item}")
+                continue
+
+            ticker, data_type, result = item
+            if isinstance(result, Exception):
+                vprint(f"⚠️  Error fetching {data_type} for {ticker}: {result}")
+                ticker_data[ticker][data_type] = []
+            else:
+                ticker_data[ticker][data_type] = result
+
+        # Post-process to extract market_cap from metrics if requested
+        if include_market_caps:
+            for ticker in tickers:
+                # Ensure metrics data exists and is not empty
+                if ticker_data.get(ticker) and ticker_data[ticker].get("metrics"):
+                    first_metric = ticker_data[ticker]["metrics"][0]
+                    # It could be a Pydantic model or a dict, handle both
+                    if hasattr(first_metric, 'market_cap'):
+                        ticker_data[ticker]["market_cap"] = first_metric.market_cap
+                    elif isinstance(first_metric, dict) and 'market_cap' in first_metric:
+                        ticker_data[ticker]["market_cap"] = first_metric['market_cap']
+                    else:
+                        ticker_data[ticker]["market_cap"] = None
+                elif ticker_data.get(ticker):
+                    ticker_data[ticker]["market_cap"] = ticker_data[ticker].get("market_cap")
+
+        # Persist newly fetched payloads so future runs can reuse them
+        if tickers_to_fetch:
+            payloads_to_store = {
+                ticker: ticker_data.get(ticker, {})
+                for ticker in tickers_to_fetch
+                if ticker_data.get(ticker)
+            }
+            if payloads_to_store:
+                store.store_batch(payloads_to_store, params)
+
+        return ticker_data
+    # End of PrefetchStore context manager
 
 
 # Synchronous wrappers for easy integration

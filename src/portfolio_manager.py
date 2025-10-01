@@ -6,6 +6,12 @@ Analyzes current portfolio and investment universe using selected analysts,
 then generates rebalancing recommendations.
 """
 
+import warnings
+
+# Suppress LangChain deprecation warnings about debug imports
+warnings.filterwarnings("ignore", message=".*Importing debug from langchain root module.*", category=UserWarning)
+
+import uuid
 from datetime import datetime
 from pathlib import Path
 
@@ -15,6 +21,7 @@ from dotenv import load_dotenv
 from src.agents.enhanced_portfolio_manager import EnhancedPortfolioManager
 from src.utils.output_formatter import display_results, format_as_portfolio_csv
 from src.utils.portfolio_loader import load_portfolio, load_universe
+from src.data.borsdata_ticker_mapping import get_ticker_market
 
 # Load environment variables from .env file
 load_dotenv()
@@ -25,8 +32,7 @@ load_dotenv()
 @click.option("--portfolio", type=click.Path(exists=True), required=True, help="Path to portfolio CSV file")
 # Universe input options
 @click.option("--universe", type=click.Path(exists=True), help="Path to universe list file")
-@click.option("--universe-tickers", type=str, help="Comma-separated list of global tickers (e.g., AAPL,MSFT,NVDA)")
-@click.option("--universe-nordics", type=str, help="Comma-separated list of Nordic tickers (e.g., HM B,ERIC B,VOLV B)")
+@click.option("--universe-tickers", type=str, help="Comma-separated list of tickers (auto-detects Nordic/Global, e.g., AAPL,TELIA,VOLV B)")
 # Analysis configuration
 @click.option("--analysts", type=str, default="all", help='Analyst selection: "all" (16 analysts), "famous" (13 investors), "core" (4 analysts), "basic" (fundamentals only), or comma-separated list')
 @click.option("--model", type=str, default="gpt-4o", help="LLM model to use")
@@ -40,7 +46,7 @@ load_dotenv()
 @click.option("--verbose", is_flag=True, help="Show detailed analysis from each analyst")
 @click.option("--dry-run", is_flag=True, help="Show recommendations without saving")
 @click.option("--test", is_flag=True, help="Run in test mode with limited analysts for quick validation")
-def main(portfolio, universe, universe_tickers, universe_nordics, analysts, model, model_provider, max_holdings, max_position, min_position, min_trade, verbose, dry_run, test):
+def main(portfolio, universe, universe_tickers, analysts, model, model_provider, max_holdings, max_position, min_position, min_trade, verbose, dry_run, test):
     """
     AI Hedge Fund Portfolio Manager - Long-only portfolio rebalancing
 
@@ -57,8 +63,8 @@ def main(portfolio, universe, universe_tickers, universe_nordics, analysts, mode
         # Regular rebalancing
         python src/portfolio_manager.py --portfolio portfolio.csv --universe stocks.txt
 
-        # Quick test with limited analysts
-        python src/portfolio_manager.py --portfolio portfolio.csv --universe-tickers "AAPL,MSFT" --test
+        # Quick test with limited analysts (auto-detects Nordic/Global)
+        python src/portfolio_manager.py --portfolio portfolio.csv --universe-tickers "AAPL,TELIA,VOLV B" --test
     """
 
     # Test mode overrides - use basic analyst for quick validation
@@ -68,8 +74,8 @@ def main(portfolio, universe, universe_tickers, universe_nordics, analysts, mode
             print("🧪 Test mode: Using fundamentals analyst for quick validation")
 
     # Validate inputs
-    if not universe and not universe_tickers and not universe_nordics:
-        click.echo("Error: Must provide at least one universe source (--universe, --universe-tickers, or --universe-nordics)", err=True)
+    if not universe and not universe_tickers:
+        click.echo("Error: Must provide at least one universe source (--universe or --universe-tickers)", err=True)
         raise click.Abort()
 
     # Load portfolio
@@ -80,9 +86,9 @@ def main(portfolio, universe, universe_tickers, universe_nordics, analysts, mode
         click.echo(f"Error loading portfolio: {e}", err=True)
         raise click.Abort()
 
-    # Load universe and build ticker_markets dict (same pattern as main.py)
+    # Load universe and build ticker_markets dict with auto-detection
     try:
-        universe_list = load_universe(universe, universe_tickers, universe_nordics, None)
+        universe_list = load_universe(universe, universe_tickers)
         if not universe_list:
             click.echo("Error: Universe is empty. Please provide valid ticker symbols.", err=True)
             raise click.Abort()
@@ -91,26 +97,31 @@ def main(portfolio, universe, universe_tickers, universe_nordics, analysts, mode
         click.echo(f"Error loading universe: {e}", err=True)
         raise click.Abort()
 
-    # Build ticker_markets dict to route tickers to correct API (Nordic vs Global)
+    # Build ticker_markets dict using auto-detection
     ticker_markets = {}
+    unknown_tickers = []
 
-    # Parse Nordic tickers
-    if universe_nordics:
-        nordic_tickers = [t.strip() for t in universe_nordics.split(",") if t.strip()]
-        for ticker in nordic_tickers:
-            ticker_markets[ticker] = "Nordic"
-
-    # Parse global tickers
-    if universe_tickers:
-        global_tickers = [t.strip() for t in universe_tickers.split(",") if t.strip()]
-        for ticker in global_tickers:
+    for ticker in universe_list:
+        market = get_ticker_market(ticker)
+        if market:
+            ticker_markets[ticker] = market
+        else:
+            # Unknown ticker - default to global and warn
             ticker_markets[ticker] = "global"
+            unknown_tickers.append(ticker)
+
+    # Show warning for unknown tickers
+    if unknown_tickers:
+        click.echo(f"\n⚠️  Warning: The following tickers are not in the Borsdata mapping:", err=False)
+        for ticker in unknown_tickers:
+            click.echo(f"   • {ticker}")
+        click.echo(f"\n💡 Tip: Run this command to refresh the ticker mapping:")
+        click.echo(f"   poetry run python scripts/refresh_borsdata_mapping.py\n")
 
     # Show ticker routing info
-    if ticker_markets:
-        global_count = sum(1 for v in ticker_markets.values() if v == "global")
-        nordic_count = sum(1 for v in ticker_markets.values() if v == "Nordic")
-        print(f"✓ Market routing: {global_count} global, {nordic_count} Nordic\n")
+    global_count = sum(1 for v in ticker_markets.values() if v.lower() == "global")
+    nordic_count = sum(1 for v in ticker_markets.values() if v == "Nordic")
+    print(f"✓ Market routing: {global_count} global, {nordic_count} Nordic\n")
 
     # Validate universe includes all current holdings
     current_tickers = {pos.ticker for pos in portfolio_data.positions}
@@ -149,8 +160,13 @@ def main(portfolio, universe, universe_tickers, universe_nordics, analysts, mode
     # Show selected analysts
     print(f"✓ Using {len(analyst_list)} analysts\n")
 
+    # Generate session ID for tracking analyses
+    session_id = str(uuid.uuid4())
+    if verbose:
+        print(f"Session ID: {session_id}\n")
+
     # Initialize portfolio manager
-    manager = EnhancedPortfolioManager(portfolio=portfolio_data, universe=universe_list, analysts=analyst_list, model_config={"name": model, "provider": model_provider}, ticker_markets=ticker_markets, verbose=verbose)
+    manager = EnhancedPortfolioManager(portfolio=portfolio_data, universe=universe_list, analysts=analyst_list, model_config={"name": model, "provider": model_provider}, ticker_markets=ticker_markets, verbose=verbose, session_id=session_id)
 
     # Generate recommendations (LONG-ONLY constraint applied here)
 
@@ -176,6 +192,18 @@ def main(portfolio, universe, universe_tickers, universe_nordics, analysts, mode
         print(f"   Next run: python src/portfolio_manager.py --portfolio {output_file} --universe ...")
     else:
         print("\n⚠️  Dry-run mode - no files saved")
+
+    # Prompt to export analyst transcript
+    print("\n" + "=" * 60)
+    response = click.prompt("Export full analyst transcript to markdown? (y/N)", default="N", show_default=False)
+    if response.lower() in ["y", "yes"]:
+        try:
+            from src.data.analysis_storage import export_to_markdown
+
+            output_path = export_to_markdown(session_id)
+            print(f"\n✅ Analyst transcript saved to: {output_path}")
+        except Exception as e:
+            click.echo(f"\n⚠️  Error exporting transcript: {e}", err=True)
 
 
 if __name__ == "__main__":
