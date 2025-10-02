@@ -1,6 +1,6 @@
 # Börsdata Integration Project Log
 
-_Last updated: 2025-10-01 (Session 46)_
+_Last updated: 2025-10-02 (Session 51)_
 
 ## End Goal
 Rebuild the data ingestion and processing pipeline so the application relies on Börsdata's REST API (per `README_Borsdata_API.md` and https://apidoc.borsdata.se/swagger/index.html). The system should let a user set a `BORSDATA_API_KEY` in `.env`, accept Börsdata-native tickers, and otherwise preserve the current user-facing workflows and capabilities.
@@ -762,5 +762,31 @@ The system now operates efficiently at scale with comprehensive financial data i
 - **Findings**: Confirmed `ThreadPoolExecutor` already launches up to eight analyst×ticker workers (`src/main.py:146-240`). Slow analysts spend most time inside synchronous numpy/pandas calculations and blocking LLM calls (`src/agents/jim_simons.py:31-166`, `src/utils/llm.py:63-148`). Switching to `asyncio` would still require running those blocking steps in threads, so no net gain without rewriting to async-friendly APIs.
 - **Next Steps**: Explore per-analyst worker throttles or chunking heavy analysts separately if further tuning is needed; consider profiling to spot CPU hotspots before attempting architectural changes.
 - **Documentation**: Reformatted portfolio CSV examples in `README.md:320-347` using Markdown tables for clearer presentation.
+
+### Session 48 (Deterministic Analyst Surfacing)
+- **Feature**: Marked deterministic analysts in `ANALYST_CONFIG` and carried the flag through `EnhancedPortfolioManager` so their analyses store without LLM metadata.
+- **Transcript Upgrade**: Enhanced `export_to_markdown` to highlight non-LLM analysts, format structured reasoning as Markdown bullet lists, and aggregate used LLM models per session.
+- **CLI Output**: After saving a transcript, the portfolio manager now prints a tabulated preview of deterministic analyst signals via the new `summarize_non_llm_analyses()` helper.
+- **Persistence**: Normalized stored reasoning to JSON strings for structured payloads; deterministic rows now persist with `model_name=None` to distinguish them cleanly.
+- **Testing**: Added coverage for the new summary helper and updated existing storage/export tests to assert deterministic formatting and metadata changes (`tests/data/test_analysis_storage.py`).
+
+### Session 49 (Prefetch Progress Regression)
+- **Bugfix**: Restored the live Rich progress bar during KPI prefetching by reattaching the bar, ticker tag, and percentage display inside `AgentProgress.update_prefetch_status` (`src/utils/progress.py`).
+- **UX**: Retained the "Fetching N ticker KPIs" copy while reintroducing cached count and percentage to communicate progress clarity.
+- **Next Steps**: Verify the CLI run against a live Börsdata fetch to confirm the bar animates as tasks complete; consider styling tweaks if readability feedback comes back.
+
+### Session 50 (News Sentiment Analyst)
+- **Feature**: Ported the upstream news sentiment analyst into the Börsdata-only fork as `src/agents/news_sentiment.py`, reworking it to score Börsdata calendar events (reports/dividends) instead of FinancialDatasets news.
+- **Agent Graph**: Registered the new analyst in `ANALYST_CONFIG` (`src/utils/analysts.py`) with ordering tweaks so downstream selection lists include it ahead of the broader market sentiment analyst.
+- **LLM Prompting**: Added an event-focused prompt builder and signal mapper so each recent calendar event is classified via the existing `call_llm` wrapper; limited analysis to five events per ticker to respect rate limits and latency.
+- **Confidence Model**: Replaced article-based confidence weighting with an event-aware calculation that blends LLM confidence scores and signal proportion.
+- **Follow Up**: Evaluate whether Börsdata calendar data provides enough textual context for reliable sentiment; if not, we may need a supplementary narrative news source or richer event metadata.
+
+### Session 51 (Analyst Cache Reuse)
+- **Persistent Cache**: Implemented `AnalysisCache` (`src/data/analysis_cache.py`) storing analyst outputs in the existing `prefetch_cache.db`, keyed by ticker, analyst, analysis date, and model identifiers to mirror the ticker prefetch cache behaviour.
+- **Portfolio Manager Integration**: Updated `EnhancedPortfolioManager._collect_analyst_signals()` to consult the new cache before invoking an analyst and to store fresh results unless `--no-cache` is supplied. Cached hits now short-circuit the LLM call, update progress to "Done (cached)", and still persist the session transcript entry.
+- **Testing**: Added `tests/data/test_analysis_cache.py` covering cache misses, overwrite semantics, model-specific keys, and ticker normalisation. Verified via `poetry run pytest tests/data/test_analysis_cache.py`.
+- **Documentation**: Documented the layered caching strategy and `--no-cache` override in the Portfolio Manager section of `README.md` so operators understand reuse behaviour and how to request fresh analyses.
+- **Next Steps**: Run a full CLI session to confirm progress output reflects cache hits and to benchmark runtime improvements with cached analyses across multiple analysts.
 
 **IMPORTANT**: Update this log at the end of each work session: note completed steps, new decisions, blockers, and refreshed next actions. Always use session numbers (Session X, Session X+1, etc.) for progress entries. Update the "Last updated" date at the top with the actual current date when making changes.

@@ -316,6 +316,22 @@ poetry run python src/portfolio_manager.py \
 - `"basic"` - Fundamentals only (fast testing)
 - Comma-separated list: `"warren_buffett,peter_lynch,fundamentals_analyst"`
 
+### Caching Behaviour
+
+The portfolio manager layers several caches so repeat runs avoid redundant Börsdata and LLM calls:
+
+- **Ticker data cache**: Prices, KPIs, line items, events, and insider trades fetched through the prefetch pipeline persist in `data/prefetch_cache.db`. Subsequent runs on the same analysis date reuse these payloads instantly.
+- **Analyst signal cache**: Each analyst stores its output per ticker, analysis date, model name, and model provider in the same database. Running the CLI again with the same universe/model replays the cached reasoning and confidence without issuing a new LLM request.
+- **LLM transcript storage**: Results are still written to `app/backend/hedge_fund.db` so transcripts remain available for later export, even when a cached response is served.
+
+To force fresh data and recompute every analyst, add the `--no-cache` flag when launching the CLI:
+
+```bash
+poetry run python src/portfolio_manager.py --portfolio portfolio.csv --universe-tickers "AAPL,MSFT" --no-cache
+```
+
+This bypasses both the ticker prefetch cache and the analyst-signal cache, ensuring new Börsdata fetches and LLM calls for the session.
+
 ### Portfolio CSV Format
 
 **Input Portfolio (`.csv`):**
