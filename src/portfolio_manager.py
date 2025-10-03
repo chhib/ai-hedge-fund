@@ -46,11 +46,12 @@ load_dotenv()
 @click.option("--home-currency", type=str, default="SEK", help="Home currency for portfolio calculations (default: SEK)")
 # Cache control
 @click.option("--no-cache", is_flag=True, help="Bypass all caches and fetch fresh data from Börsdata")
+@click.option("--no-cache-agents", is_flag=True, help="Reuse cached KPI data but force fresh analyst recommendations")
 # Output control
 @click.option("--verbose", is_flag=True, help="Show detailed analysis from each analyst")
 @click.option("--dry-run", is_flag=True, help="Show recommendations without saving")
 @click.option("--test", is_flag=True, help="Run in test mode with limited analysts for quick validation")
-def main(portfolio, universe, universe_tickers, analysts, model, model_provider, max_holdings, max_position, min_position, min_trade, home_currency, no_cache, verbose, dry_run, test):
+def main(portfolio, universe, universe_tickers, analysts, model, model_provider, max_holdings, max_position, min_position, min_trade, home_currency, no_cache, no_cache_agents, verbose, dry_run, test):
     """
     AI Hedge Fund Portfolio Manager - Long-only portfolio rebalancing
 
@@ -67,6 +68,9 @@ def main(portfolio, universe, universe_tickers, analysts, model, model_provider,
         # Regular rebalancing
         python src/portfolio_manager.py --portfolio portfolio.csv --universe stocks.txt
 
+        # Refresh analyst recommendations (reuse cached KPI data)
+        python src/portfolio_manager.py --portfolio portfolio.csv --universe stocks.txt --no-cache-agents
+
         # Quick test with limited analysts (auto-detects Nordic/Global)
         python src/portfolio_manager.py --portfolio portfolio.csv --universe-tickers "AAPL,TELIA,VOLV B" --test
     """
@@ -76,6 +80,12 @@ def main(portfolio, universe, universe_tickers, analysts, model, model_provider,
         analysts = "basic"
         if verbose:
             print("🧪 Test mode: Using fundamentals analyst for quick validation")
+
+    # Show cache mode
+    if no_cache:
+        print("🔄 Bypassing all caches (fetching fresh KPI data and analyst analysis)")
+    elif no_cache_agents:
+        print("🔄 Reusing cached KPI data, generating fresh analyst recommendations")
 
     # Validate inputs
     if not universe and not universe_tickers:
@@ -170,7 +180,7 @@ def main(portfolio, universe, universe_tickers, analysts, model, model_provider,
         print(f"Session ID: {session_id}\n")
 
     # Initialize portfolio manager
-    manager = EnhancedPortfolioManager(portfolio=portfolio_data, universe=universe_list, analysts=analyst_list, model_config={"name": model, "provider": model_provider}, ticker_markets=ticker_markets, home_currency=home_currency, no_cache=no_cache, verbose=verbose, session_id=session_id)
+    manager = EnhancedPortfolioManager(portfolio=portfolio_data, universe=universe_list, analysts=analyst_list, model_config={"name": model, "provider": model_provider}, ticker_markets=ticker_markets, home_currency=home_currency, no_cache=no_cache, no_cache_agents=no_cache_agents, verbose=verbose, session_id=session_id)
 
     # Generate recommendations (LONG-ONLY constraint applied here)
 

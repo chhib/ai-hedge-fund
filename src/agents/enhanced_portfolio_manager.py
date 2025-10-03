@@ -27,7 +27,7 @@ class EnhancedPortfolioManager:
     Maintains concentrated portfolio of 5-10 positions
     """
 
-    def __init__(self, portfolio: Portfolio, universe: List[str], analysts: List[str], model_config: Dict[str, Any], ticker_markets: Dict[str, str] = None, home_currency: str = "SEK", no_cache: bool = False, verbose: bool = False, session_id: str = None):
+    def __init__(self, portfolio: Portfolio, universe: List[str], analysts: List[str], model_config: Dict[str, Any], ticker_markets: Dict[str, str] = None, home_currency: str = "SEK", no_cache: bool = False, no_cache_agents: bool = False, verbose: bool = False, session_id: str = None):
         self.portfolio = portfolio
         self.universe = universe
         self.analyst_names = analysts
@@ -35,6 +35,7 @@ class EnhancedPortfolioManager:
         self.ticker_markets = ticker_markets or {}
         self.home_currency = home_currency.upper()
         self.no_cache = no_cache
+        self.no_cache_agents = no_cache_agents
         self.verbose = verbose
         self.session_id = session_id
         self.analysts = self._initialize_analysts(analysts, model_config)
@@ -166,10 +167,13 @@ class EnhancedPortfolioManager:
         # STEP 1: Pre-populate instrument caches (silent unless verbose)
         from src.tools.api import _borsdata_client, set_ticker_markets
 
+        # Only force refresh instruments if full no_cache is set (not no_cache_agents)
         force_refresh = self.no_cache
         if self.verbose:
             if force_refresh:
                 print("Pre-populating instrument caches (bypassing cache)...")
+            elif self.no_cache_agents:
+                print("Pre-populating instrument caches (reusing cached data)...")
             else:
                 print("Pre-populating instrument caches...")
         try:
@@ -197,6 +201,8 @@ class EnhancedPortfolioManager:
         # Let parallel fetching output show through (it shows ticker-by-ticker progress)
         progress.start()
 
+        # Only bypass KPI cache if --no-cache is set (not --no-cache-agents)
+        # --no-cache-agents reuses cached KPI data but regenerates analyst analysis
         prefetched_data = run_parallel_fetch_ticker_data(
             tickers=self.universe,
             end_date=end_date,
@@ -209,7 +215,7 @@ class EnhancedPortfolioManager:
             include_market_caps=True,
             ticker_markets=self.ticker_markets,
             progress_callback=progress.update_prefetch_status,
-            no_cache=self.no_cache,
+            no_cache=self.no_cache,  # Only bypass if --no-cache, not --no-cache-agents
         )
 
         progress.stop()
@@ -277,7 +283,8 @@ class EnhancedPortfolioManager:
                         print(f"  Warning: Failed to save analysis to database: {e}")
 
             # Attempt to reuse cached analysis when allowed
-            if not self.no_cache:
+            # Skip cache if either no_cache or no_cache_agents is set
+            if not self.no_cache and not self.no_cache_agents:
                 cached = self.analysis_cache.get_cached_analysis(
                     ticker=ticker,
                     analyst_name=analyst_name,
@@ -361,6 +368,8 @@ class EnhancedPortfolioManager:
                 # Persist results for this session and cache for future runs
                 persist_session_analysis(signal_str, numeric_signal, confidence, reasoning)
 
+                # Cache results even when --no-cache-agents is used (for next run)
+                # Only skip caching if --no-cache is set (which bypasses everything)
                 if not self.no_cache:
                     try:
                         self.analysis_cache.store_analysis(
