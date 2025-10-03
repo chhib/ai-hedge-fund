@@ -18,6 +18,7 @@ from src.agents.warren_buffett import warren_buffett_agent
 from src.agents.rakesh_jhunjhunwala import rakesh_jhunjhunwala_agent
 from src.agents.mohnish_pabrai import mohnish_pabrai_agent
 from src.agents.jim_simons import jim_simons_agent
+from src.agents.news_sentiment import news_sentiment_agent
 
 # Define analyst configuration - single source of truth
 ANALYST_CONFIG = {
@@ -124,6 +125,7 @@ ANALYST_CONFIG = {
         "agent_func": technical_analyst_agent,
         "type": "analyst",
         "order": 11,
+        "uses_llm": False,
     },
     "fundamentals_analyst": {
         "display_name": "Fundamentals Analyst",
@@ -132,6 +134,15 @@ ANALYST_CONFIG = {
         "agent_func": fundamentals_analyst_agent,
         "type": "analyst",
         "order": 12,
+        "uses_llm": False,
+    },
+    "news_sentiment_analyst": {
+        "display_name": "News Sentiment Analyst",
+        "description": "News Sentiment Specialist",
+        "investing_style": "Analyzes company event sentiment from Börsdata calendars to spot shifts driven by corporate actions.",
+        "agent_func": news_sentiment_agent,
+        "type": "analyst",
+        "order": 13,
     },
     "sentiment_analyst": {
         "display_name": "Sentiment Analyst",
@@ -139,7 +150,8 @@ ANALYST_CONFIG = {
         "investing_style": "Gauges market sentiment and investor behavior to predict market movements and identify opportunities through behavioral analysis.",
         "agent_func": sentiment_analyst_agent,
         "type": "analyst",
-        "order": 13,
+        "order": 14,
+        "uses_llm": False,
     },
     "valuation_analyst": {
         "display_name": "Valuation Analyst",
@@ -147,7 +159,8 @@ ANALYST_CONFIG = {
         "investing_style": "Specializes in determining the fair value of companies, using various valuation models and financial metrics for investment decisions.",
         "agent_func": valuation_analyst_agent,
         "type": "analyst",
-        "order": 14,
+        "order": 15,
+        "uses_llm": False,
     },
     "jim_simons": {
         "display_name": "Jim Simons",
@@ -155,7 +168,7 @@ ANALYST_CONFIG = {
         "investing_style": "Employs quantitative models and statistical arbitrage to identify and exploit market inefficiencies through systematic trading.",
         "agent_func": jim_simons_agent,
         "type": "analyst",
-        "order": 15,
+        "order": 16,
     },
 }
 

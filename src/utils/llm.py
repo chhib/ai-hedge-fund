@@ -192,19 +192,27 @@ def get_agent_model_config(state, agent_name):
     Always returns valid model_name and model_provider values.
     """
     request = state.get("metadata", {}).get("request")
-    
+
     if request and hasattr(request, 'get_agent_model_config'):
         # Get agent-specific model configuration
         model_name, model_provider = request.get_agent_model_config(agent_name)
         # Ensure we have valid values
         if model_name and model_provider:
             return model_name, model_provider.value if hasattr(model_provider, 'value') else str(model_provider)
-    
-    # Fall back to global configuration (system defaults)
+
+    # Check data.model_config (used by portfolio_manager)
+    model_config = state.get("data", {}).get("model_config")
+    if model_config:
+        model_name = model_config.get("name")
+        model_provider = model_config.get("provider")
+        if model_name:
+            return model_name, model_provider or "OPENAI"
+
+    # Fall back to metadata (used by main.py)
     model_name = state.get("metadata", {}).get("model_name") or "gpt-4.1"
     model_provider = state.get("metadata", {}).get("model_provider") or "OPENAI"
-    
+
     if hasattr(model_provider, 'value'):
         return model_name, model_provider.value
-    
+
     return model_name, str(model_provider)

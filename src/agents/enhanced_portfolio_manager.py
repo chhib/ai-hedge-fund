@@ -200,6 +200,7 @@ class EnhancedPortfolioManager:
         prefetched_data = run_parallel_fetch_ticker_data(
             tickers=self.universe,
             end_date=end_date,
+            start_date=start_date,  # Pass start_date for events and insider trades
             include_prices=True,
             include_metrics=True,
             include_line_items=True,
@@ -308,7 +309,9 @@ class EnhancedPortfolioManager:
 
                 try:
                     # Call the function-based analyst
-                    result_state = analyst_func(state.copy()) # Use a copy of the state for each thread
+                    # Use deep copy to avoid concurrent modification of nested dicts
+                    import copy
+                    result_state = analyst_func(copy.deepcopy(state), agent_id=agent_id)
                 finally:
                     if not self.verbose:
                         sys.stdout = old_stdout
@@ -321,6 +324,10 @@ class EnhancedPortfolioManager:
                     progress.update_status(agent_id, ticker, "Error")
                     if self.verbose:
                         print(f"  Warning: No analysis returned by {display_name} for {ticker}")
+                        print(f"  DEBUG: result_state keys = {result_state.keys()}")
+                        print(f"  DEBUG: result_state['data'] keys = {result_state.get('data', {}).keys()}")
+                        print(f"  DEBUG: analyst_signals keys = {analyst_signals_result.keys()}")
+                        print(f"  DEBUG: analysis type = {type(analysis)}, value = {analysis}")
                     return None
 
                 # Get the ticker's analysis
@@ -329,6 +336,8 @@ class EnhancedPortfolioManager:
                     progress.update_status(agent_id, ticker, "Error")
                     if self.verbose:
                         print(f"  Warning: No analysis for {ticker} from {display_name}")
+                        print(f"  DEBUG: analysis keys = {analysis.keys()}")
+                        print(f"  DEBUG: looking for ticker = {ticker}")
                     return None
 
                 # Extract signal info (varies by analyst, but all have these fields)
@@ -386,8 +395,8 @@ class EnhancedPortfolioManager:
             for analyst_info in self.analysts
         ]
 
-        # Process all combinations in parallel with 32 workers (same as main.py)
-        max_workers = min(len(analyst_ticker_combinations), 32)
+        # Process all combinations in parallel with 16 workers to avoid rate limits
+        max_workers = min(len(analyst_ticker_combinations), 16)
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             future_to_combo = {}
             for analyst_info, ticker_idx, ticker in analyst_ticker_combinations:
