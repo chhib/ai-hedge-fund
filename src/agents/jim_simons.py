@@ -17,7 +17,7 @@ class JimSimonsSignal(BaseModel):
     confidence: float
     reasoning: str
 
-def jim_simons_agent(state: AgentState):
+def jim_simons_agent(state: AgentState, agent_id: str = "jim_simons_agent"):
     """Analyzes stocks using Jim Simons' quantitative principles and systematic approach."""
     data = state["data"]
     end_date = data["end_date"]

@@ -5,12 +5,17 @@ Stores individual analyst analyses in SQLite database and provides
 export functionality to markdown files for review.
 """
 
+from collections import OrderedDict
 from datetime import datetime
+import json
 from pathlib import Path
 from typing import List, Optional
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
+from tabulate import tabulate
+
+from src.utils.analysts import ANALYST_CONFIG
 
 
 # Database setup - reuse the existing backend database
@@ -55,7 +60,7 @@ def save_analyst_analysis(session_id: str, ticker: str, analyst_name: str, signa
             signal=signal,
             signal_numeric=str(signal_numeric),
             confidence=str(confidence),
-            reasoning=reasoning,
+            reasoning=_normalize_reasoning(reasoning),
             model_name=model_name,
             model_provider=model_provider,
         )
@@ -137,13 +142,36 @@ def export_to_markdown(session_id: str, output_path: Optional[Path] = None) -> P
     lines.append(f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     lines.append(f"**Session ID:** {session_id}")
 
-    # Add metadata if available
-    if analyses:
-        first = analyses[0]
-        if first["model_name"]:
-            lines.append(f"**Model:** {first['model_name']}")
-        if first["model_provider"]:
-            lines.append(f"**Provider:** {first['model_provider']}")
+    # Capture metadata summaries
+    model_pairs = sorted(
+        {
+            (analysis["model_provider"], analysis["model_name"])
+            for analysis in analyses
+            if analysis.get("model_name")
+        }
+    )
+    non_llm_analysts = sorted(
+        {
+            analysis["analyst_name"]
+            for analysis in analyses
+            if not _analyst_uses_llm(analysis["analyst_name"])
+        },
+        key=lambda key: ANALYST_CONFIG.get(key, {}).get("order", 999),
+    )
+
+    if model_pairs:
+        formatted_models = ", ".join(
+            f"{provider or 'Unknown'} {model}".strip()
+            for provider, model in model_pairs
+        )
+        lines.append(f"**LLM Models Used:** {formatted_models}")
+
+    if non_llm_analysts:
+        deterministic_names = ", ".join(
+            ANALYST_CONFIG.get(name, {}).get("display_name", name.replace("_", " ").title())
+            for name in non_llm_analysts
+        )
+        lines.append(f"**Deterministic Analysts:** {deterministic_names}")
 
     lines.append("")
     lines.append(f"**Total Analyses:** {len(analyses)}")
@@ -162,8 +190,12 @@ def export_to_markdown(session_id: str, output_path: Optional[Path] = None) -> P
             signal = analysis["signal"]
             confidence = analysis.get("confidence", "N/A")
             reasoning = analysis["reasoning"]
+            display_name = ANALYST_CONFIG.get(analyst_name, {}).get("display_name", analyst_name.replace("_", " ").title())
+            uses_llm = _analyst_uses_llm(analyst_name)
 
-            lines.append(f"### {analyst_name}")
+            lines.append(f"### {display_name}")
+            if not uses_llm:
+                lines.append("_Deterministic analyst (no LLM used)._")
             lines.append("")
             lines.append(f"**Signal:** {signal}")
             if confidence != "N/A":
@@ -173,11 +205,132 @@ def export_to_markdown(session_id: str, output_path: Optional[Path] = None) -> P
                 except (ValueError, TypeError):
                     lines.append(f"**Confidence:** {confidence}")
             lines.append("")
-            lines.append(reasoning)
-            lines.append("")
+            formatted_reasoning = _format_reasoning_for_markdown(reasoning) if not uses_llm else reasoning
+            if formatted_reasoning:
+                lines.append(formatted_reasoning)
+                lines.append("")
             lines.append("---")
             lines.append("")
 
     # Write to file
     output_path.write_text("\n".join(lines), encoding="utf-8")
     return output_path
+
+
+def summarize_non_llm_analyses(session_id: str, max_tickers: int = 10) -> Optional[str]:
+    """Build a console-friendly summary table for deterministic analyst outputs."""
+
+    analyses = get_session_analyses(session_id)
+    non_llm = [analysis for analysis in analyses if not _analyst_uses_llm(analysis["analyst_name"])]
+
+    if not non_llm:
+        return None
+
+    # Preserve insertion order of tickers as retrieved from the database
+    tickers_ordered: OrderedDict[str, dict] = OrderedDict()
+    for analysis in non_llm:
+        ticker = analysis["ticker"]
+        tickers_ordered.setdefault(ticker, {})[analysis["analyst_name"]] = analysis
+
+    # Determine deterministic analyst ordering based on config order index
+    analyst_keys = sorted(
+        {analysis["analyst_name"] for analysis in non_llm},
+        key=lambda key: ANALYST_CONFIG.get(key, {}).get("order", 999),
+    )
+
+    if not analyst_keys:
+        return None
+
+    headers = ["Ticker"] + [
+        ANALYST_CONFIG.get(name, {}).get("display_name", name.replace("_", " ").title())
+        for name in analyst_keys
+    ]
+
+    rows = []
+    for idx, (ticker, per_analyst) in enumerate(tickers_ordered.items()):
+        if idx >= max_tickers:
+            break
+
+        row = [ticker]
+        for analyst_name in analyst_keys:
+            entry = per_analyst.get(analyst_name)
+            if not entry:
+                row.append("—")
+                continue
+
+            confidence = entry.get("confidence")
+            try:
+                conf_display = f"{float(confidence) * 100:.0f}%"
+            except (TypeError, ValueError):
+                conf_display = str(confidence)
+
+            row.append(f"{entry['signal'].capitalize()} ({conf_display})")
+        rows.append(row)
+
+    table = tabulate(rows, headers=headers, tablefmt="github") if rows else None
+
+    if not table:
+        return None
+
+    total_tickers = len(tickers_ordered)
+    if total_tickers > max_tickers:
+        table += f"\n(Showing first {max_tickers} of {total_tickers} tickers.)"
+
+    return table
+
+
+def _normalize_reasoning(reasoning: str | dict | list | None) -> str:
+    """Serialize reasoning payloads for persistent storage."""
+    if reasoning is None:
+        return ""
+    if isinstance(reasoning, (dict, list)):
+        try:
+            return json.dumps(reasoning, indent=2, sort_keys=True)
+        except (TypeError, ValueError):
+            return str(reasoning)
+    return str(reasoning)
+
+
+def _analyst_uses_llm(analyst_name: str) -> bool:
+    """Check whether an analyst relies on an LLM according to configuration."""
+    return ANALYST_CONFIG.get(analyst_name, {}).get("uses_llm", True)
+
+
+def _format_reasoning_for_markdown(reasoning_text: str) -> str:
+    """Render structured reasoning dictionaries as Markdown lists."""
+    if not reasoning_text:
+        return ""
+
+    try:
+        parsed = json.loads(reasoning_text)
+    except (json.JSONDecodeError, TypeError):
+        return reasoning_text
+
+    lines = _format_structured_reasoning(parsed)
+    return "\n".join(lines)
+
+
+def _format_structured_reasoning(value, level: int = 0) -> List[str]:
+    """Recursively format dictionaries/lists into Markdown bullet lists."""
+    indent = "    " * level
+    lines: List[str] = []
+
+    if isinstance(value, dict):
+        for key, nested in value.items():
+            title = key.replace("_", " ").title()
+            if isinstance(nested, (dict, list)):
+                lines.append(f"{indent}- **{title}:**")
+                lines.extend(_format_structured_reasoning(nested, level + 1))
+            else:
+                lines.append(f"{indent}- **{title}:** {nested}")
+    elif isinstance(value, list):
+        for item in value:
+            if isinstance(item, (dict, list)):
+                lines.append(f"{indent}-")
+                lines.extend(_format_structured_reasoning(item, level + 1))
+            else:
+                lines.append(f"{indent}- {item}")
+    else:
+        lines.append(f"{indent}{value}")
+
+    return lines

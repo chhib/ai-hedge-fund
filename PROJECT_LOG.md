@@ -1,6 +1,6 @@
 # Börsdata Integration Project Log
 
-_Last updated: 2025-10-02 (Session 51)_
+_Last updated: 2025-10-07 (Session 52)_
 
 ## End Goal
 Rebuild the data ingestion and processing pipeline so the application relies on Börsdata's REST API (per `README_Borsdata_API.md` and https://apidoc.borsdata.se/swagger/index.html). The system should let a user set a `BORSDATA_API_KEY` in `.env`, accept Börsdata-native tickers, and otherwise preserve the current user-facing workflows and capabilities.
@@ -788,5 +788,29 @@ The system now operates efficiently at scale with comprehensive financial data i
 - **Testing**: Added `tests/data/test_analysis_cache.py` covering cache misses, overwrite semantics, model-specific keys, and ticker normalisation. Verified via `poetry run pytest tests/data/test_analysis_cache.py`.
 - **Documentation**: Documented the layered caching strategy and `--no-cache` override in the Portfolio Manager section of `README.md` so operators understand reuse behaviour and how to request fresh analyses.
 - **Next Steps**: Run a full CLI session to confirm progress output reflects cache hits and to benchmark runtime improvements with cached analyses across multiple analysts.
+
+### Session 52 (Performance Profiling & Documentation)
+- **Comprehensive Profiling**: Created three detailed profiling reports documenting system performance characteristics:
+  - `docs/profiling/analyst_profiling_report.md` - Function-level profiling of Jim Simons and Stanley Druckenmiller agents identifying CPU hotspots
+  - `docs/profiling/comprehensive_profiling_report.md` - End-to-end profiling of all 17 agents with LLM cache analysis
+  - `docs/profiling/lazy_loading_implementation.md` - Documentation of 68% startup time improvement from lazy agent loading
+- **Reusable Profiling Tools**: Created three profiling scripts for ongoing performance monitoring:
+  - `scripts/profile_analysts.py` - Function-level cProfile analysis for CPU-heavy analyst functions
+  - `scripts/profile_all_agents.py` - Comprehensive end-to-end profiling of all agents with real data
+  - `scripts/profile_startup_time.py` - Detailed startup and import time analysis
+- **Key Findings Documented**:
+  - Lazy agent loading achieved 749x faster config import (2.324s → 0.003s)
+  - LLM response cache provides 1,000x-15,000x speedup on cache hits (7-day TTL)
+  - Warren Buffett agent identified as slowest (18.4s) requiring optimization
+  - Stanley Druckenmiller's `analyze_risk_reward` using slow `statistics.pstdev` (Priority 1 fix identified)
+  - 3 agent crashes fixed (AttributeError handling for dynamic Pydantic models)
+- **Analysis Storage Enhancements**: Enhanced `src/data/analysis_storage.py` with improved transcript formatting:
+  - Deterministic analysts now highlighted in transcripts with structured reasoning as Markdown bullet lists
+  - Added `summarize_non_llm_analyses()` for console-friendly preview of deterministic analyst signals
+  - Improved metadata capture showing LLM models used and deterministic vs LLM-based analysts
+  - Reasoning payloads normalized to JSON strings for structured data preservation
+- **Minor Code Improvements**: Small performance tweaks in `jim_simons.py`, `stanley_druckenmiller.py`, `borsdata_kpis.py`, and progress display
+- **Repository Cleanup**: Deleted one-off profiling script (`measure_startup_improvement.py`) and output data (`profiling_results.json`); organized profiling documentation into dedicated directory
+- **System Status**: Profiling infrastructure established for ongoing performance monitoring. Clear optimization roadmap identified with priority 1 targets (Warren Buffett agent, `statistics.pstdev` replacement) and expected 50% combined improvement potential.
 
 **IMPORTANT**: Update this log at the end of each work session: note completed steps, new decisions, blockers, and refreshed next actions. Always use session numbers (Session X, Session X+1, etc.) for progress entries. Update the "Last updated" date at the top with the actual current date when making changes.

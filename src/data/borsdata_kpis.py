@@ -132,7 +132,7 @@ class FinancialMetricsAssembler:
             return None, None
 
         essential_results = {}
-        with ThreadPoolExecutor(max_workers=min(16, len(essential_configs))) as executor:
+        with ThreadPoolExecutor(max_workers=min(32, len(essential_configs))) as executor:
             future_to_metric = {
                 executor.submit(fetch_kpi, metric_name, config): metric_name
                 for metric_name, config in essential_configs.items()

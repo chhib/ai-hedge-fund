@@ -142,22 +142,21 @@ class AgentProgress:
             bar = "█" * filled + "░" * empty
 
             progress_text = Text()
+            progress_text.append("⋯ ", style=Style(color="yellow"))
+            progress_text.append(f"Fetching {total} ticker KPIs", style=Style(color="yellow"))
             if cached > 0:
-                progress_text.append("⋯ ", style=Style(color="yellow"))
-                progress_text.append(f"Fetching {total} ticker(s)", style=Style(color="yellow"))
                 progress_text.append(f" ({cached} cached) ", style=Style(color="white", dim=True))
-            else:
-                progress_text.append("⋯ Prefetching tickers ", style=Style(color="yellow"))
 
-            progress_text.append(f"[{bar}] ")
+            progress_text.append(f" [{bar}] ")
             if ticker:
-                progress_text.append(f"[{ticker}] ")
-            # Calculate percentage including cached items
+                progress_text.append(f"[{ticker}] ", style=Style(color="white"))
+
             if cached > 0 and completed == 0 and total > 0:
                 percentage = (cached / total) * 100
             else:
                 percentage = (completed / total) * 100 if total > 0 else 0
             progress_text.append(f"{percentage:.0f}%")
+
             self.table.add_row(progress_text)
         elif status == "done" and total > 0 and completed >= total:
             # Just completed fetching

@@ -16,7 +16,7 @@ class StanleyDruckenmillerSignal(BaseModel):
     confidence: float
     reasoning: str
 
-def stanley_druckenmiller_agent(state: AgentState):
+def stanley_druckenmiller_agent(state: AgentState, agent_id: str = "stanley_druckenmiller_agent"):
     """Analyzes stocks using Stanley Druckenmiller's macro-driven, opportunistic approach."""
     data = state["data"]
     end_date = data["end_date"]

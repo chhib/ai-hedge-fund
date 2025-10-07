@@ -7,7 +7,12 @@ from pathlib import Path
 
 import pytest
 
-from src.data.analysis_storage import export_to_markdown, get_session_analyses, save_analyst_analysis
+from src.data.analysis_storage import (
+    export_to_markdown,
+    get_session_analyses,
+    save_analyst_analysis,
+    summarize_non_llm_analyses,
+)
 
 
 @pytest.fixture
@@ -58,9 +63,22 @@ def test_save_multiple_analyses(test_session_id):
     ]
 
     for ticker, analyst, signal, signal_num, conf, reason in analyses_to_save:
-        save_analyst_analysis(
-            session_id=test_session_id, ticker=ticker, analyst_name=analyst, signal=signal, signal_numeric=signal_num, confidence=conf, reasoning=reason, model_name="gpt-4o", model_provider="openai"
-        )
+        save_kwargs = {
+            "session_id": test_session_id,
+            "ticker": ticker,
+            "analyst_name": analyst,
+            "signal": signal,
+            "signal_numeric": signal_num,
+            "confidence": conf,
+            "reasoning": reason,
+            "model_name": "gpt-4o",
+            "model_provider": "openai",
+        }
+
+        if analyst == "technical_analyst":
+            save_kwargs.update({"model_name": None, "model_provider": None})
+
+        save_analyst_analysis(**save_kwargs)
 
     # Retrieve all analyses
     analyses = get_session_analyses(test_session_id)
@@ -78,10 +96,26 @@ def test_export_to_markdown(test_session_id, tmp_path):
     """Test exporting analyses to markdown file."""
     # Save test analyses
     save_analyst_analysis(
-        session_id=test_session_id, ticker="AAPL", analyst_name="warren_buffett", signal="bullish", signal_numeric=0.8, confidence=0.9, reasoning="Excellent value proposition.", model_name="gpt-4o", model_provider="openai"
+        session_id=test_session_id,
+        ticker="AAPL",
+        analyst_name="warren_buffett",
+        signal="bullish",
+        signal_numeric=0.8,
+        confidence=0.9,
+        reasoning="Excellent value proposition.",
+        model_name="gpt-4o",
+        model_provider="openai",
     )
     save_analyst_analysis(
-        session_id=test_session_id, ticker="AAPL", analyst_name="technical_analyst", signal="neutral", signal_numeric=0.0, confidence=0.7, reasoning="Consolidating near support.", model_name="gpt-4o", model_provider="openai"
+        session_id=test_session_id,
+        ticker="AAPL",
+        analyst_name="technical_analyst",
+        signal="neutral",
+        signal_numeric=0.0,
+        confidence=0.7,
+        reasoning="Consolidating near support.",
+        model_name=None,
+        model_provider=None,
     )
 
     # Export to markdown
@@ -98,17 +132,53 @@ def test_export_to_markdown(test_session_id, tmp_path):
     # Check header
     assert "# Analyst Transcript" in content
     assert test_session_id in content
-    assert "**Model:** gpt-4o" in content
-    assert "**Provider:** openai" in content
+    assert "**LLM Models Used:** openai gpt-4o" in content
+    assert "**Deterministic Analysts:** Technical Analyst" in content
 
     # Check analyses are present
     assert "## AAPL" in content
-    assert "### warren_buffett" in content
-    assert "### technical_analyst" in content
+    assert "### Warren Buffett" in content
+    assert "### Technical Analyst" in content
+    assert "Deterministic analyst" in content
     assert "**Signal:** bullish" in content
     assert "**Signal:** neutral" in content
     assert "Excellent value proposition" in content
     assert "Consolidating near support" in content
+
+
+def test_summarize_non_llm_analyses(test_session_id):
+    """Ensure deterministic analyst summary tables are generated."""
+
+    save_analyst_analysis(
+        session_id=test_session_id,
+        ticker="AAPL",
+        analyst_name="technical_analyst",
+        signal="neutral",
+        signal_numeric=0.0,
+        confidence=0.65,
+        reasoning="Range-bound price action",
+        model_name=None,
+        model_provider=None,
+    )
+
+    save_analyst_analysis(
+        session_id=test_session_id,
+        ticker="AAPL",
+        analyst_name="fundamentals_analyst",
+        signal="bullish",
+        signal_numeric=0.6,
+        confidence=0.8,
+        reasoning="Solid balance sheet",
+        model_name=None,
+        model_provider=None,
+    )
+
+    summary = summarize_non_llm_analyses(test_session_id)
+    assert summary is not None
+    assert "Ticker" in summary
+    assert "Technical Analyst" in summary
+    assert "Fundamentals Analyst" in summary
+    assert "AAPL" in summary
 
 
 def test_export_empty_session():
