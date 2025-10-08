@@ -632,25 +632,44 @@ class EnhancedPortfolioManager:
         if total_score == 0:
             return {}
 
+        count = len(selected_tickers)
+        effective_max_position = max(max_position, 1.0 / count)
+        effective_max_position = min(effective_max_position, 1.0)
+
         target_weights = {}
         for ticker in selected_tickers:
-            # Base weight proportional to score
             base_weight = selected_scores[ticker] / total_score
 
-            # Apply position limits
-            if base_weight > max_position:
-                target_weights[ticker] = max_position
+            if base_weight > effective_max_position:
+                weight = effective_max_position
             elif base_weight < min_position:
-                # For concentrated portfolio, either meaningful position or nothing
-                target_weights[ticker] = min_position
+                weight = min_position
             else:
-                target_weights[ticker] = base_weight
+                weight = base_weight
 
-        # Re-normalize after applying constraints
+            target_weights[ticker] = weight
+
         total_weight = sum(target_weights.values())
+
+        # If weights exceed total, scale down proportionally
         if total_weight > 1.0:
             for ticker in target_weights:
                 target_weights[ticker] /= total_weight
+            total_weight = sum(target_weights.values())
+
+        # If there is remaining allocation capacity, distribute among non-capped tickers
+        if total_weight < 1.0:
+            residual = 1.0 - total_weight
+            capacities = {ticker: max(0.0, effective_max_position - weight) for ticker, weight in target_weights.items()}
+            capacity_total = sum(capacities.values())
+
+            if capacity_total > 0 and residual > 0:
+                for ticker, capacity in capacities.items():
+                    if capacity <= 0:
+                        continue
+                    addition = residual * (capacity / capacity_total)
+                    addition = min(addition, capacity)
+                    target_weights[ticker] += addition
 
         return target_weights
 
@@ -961,69 +980,63 @@ class EnhancedPortfolioManager:
         All calculations in HOME CURRENCY to handle multi-currency portfolios.
         Scale down ALL purchases proportionally if total cash insufficient.
         """
-        # Calculate total cash available in HOME CURRENCY
+        # Calculate total cash available in HOME CURRENCY (pre-trade)
         total_cash_available = 0.0
         for currency, cash in self.portfolio.cash_holdings.items():
             fx_rate = self.exchange_rates.get(currency, 1.0)
             total_cash_available += cash * fx_rate
 
-        # Calculate net cash needed (in home currency) from purchases and sales
-        net_cash_needed = 0.0
+        sale_proceeds_home = 0.0
+        purchase_requirements_home = 0.0
+
+        position_lookup = {p.ticker: p for p in self.portfolio.positions}
 
         for rec in recommendations:
             fx_rate = self.exchange_rates.get(rec["currency"], 1.0)
 
             if rec["action"] == "SELL":
-                # Selling adds cash (convert to home currency)
-                net_cash_needed -= rec["current_shares"] * rec["current_price"] * fx_rate
+                sale_value = rec["current_shares"] * rec["current_price"] * fx_rate
+                sale_proceeds_home += sale_value
 
             elif rec["action"] == "ADD":
-                # Buying deducts cash (convert to home currency)
-                net_cash_needed += rec["target_shares"] * rec["current_price"] * fx_rate
+                purchase_value = rec["target_shares"] * rec["current_price"] * fx_rate
+                purchase_requirements_home += purchase_value
 
             elif rec["action"] == "INCREASE":
-                # Get existing position to calculate delta (convert to home currency)
-                existing = next((p for p in self.portfolio.positions if p.ticker == rec["ticker"]), None)
+                existing = position_lookup.get(rec["ticker"])
                 if existing:
                     delta_shares = rec["target_shares"] - existing.shares
-                    net_cash_needed += delta_shares * rec["current_price"] * fx_rate
+                    if delta_shares > 0:
+                        purchase_requirements_home += delta_shares * rec["current_price"] * fx_rate
+                    elif delta_shares < 0:
+                        sale_proceeds_home += abs(delta_shares) * rec["current_price"] * fx_rate
 
             elif rec["action"] == "DECREASE":
-                # Decreasing adds cash back (convert to home currency)
-                existing = next((p for p in self.portfolio.positions if p.ticker == rec["ticker"]), None)
+                existing = position_lookup.get(rec["ticker"])
                 if existing:
                     delta_shares = existing.shares - rec["target_shares"]
-                    net_cash_needed -= delta_shares * rec["current_price"] * fx_rate
+                    sale_proceeds_home += delta_shares * rec["current_price"] * fx_rate
 
-        # Check if we need to scale down purchases
-        if net_cash_needed > total_cash_available:
-            # Calculate total value of all purchases (in home currency)
-            total_purchases = 0.0
+        projected_cash_available = total_cash_available + sale_proceeds_home
+
+        if purchase_requirements_home > projected_cash_available:
+            if projected_cash_available <= 0:
+                scale_factor = 0.0
+            else:
+                scale_factor = (projected_cash_available * 0.99) / purchase_requirements_home
+
+            scale_factor = max(min(scale_factor, 1.0), 0.0)
+
             for rec in recommendations:
-                fx_rate = self.exchange_rates.get(rec["currency"], 1.0)
-
-                if rec["action"] == "ADD":
-                    total_purchases += rec["target_shares"] * rec["current_price"] * fx_rate
-                elif rec["action"] == "INCREASE":
-                    existing = next((p for p in self.portfolio.positions if p.ticker == rec["ticker"]), None)
-                    if existing:
-                        delta_shares = rec["target_shares"] - existing.shares
-                        total_purchases += delta_shares * rec["current_price"] * fx_rate
-
-            if total_purchases > 0:
-                # Scale factor to fit within available cash (99% to leave buffer)
-                scale_factor = (total_cash_available * 0.99) / total_purchases
-
-                # Apply scaling to ALL purchases proportionally
-                for rec in recommendations:
-                    if rec["action"] in ["ADD", "INCREASE"]:
-                        if rec["action"] == "ADD":
-                            rec["target_shares"] *= scale_factor
-                            rec["target_weight"] *= scale_factor
-                        elif rec["action"] == "INCREASE":
-                            existing = next((p for p in self.portfolio.positions if p.ticker == rec["ticker"]), None)
-                            if existing:
-                                delta_shares = rec["target_shares"] - existing.shares
+                if rec["action"] in ["ADD", "INCREASE"]:
+                    if rec["action"] == "ADD":
+                        rec["target_shares"] *= scale_factor
+                        rec["target_weight"] *= scale_factor
+                    elif rec["action"] == "INCREASE":
+                        existing = position_lookup.get(rec["ticker"])
+                        if existing:
+                            delta_shares = rec["target_shares"] - existing.shares
+                            if delta_shares > 0:
                                 scaled_delta = delta_shares * scale_factor
                                 rec["target_shares"] = existing.shares + scaled_delta
                                 rec["target_weight"] *= scale_factor

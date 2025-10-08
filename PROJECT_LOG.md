@@ -818,7 +818,7 @@ The system now operates efficiently at scale with comprehensive financial data i
 - **Finding**: Confirmed `_get_current_price` uses the most recent Börsdata daily close (`c`) returned by `get_stock_prices`, falling back to cost basis or a default when the API fails.
 - **Documentation**: Clarified for stakeholders that valuations use the latest end-of-day close within the last five calendar days, not live prices or VWAP calculations.
 - **Implementation**: Added three-day rolling price heuristics (SMA, ATR, slippage band) in `EnhancedPortfolioManager` so trade sizing uses a prefetched price context instead of a single close.
-- **Stability**: Guarded cash updates so the home-currency bucket (`SEK`) is initialised even when the input portfolio lists no SEK cash line, and added USD-cross fallback logic when direct exchange-rate pairs are missing (e.g., PLN/SEK).
+- **Stability**: Guarded cash updates so the home-currency bucket (`SEK`) is initialised even when the input portfolio lists no SEK cash line, added USD-cross fallback logic when direct exchange-rate pairs are missing (e.g., PLN/SEK), and reworked allocation/cash guards so sale proceeds fund new buys and concentrated rosters get fully sized (dynamic max-position + residual redistribution).
 - **Next Steps**: None; informational update only.
 
 **IMPORTANT**: Update this log at the end of each work session: note completed steps, new decisions, blockers, and refreshed next actions. Always use session numbers (Session X, Session X+1, etc.) for progress entries. Update the "Last updated" date at the top with the actual current date when making changes.
