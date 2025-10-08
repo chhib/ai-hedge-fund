@@ -501,13 +501,49 @@ class EnhancedPortfolioManager:
         if self.verbose:
             print(f"Fetching exchange rates to {self.home_currency}...")
 
+        def _get_rate_via_usd(target_currency: str) -> tuple[float | None, str]:
+            """
+            Attempt to derive the target/home rate via USD if direct pair is missing.
+            Returns (rate, strategy) where strategy is "usd_cross" or "missing".
+            """
+            if target_currency.upper() == "USD" or self.home_currency.upper() == "USD":
+                return None, "missing"
+
+            usd_home = self.exchange_rates.get("USD")
+            if usd_home is None:
+                usd_home = fx_service.get_rate("USD", self.home_currency)
+                if usd_home:
+                    self.exchange_rates["USD"] = usd_home
+                elif self.verbose:
+                    print(f"  ⚠️  USD/{self.home_currency} rate not available for USD cross fallback")
+
+            if not usd_home:
+                return None, "missing"
+
+            currency_usd = fx_service.get_rate(target_currency, "USD")
+            if not currency_usd:
+                inverse = fx_service.get_rate("USD", target_currency)
+                if inverse and inverse != 0:
+                    currency_usd = 1 / inverse
+
+            if currency_usd:
+                return currency_usd * usd_home, "usd_cross"
+
+            return None, "missing"
+
         for currency in currencies_needed:
             try:
                 rate = fx_service.get_rate(currency, self.home_currency)
+                strategy = "direct"
+
+                if not rate:
+                    rate, strategy = _get_rate_via_usd(currency)
+
                 if rate:
                     self.exchange_rates[currency] = rate
                     if self.verbose:
-                        print(f"  ✓ {currency}/{self.home_currency} = {rate:.4f}")
+                        suffix = " (via USD)" if strategy == "usd_cross" else ""
+                        print(f"  ✓ {currency}/{self.home_currency} = {rate:.4f}{suffix}")
                 else:
                     # Fallback to 1.0 if rate not found (with warning)
                     self.exchange_rates[currency] = 1.0
