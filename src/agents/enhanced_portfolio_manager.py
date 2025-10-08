@@ -1003,6 +1003,9 @@ class EnhancedPortfolioManager:
         updated_positions = []
         updated_cash = dict(self.portfolio.cash_holdings)  # Copy current cash
 
+        if self.home_currency not in updated_cash:
+            updated_cash[self.home_currency] = 0.0
+
         for rec in recommendations:
             ticker = rec["ticker"]
             currency = rec["currency"]
