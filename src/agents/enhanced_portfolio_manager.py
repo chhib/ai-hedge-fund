@@ -20,6 +20,21 @@ class AnalystSignal:
     reasoning: str
 
 
+@dataclass
+class PriceContext:
+    ticker: str
+    currency: str
+    latest_close: float
+    entry_price: float
+    buy_price: float
+    sell_price: float
+    atr: float
+    band_low: float
+    band_high: float
+    sample_size: int
+    source: str
+
+
 class EnhancedPortfolioManager:
     """
     Portfolio Manager that aggregates analyst signals for LONG-ONLY portfolios
@@ -41,6 +56,8 @@ class EnhancedPortfolioManager:
         self.analysts = self._initialize_analysts(analysts, model_config)
         self.exchange_rates: Dict[str, float] = {}  # Currency -> rate (e.g., {"USD": 10.5, "GBP": 13.2})
         self.analysis_cache = get_analysis_cache()
+        self.prefetched_data: Dict[str, Dict[str, Any]] = {}
+        self.price_context_cache: Dict[str, PriceContext] = {}
 
     def _initialize_analysts(self, analyst_names: List[str], model_config: Dict[str, Any]) -> List[Any]:
         """
@@ -219,6 +236,9 @@ class EnhancedPortfolioManager:
         )
 
         progress.stop()
+
+        # Make prefetched payloads available for downstream price heuristics
+        self.prefetched_data = prefetched_data
 
         # STEP 3.5: Fetch exchange rates for all currencies in the universe
         self._fetch_exchange_rates(api_key)
@@ -627,14 +647,14 @@ class EnhancedPortfolioManager:
         market = self.ticker_markets.get(ticker, "global")
         return "SEK" if market == "Nordic" else "USD"
 
-    def _get_current_price(self, ticker: str) -> tuple[float, str]:
+    def _fetch_latest_close(self, ticker: str) -> tuple[float, str]:
         """
-        Fetch current price and currency from Borsdata
-        Returns (price, currency) tuple
+        Fetch the latest available close from Börsdata as a simple fallback.
+        Returns (price, currency).
         """
         import os
-        from src.tools.api import _borsdata_client
         from datetime import datetime, timedelta
+        from src.tools.api import _borsdata_client
 
         api_key = os.getenv("BORSDATA_API_KEY")
         if not api_key:
@@ -646,12 +666,10 @@ class EnhancedPortfolioManager:
             market = self.ticker_markets.get(ticker, "global")
             use_global = market.lower() == "global"
 
-            # Get instrument for currency info
             instrument = _borsdata_client.get_instrument(ticker, api_key=api_key, use_global=use_global)
             raw_currency = instrument.get("stockPriceCurrency", "USD")
             instrument_id = instrument.get("insId")
 
-            # Fetch recent prices (last 5 days to handle weekends)
             end_date = datetime.now().strftime("%Y-%m-%d")
             start_date = (datetime.now() - timedelta(days=5)).strftime("%Y-%m-%d")
 
@@ -663,9 +681,8 @@ class EnhancedPortfolioManager:
             )
 
             if prices:
-                # Get most recent price
                 latest = prices[-1]
-                close_price = latest.get("c")  # close price
+                close_price = latest.get("c")
                 if close_price is not None:
                     normalized_price, normalized_currency = normalize_price_and_currency(float(close_price), raw_currency)
                     if self.verbose and normalized_price != float(close_price):
@@ -680,6 +697,98 @@ class EnhancedPortfolioManager:
             if self.verbose:
                 print(f"Warning: Could not fetch price for {ticker}: {e}")
             return 100.0, self._get_ticker_currency(ticker)
+
+    def _get_price_context(self, ticker: str) -> PriceContext:
+        """
+        Build a three-day price context with rolling averages and ATR heuristics.
+        """
+        if ticker in self.price_context_cache:
+            return self.price_context_cache[ticker]
+
+        from datetime import datetime, timedelta
+        from statistics import fmean
+        from src.tools.api import get_prices
+
+        cached_prices = self.prefetched_data.get(ticker, {}).get("prices", [])
+        source = "prefetch" if cached_prices else "api"
+
+        price_records = list(cached_prices)
+        if not price_records:
+            end_date = datetime.now().strftime("%Y-%m-%d")
+            start_date = (datetime.now() - timedelta(days=10)).strftime("%Y-%m-%d")
+            price_records = get_prices(ticker, start_date, end_date)
+
+        if not price_records:
+            fallback_price, fallback_currency = self._fetch_latest_close(ticker)
+            context = PriceContext(
+                ticker=ticker,
+                currency=fallback_currency,
+                latest_close=fallback_price,
+                entry_price=fallback_price,
+                buy_price=fallback_price,
+                sell_price=fallback_price,
+                atr=0.0,
+                band_low=fallback_price,
+                band_high=fallback_price,
+                sample_size=0,
+                source="fallback",
+            )
+            self.price_context_cache[ticker] = context
+            return context
+
+        price_records.sort(key=lambda p: p.time)
+        recent = price_records[-3:]
+        sample_size = len(recent)
+
+        closes = [float(p.close) for p in recent if p.close is not None]
+
+        latest_close = closes[-1] if closes else float(price_records[-1].close)
+        entry_price = fmean(closes) if closes else latest_close
+
+        prev_close = None
+        if len(price_records) > sample_size:
+            prev_close = float(price_records[-sample_size - 1].close)
+
+        true_ranges: List[float] = []
+        prior_close = prev_close
+        for price in recent:
+            high = float(price.high)
+            low = float(price.low)
+            close = float(price.close)
+            range_high_low = high - low
+            if prior_close is None:
+                tr = range_high_low
+            else:
+                tr = max(range_high_low, abs(high - prior_close), abs(low - prior_close))
+            true_ranges.append(max(tr, 0.0))
+            prior_close = close
+
+        atr = fmean(true_ranges) if true_ranges else 0.0
+        band_half = atr / 2 if atr else 0.0
+        band_low = max(entry_price - band_half, 0.0)
+        band_high = entry_price + band_half
+        slippage = atr * 0.5 if atr else 0.0
+
+        currency = self._get_ticker_currency(ticker)
+        if not currency:
+            _, currency = self._fetch_latest_close(ticker)
+
+        context = PriceContext(
+            ticker=ticker,
+            currency=currency,
+            latest_close=latest_close,
+            entry_price=entry_price,
+            buy_price=max(entry_price + slippage, 0.0),
+            sell_price=max(entry_price - slippage, 0.0),
+            atr=atr,
+            band_low=band_low,
+            band_high=band_high,
+            sample_size=sample_size,
+            source=source,
+        )
+
+        self.price_context_cache[ticker] = context
+        return context
 
     def _generate_recommendations(self, target_positions: Dict[str, float], min_trade_size: float) -> List[Dict[str, Any]]:
         """
@@ -737,27 +846,40 @@ class EnhancedPortfolioManager:
             else:
                 action = "HOLD"
 
-            # Fetch current price and currency from Borsdata
-            current_price, currency = self._get_current_price(ticker)
+            price_context = self._get_price_context(ticker)
+            currency = price_context.currency or (current_pos.currency if current_pos else self._get_ticker_currency(ticker))
 
-            # For existing positions, validate currency and fall back to cost basis if fetch failed
-            if current_pos:
-                if current_price == 100.0:  # Default price indicates fetch failure
-                    current_price = current_pos.cost_basis
-                    currency = current_pos.currency
-                elif currency != current_pos.currency and self.verbose:
+            # Align with existing position currency when possible
+            if current_pos and currency and current_pos.currency and currency != current_pos.currency:
+                if self.verbose:
                     print(f"⚠️  Currency update for {ticker}: {current_pos.currency} → {currency}")
 
-            # Convert price to home currency for weight calculations
             fx_rate = self.exchange_rates.get(currency, 1.0)
-            current_price_home = current_price * fx_rate
-
-            # Calculate target shares using home currency values
             target_value_home = target_weight * total_value
-            target_shares = target_value_home / current_price_home if current_price_home > 0 else 0
 
-            # Calculate value delta in native currency for display
-            value_delta = (target_shares - current_shares) * current_price
+            # Select trade price based on intended action
+            if action in {"ADD", "INCREASE"}:
+                trade_price = price_context.buy_price or price_context.entry_price
+            elif action in {"SELL", "DECREASE"}:
+                trade_price = price_context.sell_price or price_context.entry_price
+            else:
+                trade_price = price_context.entry_price
+
+            # Fallback handling for missing price context
+            if current_pos and price_context.sample_size == 0:
+                trade_price = current_pos.cost_basis or trade_price
+                currency = current_pos.currency or currency
+                fx_rate = self.exchange_rates.get(currency, 1.0)
+
+            if trade_price <= 0:
+                fallback_price = price_context.latest_close
+                if (fallback_price is None or fallback_price <= 0) and current_pos:
+                    fallback_price = current_pos.cost_basis
+                trade_price = fallback_price if fallback_price and fallback_price > 0 else 100.0
+
+            trade_price_home = trade_price * fx_rate
+            target_shares = target_value_home / trade_price_home if trade_price_home > 0 else 0
+            value_delta = (target_shares - current_shares) * trade_price
 
             recommendations.append(
                 {
@@ -770,8 +892,14 @@ class EnhancedPortfolioManager:
                     "value_delta": value_delta,
                     "confidence": 0.75,  # Simplified
                     "reasoning": f"Target allocation: {target_weight:.1%}",
-                    "current_price": current_price,
+                    "current_price": trade_price,
                     "currency": currency,
+                    "pricing_basis": price_context.entry_price,
+                    "pricing_band": {"low": price_context.band_low, "high": price_context.band_high},
+                    "latest_close": price_context.latest_close,
+                    "atr": price_context.atr,
+                    "pricing_sample": price_context.sample_size,
+                    "pricing_source": price_context.source,
                 }
             )
 

@@ -1,6 +1,6 @@
 # Börsdata Integration Project Log
 
-_Last updated: 2025-10-07 (Session 52)_
+_Last updated: 2025-10-08 (Session 53)_
 
 ## End Goal
 Rebuild the data ingestion and processing pipeline so the application relies on Börsdata's REST API (per `README_Borsdata_API.md` and https://apidoc.borsdata.se/swagger/index.html). The system should let a user set a `BORSDATA_API_KEY` in `.env`, accept Börsdata-native tickers, and otherwise preserve the current user-facing workflows and capabilities.
@@ -812,5 +812,12 @@ The system now operates efficiently at scale with comprehensive financial data i
 - **Minor Code Improvements**: Small performance tweaks in `jim_simons.py`, `stanley_druckenmiller.py`, `borsdata_kpis.py`, and progress display
 - **Repository Cleanup**: Deleted one-off profiling script (`measure_startup_improvement.py`) and output data (`profiling_results.json`); organized profiling documentation into dedicated directory
 - **System Status**: Profiling infrastructure established for ongoing performance monitoring. Clear optimization roadmap identified with priority 1 targets (Warren Buffett agent, `statistics.pstdev` replacement) and expected 50% combined improvement potential.
+
+### Session 53 (Price Data Clarification)
+- **Research**: Reviewed `src/agents/enhanced_portfolio_manager.py` and `src/tools/api.py` to trace quote sourcing for the portfolio manager CLI.
+- **Finding**: Confirmed `_get_current_price` uses the most recent Börsdata daily close (`c`) returned by `get_stock_prices`, falling back to cost basis or a default when the API fails.
+- **Documentation**: Clarified for stakeholders that valuations use the latest end-of-day close within the last five calendar days, not live prices or VWAP calculations.
+- **Implementation**: Added three-day rolling price heuristics (SMA, ATR, slippage band) in `EnhancedPortfolioManager` so trade sizing uses a prefetched price context instead of a single close.
+- **Next Steps**: None; informational update only.
 
 **IMPORTANT**: Update this log at the end of each work session: note completed steps, new decisions, blockers, and refreshed next actions. Always use session numbers (Session X, Session X+1, etc.) for progress entries. Update the "Last updated" date at the top with the actual current date when making changes.
