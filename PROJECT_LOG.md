@@ -1,6 +1,6 @@
 # Börsdata Integration Project Log
 
-_Last updated: 2025-10-08 (Session 53)_
+_Last updated: 2025-10-09 (Session 54)_
 
 ## End Goal
 Rebuild the data ingestion and processing pipeline so the application relies on Börsdata's REST API (per `README_Borsdata_API.md` and https://apidoc.borsdata.se/swagger/index.html). The system should let a user set a `BORSDATA_API_KEY` in `.env`, accept Börsdata-native tickers, and otherwise preserve the current user-facing workflows and capabilities.
@@ -820,5 +820,13 @@ The system now operates efficiently at scale with comprehensive financial data i
 - **Implementation**: Added three-day rolling price heuristics (SMA, ATR, slippage band) in `EnhancedPortfolioManager` so trade sizing uses a prefetched price context instead of a single close.
 - **Stability**: Guarded cash updates so the home-currency bucket (`SEK`) is initialised even when the input portfolio lists no SEK cash line, added USD-cross fallback logic when direct exchange-rate pairs are missing (e.g., PLN/SEK), and reworked allocation/cash guards so sale proceeds fund new buys and concentrated rosters get fully sized (dynamic max-position + residual redistribution).
 - **Next Steps**: None; informational update only.
+
+### Session 54 (Market Valuation Fix)
+- **Valuation Update**: Reworked `EnhancedPortfolioManager._generate_recommendations()` to compute NAV from live price context instead of portfolio cost basis so recommended trades respect actual buying power.
+- **Summary Refresh**: `_portfolio_summary()` now reuses the market valuation cache, keeping displayed totals aligned with trade sizing.
+- **Testing**: Added `tests/test_enhanced_portfolio_manager.py` covering the new valuation behaviour and ran `poetry run pytest tests/test_enhanced_portfolio_manager.py`.
+- **Share Rounding**: Adjusted integer rounding to floor incremental buys after cash scaling so FX-adjusted totals never exceed available capital.
+- **Slippage Guardrail**: Added regression coverage ensuring rebalance output (positions + cash) stays within a 3% tolerance of the intended capital footprint across mixed currencies.
+- **Next Steps**: Monitor a full CLI rebalance with real data to confirm cash usage now tracks broker balances.
 
 **IMPORTANT**: Update this log at the end of each work session: note completed steps, new decisions, blockers, and refreshed next actions. Always use session numbers (Session X, Session X+1, etc.) for progress entries. Update the "Last updated" date at the top with the actual current date when making changes.

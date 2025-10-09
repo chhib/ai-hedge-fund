@@ -1,8 +1,9 @@
+import math
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, List
 
-from src.utils.portfolio_loader import Portfolio
+from src.utils.portfolio_loader import Portfolio, Position
 from src.utils.currency import (
     normalize_currency_code,
     normalize_price_and_currency,
@@ -58,6 +59,7 @@ class EnhancedPortfolioManager:
         self.analysis_cache = get_analysis_cache()
         self.prefetched_data: Dict[str, Dict[str, Any]] = {}
         self.price_context_cache: Dict[str, PriceContext] = {}
+        self._current_position_values: Dict[str, Dict[str, float]] = {}
 
     def _initialize_analysts(self, analyst_names: List[str], model_config: Dict[str, Any]) -> List[Any]:
         """
@@ -845,6 +847,49 @@ class EnhancedPortfolioManager:
         self.price_context_cache[ticker] = context
         return context
 
+    def _get_position_value_info(self, position: Position) -> Dict[str, float]:
+        """
+        Calculate the current market value for a position using price context data.
+        Falls back to cost basis when pricing data is unavailable.
+        """
+        price_context = None
+        try:
+            price_context = self._get_price_context(position.ticker)
+        except Exception:
+            # _get_price_context already logs warnings when verbose; continue with fallbacks.
+            price_context = None
+
+        price_candidates = []
+        if price_context:
+            price_candidates.extend(
+                [
+                    getattr(price_context, "entry_price", None),
+                    getattr(price_context, "latest_close", None),
+                ]
+            )
+        price_candidates.append(position.cost_basis)
+
+        price = next((float(p) for p in price_candidates if p is not None and p > 0), 0.0)
+
+        # Align currency with price context when available, otherwise fall back to stored currency.
+        currency = None
+        if price_context and getattr(price_context, "currency", None):
+            currency = price_context.currency
+        elif position.currency:
+            currency = position.currency
+        else:
+            currency = self.home_currency
+
+        fx_rate = self.exchange_rates.get(currency, 1.0)
+        value_home = position.shares * price * fx_rate
+
+        return {
+            "price": price,
+            "currency": currency,
+            "fx_rate": fx_rate,
+            "value_home": value_home,
+        }
+
     def _generate_recommendations(self, target_positions: Dict[str, float], min_trade_size: float) -> List[Dict[str, Any]]:
         """
         Generate trading recommendations based on target positions vs current portfolio
@@ -854,14 +899,17 @@ class EnhancedPortfolioManager:
         current_tickers = {p.ticker for p in self.portfolio.positions}
         all_tickers = set(list(target_positions.keys()) + list(current_tickers))
 
+        # Track current market value for existing positions using live pricing context.
+        position_value_map: Dict[str, Dict[str, float]] = {}
+
         # Calculate total portfolio value in HOME CURRENCY
         total_value_home = 0.0
 
         # Convert position values to home currency
         for pos in self.portfolio.positions:
-            fx_rate = self.exchange_rates.get(pos.currency, 1.0)
-            position_value_home = pos.shares * pos.cost_basis * fx_rate
-            total_value_home += position_value_home
+            value_info = self._get_position_value_info(pos)
+            position_value_map[pos.ticker] = value_info
+            total_value_home += value_info["value_home"]
 
         # Convert cash holdings to home currency
         for currency, cash in self.portfolio.cash_holdings.items():
@@ -869,6 +917,7 @@ class EnhancedPortfolioManager:
             total_value_home += cash * fx_rate
 
         total_value = total_value_home
+        self._current_position_values = position_value_map
 
         for ticker in all_tickers:
             # Current position
@@ -876,10 +925,14 @@ class EnhancedPortfolioManager:
             current_weight = 0.0
             current_shares = 0.0
             if current_pos:
-                # Convert to home currency for weight calculation
-                fx_rate = self.exchange_rates.get(current_pos.currency, 1.0)
-                current_value_home = current_pos.shares * current_pos.cost_basis * fx_rate
-                current_weight = current_value_home / total_value if total_value > 0 else 0
+                value_info = position_value_map.get(ticker)
+                if value_info:
+                    current_value_home = value_info["value_home"]
+                    current_weight = current_value_home / total_value if total_value > 0 else 0
+                else:
+                    fx_rate = self.exchange_rates.get(current_pos.currency, 1.0)
+                    current_value_home = current_pos.shares * current_pos.cost_basis * fx_rate
+                    current_weight = current_value_home / total_value if total_value > 0 else 0
                 current_shares = current_pos.shares
 
             # Target position
@@ -955,24 +1008,14 @@ class EnhancedPortfolioManager:
                     "atr": price_context.atr,
                     "pricing_sample": price_context.sample_size,
                     "pricing_source": price_context.source,
+                    "desired_weight": target_weight,
                 }
             )
 
         # Validate and adjust for cash constraints per currency
         recommendations = self._validate_cash_constraints(recommendations)
 
-        for rec in recommendations:
-            if rec["ticker"].upper() != "CASH":
-                rec["target_shares"] = max(0, round(rec["target_shares"]))
-            delta_shares = rec["target_shares"] - rec["current_shares"]
-            rec["value_delta"] = delta_shares * rec["current_price"]
-
-            # Recalculate target_weight after rounding shares (must convert to home currency)
-            fx_rate = self.exchange_rates.get(rec["currency"], 1.0)
-            position_value_home = rec["target_shares"] * rec["current_price"] * fx_rate
-            rec["target_weight"] = position_value_home / total_value if total_value > 0 else 0.0
-
-        return recommendations
+        return self._round_and_top_up_shares(recommendations, target_positions, total_value, min_trade_size)
 
     def _validate_cash_constraints(self, recommendations: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
@@ -1042,6 +1085,174 @@ class EnhancedPortfolioManager:
                                 rec["target_weight"] *= scale_factor
 
         return recommendations
+
+    def _round_and_top_up_shares(self, recommendations: List[Dict[str, Any]], target_positions: Dict[str, float], total_value: float, min_trade_size: float) -> List[Dict[str, Any]]:
+        """
+        Round share counts to integers and, when possible, deploy residual cash so the
+        resulting portfolio stays close to the intended allocation.
+        """
+        if total_value <= 0:
+            return recommendations
+
+        for rec in recommendations:
+            if "desired_weight" not in rec:
+                rec["desired_weight"] = target_positions.get(rec["ticker"], 0.0)
+
+        for rec in recommendations:
+            if rec["ticker"].upper() == "CASH":
+                continue
+
+            current_shares = rec["current_shares"]
+            raw_target_shares = rec["target_shares"]
+            action = rec["action"]
+
+            if action == "SELL":
+                adjusted_shares = 0.0
+            elif action == "ADD":
+                adjusted_shares = math.floor(raw_target_shares)
+            elif action == "INCREASE":
+                delta = max(0.0, raw_target_shares - current_shares)
+                adjusted_shares = current_shares + math.floor(delta)
+            elif action == "DECREASE":
+                delta = max(0.0, current_shares - raw_target_shares)
+                adjusted_shares = current_shares - math.floor(delta)
+            else:
+                adjusted_shares = round(raw_target_shares)
+
+            adjusted_shares = max(0.0, float(adjusted_shares))
+            rec["target_shares"] = adjusted_shares
+
+            delta_shares = adjusted_shares - current_shares
+            if adjusted_shares == 0 and current_shares > 0:
+                rec["action"] = "SELL"
+            elif delta_shares > 0 and current_shares == 0:
+                rec["action"] = "ADD"
+            elif delta_shares > 0:
+                rec["action"] = "INCREASE"
+            elif delta_shares < 0 and adjusted_shares > 0:
+                rec["action"] = "DECREASE"
+            elif delta_shares < 0:
+                rec["action"] = "SELL"
+            else:
+                rec["action"] = "HOLD"
+
+            rec["value_delta"] = delta_shares * rec["current_price"]
+
+            fx_rate = self.exchange_rates.get(rec["currency"], 1.0)
+            position_value_home = adjusted_shares * rec["current_price"] * fx_rate
+            rec["target_weight"] = position_value_home / total_value if total_value > 0 else 0.0
+
+        self._allocate_residual_cash(recommendations, total_value, min_trade_size)
+
+        return recommendations
+
+    def _allocate_residual_cash(self, recommendations: List[Dict[str, Any]], total_value: float, min_trade_size: float, base_weight_tolerance: float = 0.02) -> None:
+        """
+        Greedily allocate remaining cash to the most attractive tickers while keeping the
+        final allocation close to the intended weights. Gradually relaxes the tolerance if
+        residual cash remains so we prefer investing over leaving idle balances.
+        """
+        if total_value <= 0:
+            return
+
+        non_cash: List[Dict[str, Any]] = []
+        residual_home = total_value
+
+        for rec in recommendations:
+            if rec["ticker"].upper() == "CASH":
+                continue
+            fx_rate = self.exchange_rates.get(rec["currency"], 1.0)
+            allocation = rec["target_shares"] * rec["current_price"] * fx_rate
+            residual_home -= allocation
+            non_cash.append(rec)
+
+        residual_home = max(residual_home, 0.0)
+
+        if residual_home < min_trade_size:
+            return
+
+        tolerance_schedule = [0.0, base_weight_tolerance, 0.05, 0.1, 0.2, 0.5, 1.0]
+
+        while residual_home >= min_trade_size - 1e-6:
+            candidate = None
+            candidate_units = 0
+            candidate_cost = 0.0
+            candidate_deficit = -1.0
+
+            for tolerance in tolerance_schedule:
+                for rec in non_cash:
+                    desired_weight = rec.get("desired_weight", 0.0)
+                    current_weight = rec.get("target_weight", 0.0)
+                    deficit = max(0.0, desired_weight - current_weight)
+
+                    fx_rate = self.exchange_rates.get(rec["currency"], 1.0)
+                    share_cost_home = rec["current_price"] * fx_rate
+                    if share_cost_home <= 0:
+                        continue
+
+                    max_affordable_units = int(residual_home // share_cost_home)
+                    if max_affordable_units <= 0:
+                        continue
+
+                    min_units = 1
+                    if min_trade_size > 0:
+                        min_units = max(1, math.ceil(min_trade_size / share_cost_home))
+                    if max_affordable_units < min_units:
+                        continue
+
+                    if tolerance < 1.0:
+                        allowable_home = max(
+                            0.0,
+                            (desired_weight + tolerance) * total_value - current_weight * total_value,
+                        )
+                        max_units_tolerance = int(allowable_home // share_cost_home)
+                        if max_units_tolerance <= 0:
+                            continue
+                        units = min(max_affordable_units, max(min_units, max_units_tolerance))
+                    else:
+                        units = max_affordable_units
+
+                    if units < min_units:
+                        continue
+
+                    if candidate is None or deficit > candidate_deficit or (
+                        abs(deficit - candidate_deficit) < 1e-9 and share_cost_home * units < candidate_cost
+                    ):
+                        candidate = rec
+                        candidate_units = units
+                        candidate_cost = share_cost_home * units
+                        candidate_deficit = deficit
+
+                if candidate:
+                    break
+
+            if not candidate:
+                break
+
+            fx_rate = self.exchange_rates.get(candidate["currency"], 1.0)
+
+            candidate["target_shares"] += float(candidate_units)
+            delta_shares = candidate["target_shares"] - candidate["current_shares"]
+            if candidate["current_shares"] == 0 and candidate["target_shares"] > 0:
+                candidate["action"] = "ADD"
+            elif candidate["target_shares"] > candidate["current_shares"]:
+                candidate["action"] = "INCREASE"
+            elif candidate["target_shares"] < candidate["current_shares"]:
+                candidate["action"] = "DECREASE"
+            elif candidate["target_shares"] == 0 and candidate["current_shares"] > 0:
+                candidate["action"] = "SELL"
+            else:
+                candidate["action"] = "HOLD"
+
+            candidate["value_delta"] = delta_shares * candidate["current_price"]
+            position_value_home = candidate["target_shares"] * candidate["current_price"] * fx_rate
+            candidate["target_weight"] = position_value_home / total_value if total_value > 0 else 0.0
+
+            residual_home -= candidate_cost
+
+            if residual_home < 0 and abs(residual_home) < 1e-6:
+                residual_home = 0.0
+                break
 
     def _calculate_updated_portfolio(self, recommendations: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
@@ -1133,9 +1344,12 @@ class EnhancedPortfolioManager:
         """Generate summary of current portfolio in HOME CURRENCY"""
         # Convert position values to home currency
         total_value = 0.0
+        position_value_map = getattr(self, "_current_position_values", {})
         for p in self.portfolio.positions:
-            fx_rate = self.exchange_rates.get(p.currency, 1.0)
-            total_value += p.shares * p.cost_basis * fx_rate
+            value_info = position_value_map.get(p.ticker)
+            if not value_info:
+                value_info = self._get_position_value_info(p)
+            total_value += value_info["value_home"]
 
         # Convert cash holdings to home currency
         for currency, cash in self.portfolio.cash_holdings.items():
