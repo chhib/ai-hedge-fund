@@ -1,6 +1,6 @@
 # Börsdata Integration Project Log
 
-_Last updated: 2025-10-09 (Session 54)_
+_Last updated: 2025-10-16 (Session 55)_
 
 ## End Goal
 Rebuild the data ingestion and processing pipeline so the application relies on Börsdata's REST API (per `README_Borsdata_API.md` and https://apidoc.borsdata.se/swagger/index.html). The system should let a user set a `BORSDATA_API_KEY` in `.env`, accept Börsdata-native tickers, and otherwise preserve the current user-facing workflows and capabilities.
@@ -828,5 +828,35 @@ The system now operates efficiently at scale with comprehensive financial data i
 - **Share Rounding**: Adjusted integer rounding to floor incremental buys after cash scaling so FX-adjusted totals never exceed available capital.
 - **Slippage Guardrail**: Added regression coverage ensuring rebalance output (positions + cash) stays within a 3% tolerance of the intended capital footprint across mixed currencies.
 - **Next Steps**: Monitor a full CLI rebalance with real data to confirm cash usage now tracks broker balances.
+
+### Session 55 (Timeout Fix & Table-Based Recommendations Display)
+- **Critical Bug Fix**: Resolved infinite hanging issue in portfolio manager when analyzing large universes (209 tickers × 5 analysts = 1,045 tasks):
+  - **Root Cause**: `future.result()` in `EnhancedPortfolioManager._collect_analyst_signals()` had no timeout, causing permanent blocks when LLM calls timed out or network issues occurred
+  - **Fix**: Added 120-second timeout per analyst×ticker task at line 462 with graceful `TimeoutError` handling
+  - **Impact**: System now continues processing remaining tasks instead of hanging indefinitely
+  - Modified `src/agents/enhanced_portfolio_manager.py` to handle timeouts with verbose warnings
+- **UX Enhancement**: Refactored recommendations display from list format to organized table layout:
+  - **Table Structure**: 5 columns (SELL, DECREASE, HOLD, INCREASE, ADD) showing all actions side-by-side
+  - **Clear Action Descriptions**: Line 2 shows explicit trading instructions:
+    - "Sell all 8 @ 124.52" (complete position exit with price)
+    - "Buy 88 @ 4.48" (exact shares to acquire with price)
+    - "Sell 4 @ 11.66" (partial position reduction with price)
+  - **Eliminates Mental Math**: Users no longer calculate share deltas from "8 → 0 shs" format
+  - **Ready for Broker Entry**: Price information immediately available for order execution
+  - Modified `src/utils/output_formatter.py` (lines 58-197) with table generation, action calculation, and price display
+- **Summary Section**: Added emoji-based summary showing position counts per action type
+- **Verbose Mode**: Detailed list view still available with `--verbose` flag showing reasoning
+- **Portfolio Management Workflow**: Successfully created Oct 16 actual portfolio from IBKR screenshot and compared with Oct 9 baseline:
+  - No trading activity during week (7 positions held)
+  - Cash increased +100.64 SEK (~24%)
+  - Minor cost basis adjustments across several holdings
+  - Generated rebalancing recommendations for large 209-ticker universe
+- **Files Modified**:
+  - `src/agents/enhanced_portfolio_manager.py` - Added timeout protection
+  - `src/utils/output_formatter.py` - Implemented table-based display with prices
+- **Commits**:
+  - `843d920` - "fix: add timeout to analyst tasks and table-based recommendations display"
+  - `a82cd89` - "feat: add clear action descriptions with prices to recommendations table"
+- **System Status**: Portfolio manager now handles large-scale analysis without hanging and provides trader-friendly output with explicit buy/sell instructions and prices.
 
 **IMPORTANT**: Update this log at the end of each work session: note completed steps, new decisions, blockers, and refreshed next actions. Always use session numbers (Session X, Session X+1, etc.) for progress entries. Update the "Last updated" date at the top with the actual current date when making changes.
