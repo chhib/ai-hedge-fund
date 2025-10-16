@@ -55,42 +55,121 @@ def display_results(results: Dict, verbose: bool):
             if currency != home_currency:
                 print(f"   1 {currency} = {rate:.4f} {home_currency}")
 
-    # Recommendations table
+    # Recommendations table organized by action type
     recs = results.get("recommendations", [])
     if recs:
         print("\n" + "-" * 40)
         print("RECOMMENDATIONS")
         print("-" * 40)
 
+        def _format_shares(value: float) -> str:
+            try:
+                if value is None:
+                    return "0"
+                return f"{int(value)}"
+            except (ValueError, TypeError):
+                return f"{value:.0f}"
+
+        # Group recommendations by action
+        by_action = {
+            "SELL": [],
+            "DECREASE": [],
+            "HOLD": [],
+            "INCREASE": [],
+            "ADD": []
+        }
+
         for rec in recs:
             action = rec["action"]
+            if action in by_action:
+                current_shares = _format_shares(rec["current_shares"])
+                target_shares = _format_shares(rec.get("target_shares", 0.0))
+                change_value = rec.get("value_delta", 0.0)
+                currency = rec.get("currency") or ""
+                change_formatted = f"{change_value:+,.0f} {currency}".strip()
+
+                by_action[action].append({
+                    "ticker": rec["ticker"],
+                    "current": current_shares,
+                    "target": target_shares,
+                    "change": change_formatted,
+                    "reasoning": rec.get("reasoning", "") if verbose else ""
+                })
+
+        # Calculate max rows needed
+        max_rows = max(len(items) for items in by_action.values()) if any(by_action.values()) else 0
+
+        if max_rows > 0:
+            # Print table header
+            col_width = 20
+            header = "| " + " | ".join([f"{action:^{col_width}}" for action in by_action.keys()]) + " |"
+            separator = "+-" + "-+-".join(["-" * col_width for _ in by_action.keys()]) + "-+"
+
+            print("\n" + separator)
+            print(header)
+            print(separator)
+
+            # Print table rows - each ticker gets 3 lines
+            for row_idx in range(max_rows):
+                # Line 1: Ticker name
+                line1_parts = []
+                for action, items in by_action.items():
+                    if row_idx < len(items):
+                        ticker = f"{items[row_idx]['ticker']}"
+                        line1_parts.append(f" {ticker:<{col_width}} ")
+                    else:
+                        line1_parts.append(f" {'':<{col_width}} ")
+                print("|" + "|".join(line1_parts) + "|")
+
+                # Line 2: Share change
+                line2_parts = []
+                for action, items in by_action.items():
+                    if row_idx < len(items):
+                        item = items[row_idx]
+                        shares_change = f"{item['current']} → {item['target']} shs"
+                        line2_parts.append(f" {shares_change:<{col_width}} ")
+                    else:
+                        line2_parts.append(f" {'':<{col_width}} ")
+                print("|" + "|".join(line2_parts) + "|")
+
+                # Line 3: Value change
+                line3_parts = []
+                for action, items in by_action.items():
+                    if row_idx < len(items):
+                        change = items[row_idx]['change']
+                        # Truncate if too long
+                        if len(change) > col_width:
+                            change = change[:col_width-3] + "..."
+                        line3_parts.append(f" {change:<{col_width}} ")
+                    else:
+                        line3_parts.append(f" {'':<{col_width}} ")
+                print("|" + "|".join(line3_parts) + "|")
+
+                # Add separator between items (not after last item)
+                if row_idx < max_rows - 1:
+                    print(separator)
+
+            print(separator)
+
+        # Print summary
+        counts = {action: len(items) for action, items in by_action.items() if items}
+        print("\n**Summary:**")
+        for action, count in counts.items():
             emoji = {"ADD": "🟢", "INCREASE": "⬆️", "HOLD": "⏸️", "DECREASE": "⬇️", "SELL": "🔴"}.get(action, "")
+            print(f"  {emoji} {count} position(s) to {action.lower()}")
 
-            def _format_shares(value: float) -> str:
-                try:
-                    if value is None:
-                        return "0"
-                    return f"{int(value)}"
-                except (ValueError, TypeError):
-                    return f"{value:.0f}"
-
-            current_shares_display = _format_shares(rec["current_shares"])
-            target_shares_display = _format_shares(rec.get("target_shares", 0.0))
-
-            change_value = rec.get("value_delta", 0.0)
-            currency = rec.get("currency") or ""
-            change_formatted = f"{change_value:+,.0f}"
-            if currency:
-                change_formatted = f"{change_formatted} {currency}"
-
-            print(f"\n{emoji} {rec['ticker']}: {action}")
-            print(f"   Current: {current_shares_display} shares ({rec['current_weight']:.1%})")
-            print(f"   Target:  {target_shares_display} shares ({rec['target_weight']:.1%})")
-            print(f"   Change:  {change_formatted}")
-            print(f"   Confidence: {rec['confidence']:.1%}")
-
-            if verbose:
-                print(f"   Reasoning: {rec['reasoning']}")
+        # Show detailed list if verbose
+        if verbose:
+            print("\n" + "-" * 40)
+            print("DETAILED RECOMMENDATIONS")
+            print("-" * 40)
+            for action in by_action.keys():
+                if by_action[action]:
+                    print(f"\n{action}:")
+                    for item in by_action[action]:
+                        print(f"  • {item['ticker']}: {item['current']} → {item['target']} shares ({item['change']})")
+                        if item['reasoning']:
+                            print(f"    Reasoning: {item['reasoning']}")
 
     # Show detailed analyst opinions if verbose
     if verbose and "analyst_signals" in results and results["analyst_signals"]:

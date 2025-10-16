@@ -459,9 +459,13 @@ class EnhancedPortfolioManager:
 
             for future in as_completed(future_to_combo):
                 try:
-                    result = future.result()
+                    result = future.result(timeout=120)  # 2 minute timeout per analyst×ticker task
                     if result:
                         signals.append(result)
+                except TimeoutError:
+                    analyst_info, ticker = future_to_combo[future]
+                    if self.verbose:
+                        print(f'\n  Warning: {analyst_info["display_name"]} for {ticker} timed out after 120 seconds')
                 except Exception as exc:
                     analyst_info, ticker = future_to_combo[future]
                     if self.verbose:
