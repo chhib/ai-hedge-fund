@@ -82,16 +82,38 @@ def display_results(results: Dict, verbose: bool):
         for rec in recs:
             action = rec["action"]
             if action in by_action:
-                current_shares = _format_shares(rec["current_shares"])
-                target_shares = _format_shares(rec.get("target_shares", 0.0))
+                current_shares_num = rec["current_shares"]
+                target_shares_num = rec.get("target_shares", 0.0)
+                current_shares = _format_shares(current_shares_num)
+                target_shares = _format_shares(target_shares_num)
                 change_value = rec.get("value_delta", 0.0)
                 currency = rec.get("currency") or ""
                 change_formatted = f"{change_value:+,.0f} {currency}".strip()
+
+                # Calculate the actual number of shares to trade
+                delta_shares = int(target_shares_num - current_shares_num)
+
+                # Get current price
+                current_price = rec.get("current_price", 0.0)
+                price_str = f"@ {current_price:.2f}" if current_price > 0 else ""
+
+                # Create action description
+                if action == "SELL":
+                    action_desc = f"Sell all {current_shares} {price_str}"
+                elif action == "DECREASE":
+                    action_desc = f"Sell {abs(delta_shares)} {price_str}"
+                elif action == "INCREASE":
+                    action_desc = f"Buy {delta_shares} {price_str}"
+                elif action == "ADD":
+                    action_desc = f"Buy {target_shares} {price_str}"
+                else:  # HOLD
+                    action_desc = f"Hold {current_shares}"
 
                 by_action[action].append({
                     "ticker": rec["ticker"],
                     "current": current_shares,
                     "target": target_shares,
+                    "action_desc": action_desc,
                     "change": change_formatted,
                     "reasoning": rec.get("reasoning", "") if verbose else ""
                 })
@@ -121,13 +143,16 @@ def display_results(results: Dict, verbose: bool):
                         line1_parts.append(f" {'':<{col_width}} ")
                 print("|" + "|".join(line1_parts) + "|")
 
-                # Line 2: Share change
+                # Line 2: Action description (e.g., "Buy 88 @ 4.48" or "Sell all 8 @ 124.52")
                 line2_parts = []
                 for action, items in by_action.items():
                     if row_idx < len(items):
                         item = items[row_idx]
-                        shares_change = f"{item['current']} → {item['target']} shs"
-                        line2_parts.append(f" {shares_change:<{col_width}} ")
+                        action_text = item['action_desc']
+                        # Truncate if too long
+                        if len(action_text) > col_width:
+                            action_text = action_text[:col_width-3] + "..."
+                        line2_parts.append(f" {action_text:<{col_width}} ")
                     else:
                         line2_parts.append(f" {'':<{col_width}} ")
                 print("|" + "|".join(line2_parts) + "|")
@@ -167,7 +192,7 @@ def display_results(results: Dict, verbose: bool):
                 if by_action[action]:
                     print(f"\n{action}:")
                     for item in by_action[action]:
-                        print(f"  • {item['ticker']}: {item['current']} → {item['target']} shares ({item['change']})")
+                        print(f"  • {item['ticker']}: {item['action_desc']} → {item['change']}")
                         if item['reasoning']:
                             print(f"    Reasoning: {item['reasoning']}")
 
