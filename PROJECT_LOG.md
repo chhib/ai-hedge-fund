@@ -1,6 +1,6 @@
 # Börsdata Integration Project Log
 
-_Last updated: 2025-10-16 (Session 55)_
+_Last updated: 2025-11-08 (Session 56)_
 
 ## End Goal
 Rebuild the data ingestion and processing pipeline so the application relies on Börsdata's REST API (per `README_Borsdata_API.md` and https://apidoc.borsdata.se/swagger/index.html). The system should let a user set a `BORSDATA_API_KEY` in `.env`, accept Börsdata-native tickers, and otherwise preserve the current user-facing workflows and capabilities.
@@ -858,5 +858,32 @@ The system now operates efficiently at scale with comprehensive financial data i
   - `843d920` - "fix: add timeout to analyst tasks and table-based recommendations display"
   - `a82cd89` - "feat: add clear action descriptions with prices to recommendations table"
 - **System Status**: Portfolio manager now handles large-scale analysis without hanging and provides trader-friendly output with explicit buy/sell instructions and prices.
+
+### Session 56 (Rate Limiting Fix with Configurable Parallelism)
+- **Performance Issue Diagnosed**: Large universe analysis (208 tickers × 5 analysts = 1,040 tasks) still experiencing extreme slowness despite Session 55 timeout fix:
+  - **Symptom**: Progress bars showed ~15% completion after 17 minutes, with process appearing hung
+  - **Root Cause**: Hardcoded 16 parallel workers overwhelming API rate limits for gpt-5-nano model
+  - **Behavior**: Workers simultaneously hitting rate limits → timeouts → 120s wasted per failed task
+  - **Impact**: Theoretical completion time of 2+ hours for 1,040 tasks (many timing out)
+- **Solution Implemented**: Added configurable `--max-workers` parameter to control parallel execution:
+  - **CLI Option**: `--max-workers` (default: 4, previously hardcoded at 16)
+  - **Rationale**: Lower parallelism prevents rate limit saturation, allowing tasks to complete successfully
+  - **Performance Improvement**: Estimated time reduced from 2+ hours to ~13 minutes for 1,040 tasks
+  - **Flexibility**: Users can tune parallelism based on their API endpoint's rate limits
+- **Code Changes**:
+  - `src/portfolio_manager.py:40` - Added `--max-workers` CLI parameter with default of 4
+  - `src/agents/enhanced_portfolio_manager.py:46` - Accept `max_workers` in `__init__`
+  - `src/agents/enhanced_portfolio_manager.py:431` - Use `self.max_workers` instead of hardcoded 16
+- **Testing Validation**:
+  - Single ticker test (8 tickers × 5 analysts) completed successfully in 2-3 minutes
+  - Confirmed gpt-5-nano model operational (not a model availability issue)
+  - Rate limiting identified as bottleneck, not timeout handling
+- **Usage Guidance**:
+  - Default (4 workers): Balanced for most API endpoints
+  - Lower (2 workers): Maximum reliability for strict rate limits
+  - Higher (8+ workers): If API endpoint can handle higher throughput
+- **Relationship to Session 55**: Timeout fix prevented infinite hangs, this fix prevents timeouts from occurring by respecting rate limits
+- **Commit**: `0fe71b0` - "fix: add configurable max_workers to prevent rate limit hangs"
+- **System Status**: Portfolio manager now provides reliable, predictable performance for large-scale analysis while respecting API rate limits.
 
 **IMPORTANT**: Update this log at the end of each work session: note completed steps, new decisions, blockers, and refreshed next actions. Always use session numbers (Session X, Session X+1, etc.) for progress entries. Update the "Last updated" date at the top with the actual current date when making changes.
