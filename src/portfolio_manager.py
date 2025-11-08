@@ -37,6 +37,7 @@ load_dotenv()
 @click.option("--analysts", type=str, default="all", help='Analyst selection: "all" (16 analysts), "famous" (13 investors), "core" (4 analysts), "basic" (fundamentals only), or comma-separated list')
 @click.option("--model", type=str, default="gpt-4o", help="LLM model to use")
 @click.option("--model-provider", type=click.Choice(["openai", "anthropic", "groq", "ollama"]), help="Model provider (optional, auto-detected from model name)")
+@click.option("--max-workers", type=int, default=4, help="Maximum parallel workers for analyst tasks (default: 4, lower = slower but avoids rate limits)")
 # Position sizing constraints
 @click.option("--max-holdings", type=int, default=8, help="Maximum number of holdings in portfolio (default: 8)")
 @click.option("--max-position", type=float, default=0.25, help="Maximum position size as decimal (0.25 = 25%)")
@@ -51,7 +52,7 @@ load_dotenv()
 @click.option("--verbose", is_flag=True, help="Show detailed analysis from each analyst")
 @click.option("--dry-run", is_flag=True, help="Show recommendations without saving")
 @click.option("--test", is_flag=True, help="Run in test mode with limited analysts for quick validation")
-def main(portfolio, universe, universe_tickers, analysts, model, model_provider, max_holdings, max_position, min_position, min_trade, home_currency, no_cache, no_cache_agents, verbose, dry_run, test):
+def main(portfolio, universe, universe_tickers, analysts, model, model_provider, max_workers, max_holdings, max_position, min_position, min_trade, home_currency, no_cache, no_cache_agents, verbose, dry_run, test):
     """
     AI Hedge Fund Portfolio Manager - Long-only portfolio rebalancing
 
@@ -180,7 +181,7 @@ def main(portfolio, universe, universe_tickers, analysts, model, model_provider,
         print(f"Session ID: {session_id}\n")
 
     # Initialize portfolio manager
-    manager = EnhancedPortfolioManager(portfolio=portfolio_data, universe=universe_list, analysts=analyst_list, model_config={"name": model, "provider": model_provider}, ticker_markets=ticker_markets, home_currency=home_currency, no_cache=no_cache, no_cache_agents=no_cache_agents, verbose=verbose, session_id=session_id)
+    manager = EnhancedPortfolioManager(portfolio=portfolio_data, universe=universe_list, analysts=analyst_list, model_config={"name": model, "provider": model_provider}, ticker_markets=ticker_markets, home_currency=home_currency, no_cache=no_cache, no_cache_agents=no_cache_agents, verbose=verbose, session_id=session_id, max_workers=max_workers)
 
     # Generate recommendations (LONG-ONLY constraint applied here)
 

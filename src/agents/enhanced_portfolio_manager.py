@@ -43,7 +43,7 @@ class EnhancedPortfolioManager:
     Maintains concentrated portfolio of 5-10 positions
     """
 
-    def __init__(self, portfolio: Portfolio, universe: List[str], analysts: List[str], model_config: Dict[str, Any], ticker_markets: Dict[str, str] = None, home_currency: str = "SEK", no_cache: bool = False, no_cache_agents: bool = False, verbose: bool = False, session_id: str = None):
+    def __init__(self, portfolio: Portfolio, universe: List[str], analysts: List[str], model_config: Dict[str, Any], ticker_markets: Dict[str, str] = None, home_currency: str = "SEK", no_cache: bool = False, no_cache_agents: bool = False, verbose: bool = False, session_id: str = None, max_workers: int = 4):
         self.portfolio = portfolio
         self.universe = universe
         self.analyst_names = analysts
@@ -54,6 +54,7 @@ class EnhancedPortfolioManager:
         self.no_cache_agents = no_cache_agents
         self.verbose = verbose
         self.session_id = session_id
+        self.max_workers = max_workers
         self.analysts = self._initialize_analysts(analysts, model_config)
         self.exchange_rates: Dict[str, float] = {}  # Currency -> rate (e.g., {"USD": 10.5, "GBP": 13.2})
         self.analysis_cache = get_analysis_cache()
@@ -426,8 +427,8 @@ class EnhancedPortfolioManager:
             for analyst_info in self.analysts
         ]
 
-        # Process all combinations in parallel with 16 workers to avoid rate limits
-        max_workers = min(len(analyst_ticker_combinations), 16)
+        # Process all combinations in parallel with configurable workers to avoid rate limits
+        max_workers = min(len(analyst_ticker_combinations), self.max_workers)
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             future_to_combo = {}
             for analyst_info, ticker_idx, ticker in analyst_ticker_combinations:
