@@ -10,6 +10,7 @@ from src.utils.currency import (
     compute_cost_basis_after_rebalance,
 )
 from src.data.analysis_cache import get_analysis_cache
+from src.data.analyst_task_queue import get_task_queue, TaskKey
 
 
 @dataclass
@@ -58,9 +59,11 @@ class EnhancedPortfolioManager:
         self.analysts = self._initialize_analysts(analysts, model_config)
         self.exchange_rates: Dict[str, float] = {}  # Currency -> rate (e.g., {"USD": 10.5, "GBP": 13.2})
         self.analysis_cache = get_analysis_cache()
+        self.task_queue = get_task_queue()
         self.prefetched_data: Dict[str, Dict[str, Any]] = {}
         self.price_context_cache: Dict[str, PriceContext] = {}
         self._current_position_values: Dict[str, Dict[str, float]] = {}
+        self._analysis_date: str | None = None
 
     def _initialize_analysts(self, analyst_names: List[str], model_config: Dict[str, Any]) -> List[Any]:
         """
@@ -137,6 +140,10 @@ class EnhancedPortfolioManager:
         Maintains concentrated portfolio of max_holdings positions
         """
 
+        # Track analysis date for queue/caching purposes
+        analysis_timestamp = datetime.now()
+        self._analysis_date = analysis_timestamp.strftime("%Y-%m-%d")
+
         # Step 1: Collect signals from all analysts
         all_signals = self._collect_analyst_signals()
 
@@ -158,7 +165,13 @@ class EnhancedPortfolioManager:
         # Step 7: Calculate updated portfolio
         updated_portfolio = self._calculate_updated_portfolio(recommendations)
 
-        return {"analysis_date": datetime.now().isoformat(), "current_portfolio": self._portfolio_summary(), "recommendations": recommendations, "updated_portfolio": updated_portfolio, "analyst_signals": all_signals if self.verbose else None}
+        return {
+            "analysis_date": analysis_timestamp.isoformat(),
+            "current_portfolio": self._portfolio_summary(),
+            "recommendations": recommendations,
+            "updated_portfolio": updated_portfolio,
+            "analyst_signals": all_signals if self.verbose else None,
+        }
 
     def _collect_analyst_signals(self) -> List[AnalystSignal]:
         """
@@ -215,7 +228,7 @@ class EnhancedPortfolioManager:
         import io
         import sys
 
-        end_date = datetime.now().strftime("%Y-%m-%d")
+        end_date = self._analysis_date or datetime.now().strftime("%Y-%m-%d")
         start_date = (datetime.now().replace(year=datetime.now().year - 1)).strftime("%Y-%m-%d")
 
         # Let parallel fetching output show through (it shows ticker-by-ticker progress)
@@ -253,6 +266,8 @@ class EnhancedPortfolioManager:
         # Start progress display for analyst execution
         progress.start()
 
+        allow_cache = not self.no_cache and not self.no_cache_agents
+
         # STEP 4: Call function-based analysts with AgentState for each ticker
         from src.graph.state import AgentState
         from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -284,6 +299,18 @@ class EnhancedPortfolioManager:
             # Update progress: analyzing
             progress.update_status(agent_id, ticker, f"Generating {display_name} analysis", next_ticker=next_ticker)
 
+            queue_key = None
+            if allow_cache:
+                ticker_upper = ticker.upper()
+                queue_key = TaskKey(
+                    analysis_date=end_date,
+                    ticker=ticker_upper,
+                    analyst_name=analyst_name,
+                    model_name=cache_model_name,
+                    model_provider=cache_model_provider,
+                )
+                self.task_queue.ensure_task(queue_key)
+
             def persist_session_analysis(signal_str: str, numeric_signal: float, confidence_val: float, reasoning_text: str) -> None:
                 if not self.session_id:
                     return
@@ -306,8 +333,8 @@ class EnhancedPortfolioManager:
                         print(f"  Warning: Failed to save analysis to database: {e}")
 
             # Attempt to reuse cached analysis when allowed
-            # Skip cache if either no_cache or no_cache_agents is set
-            if not self.no_cache and not self.no_cache_agents:
+            cached = None
+            if allow_cache:
                 cached = self.analysis_cache.get_cached_analysis(
                     ticker=ticker,
                     analyst_name=analyst_name,
@@ -315,21 +342,24 @@ class EnhancedPortfolioManager:
                     model_name=cache_model_name,
                     model_provider=cache_model_provider,
                 )
-                if cached:
-                    signal_str = cached.signal
-                    numeric_signal = cached.signal_numeric
-                    confidence = cached.confidence
-                    reasoning = cached.reasoning or "Cached analysis"
-                    progress.update_status(agent_id, ticker, "Using cached analysis", next_ticker=next_ticker)
-                    persist_session_analysis(signal_str, numeric_signal, confidence, reasoning)
-                    progress.update_status(agent_id, ticker, "Done (cached)", next_ticker=next_ticker)
-                    return AnalystSignal(
-                        ticker=ticker,
-                        analyst=analyst_name,
-                        signal=numeric_signal,
-                        confidence=confidence,
-                        reasoning=reasoning,
-                    )
+
+            if cached and allow_cache:
+                signal_str = cached.signal
+                numeric_signal = cached.signal_numeric
+                confidence = cached.confidence
+                reasoning = cached.reasoning or "Cached analysis"
+                progress.update_status(agent_id, ticker, "Using cached analysis", next_ticker=next_ticker)
+                persist_session_analysis(signal_str, numeric_signal, confidence, reasoning)
+                progress.update_status(agent_id, ticker, "Done (cached)", next_ticker=next_ticker)
+                if queue_key:
+                    self.task_queue.mark_completed(queue_key)
+                return AnalystSignal(
+                    ticker=ticker,
+                    analyst=analyst_name,
+                    signal=numeric_signal,
+                    confidence=confidence,
+                    reasoning=reasoning,
+                )
 
             try:
                 # Suppress agent print statements (like show_agent_reasoning)
@@ -410,6 +440,8 @@ class EnhancedPortfolioManager:
                         if self.verbose:
                             print(f"  Warning: Failed to cache analysis for {ticker}: {cache_error}")
 
+                if queue_key:
+                    self.task_queue.mark_completed(queue_key)
                 return AnalystSignal(ticker=ticker, analyst=analyst_name, signal=numeric_signal, confidence=confidence, reasoning=reasoning)
 
             except Exception as e:
@@ -418,6 +450,8 @@ class EnhancedPortfolioManager:
                     print(f"\n  Warning: Analyst {display_name} failed for {ticker}: {e}")
                     import traceback
                     traceback.print_exc()
+                if queue_key:
+                    self.task_queue.mark_failed(queue_key)
                 return None
 
         # Create all analyst×ticker combinations for maximum parallelization (same as main.py)

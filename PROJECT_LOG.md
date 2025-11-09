@@ -1,6 +1,6 @@
 # Börsdata Integration Project Log
 
-_Last updated: 2025-11-08 (Session 56)_
+_Last updated: 2025-11-08 (Session 57)_
 
 ## End Goal
 Rebuild the data ingestion and processing pipeline so the application relies on Börsdata's REST API (per `README_Borsdata_API.md` and https://apidoc.borsdata.se/swagger/index.html). The system should let a user set a `BORSDATA_API_KEY` in `.env`, accept Börsdata-native tickers, and otherwise preserve the current user-facing workflows and capabilities.
@@ -887,3 +887,10 @@ The system now operates efficiently at scale with comprehensive financial data i
 - **System Status**: Portfolio manager now provides reliable, predictable performance for large-scale analysis while respecting API rate limits.
 
 **IMPORTANT**: Update this log at the end of each work session: note completed steps, new decisions, blockers, and refreshed next actions. Always use session numbers (Session X, Session X+1, etc.) for progress entries. Update the "Last updated" date at the top with the actual current date when making changes.
+
+### Session 57
+- Introduced `src/services/portfolio_runner.py` and a Typer-powered CLI (`poetry run hedge …`) so the weekly rebalance, backtesting, and transcript export logic share a single service. Legacy `src/portfolio_manager.py` now delegates to the service to keep the existing workflow intact.
+- Added an Interactive Brokers Client Portal integration (`src/integrations/ibkr_client.py`) plus CLI flags (`--portfolio-source ibkr` / Typer equivalents) to pull live positions + cash via the API instead of manual CSV snapshots.
+- Registered the new CLI in `pyproject.toml`, added the Typer dependency, and created automated coverage in `tests/integrations/test_ibkr_client.py` (run with `PYTHONPATH=. pytest tests/integrations/test_ibkr_client.py tests/test_enhanced_portfolio_manager.py`).
+- Added a persistent analyst task queue (`src/data/analyst_task_queue.py`) wired into `EnhancedPortfolioManager` so analyst×ticker results are re-used for the same analysis day even after failures; covered by `tests/data/test_analyst_task_queue.py`.
+- Smoke-tested the Typer CLI against a random 30-ticker slice of `borsdata_universe.txt` to confirm Börsdata access, exchange-rate handling, and transcript export (`poetry run hedge rebalance ... --export-transcript`), transcript saved as `analyst_transcript_20251109_083159.md`.

@@ -1,403 +1,196 @@
-# AI Hedge Fund - Börsdata Edition
+# AI Hedge Fund – Börsdata Edition
 
-Enhanced version of [virattt/ai-hedge-fund](https://github.com/virattt/ai-hedge-fund) with Börsdata API integration for Nordic + Global market support and portfolio management capabilities.
-
-## 🚀 Enhancements
-
-### Börsdata API Integration
-- **Nordic + Global market support**: Nordic tickers ("NOVO B", "HM B") + global tickers (SAP, AAPL) US, CA, UK, DE, FR, ES, PT, IT, CH, BE, NL, PL, EE, LV, LT
-- **Multi-currency support**: SEK, DKK, NOK, USD, GBP with automatic currency detection
-
-### Portfolio Management
-- **Long-only portfolio rebalancing** for concentrated positions (5-10 holdings)
-- **Multi-currency portfolios** with automatic currency normalization (GBX/GBP, etc.)
-- **Analyst aggregation** - 17 analysts (13 famous investors + 4 core analysts)
-- **Automatic portfolio tracking** with cost basis and acquisition dates
-
-### System Capabilities
-- **Command-line interface**: 3 CLI tools for analysis, backtesting, and portfolio management
-
-## 🎯 Three Main CLI Tools
-
-### 1. **Analysis CLI** (`src/main.py`)
-Real-time market analysis using AI agents to generate trading signals.
-
-### 2. **Backtester CLI** (`src/backtester.py`)
-Historical backtesting to evaluate strategy performance over time.
-
-### 3. **Portfolio Manager CLI** (`src/portfolio_manager.py`)
-Rebalance existing portfolios using AI analyst consensus.
+Modernized fork of `virattt/ai-hedge-fund` tuned for Börsdata’s Nordic + Global coverage, long-only portfolio management, and weekly rebalance workflows. All data pulls rely on Börsdata, LLM access is abstracted behind the agents, and Interactive Brokers (IBKR) positions can be imported directly from the Client Portal API.
 
 ---
 
-## 🤖 System Overview
+## TL;DR – Weekly Command I Actually Run
 
-The system employs 17 AI agents working together:
+```bash
+poetry run python src/portfolio_manager.py \
+  --portfolio portfolio_20251107_actual.csv \
+  --universe portfolios/borsdata_universe.txt \
+  --model gpt-5-nano \
+  --analysts stanley_druckenmiller,technical_analyst,jim_simons,fundamentals_analyst,news_sentiment_analyst
+```
 
-### Core Analysis Agents
-- **Fundamentals Analyst** - Evaluates company health through financial thresholds (ROE, margins, growth metrics)
-- **Technical Analyst** - Combines 5 strategies: trend following, mean reversion, momentum, volatility, statistical arbitrage
-- **Sentiment Analyst** - Analyzes insider trades and corporate events to gauge market sentiment
-- **Valuation Analyst** - Calculates intrinsic value using DCF, Owner Earnings, EV/EBITDA, and Residual Income models
-- **Risk Manager** - Sets position limits based on volatility and correlation analysis
-
-### Legendary Investor Agents (13 personas)
-- **Warren Buffett** - Value investing with 30% margin of safety
-- **Ben Graham** - Father of value investing, Graham Number and net-net analysis
-- **Charlie Munger** - Quality businesses with economic moats
-- **Peter Lynch** - Growth at reasonable price (PEG ratio) with "ten-bagger" potential
-- **Phil Fisher** - Growth investing through "scuttlebutt" research
-- **Bill Ackman** - Activist investing targeting operational improvements
-- **Cathie Wood** - Disruptive innovation focus
-- **Michael Burry** - Contrarian deep value with high FCF yields
-- **Mohnish Pabrai** - "Heads I win, tails I don't lose much" with downside protection
-- **Stanley Druckenmiller** - Macro momentum with growth and risk/reward analysis
-- **Rakesh Jhunjhunwala** - High-quality growth with ROE > 20%
-- **Aswath Damodaran** - Academic valuation using CAPM and sophisticated DCF models
-- **Jim Simons** - Quantitative agent based on multi-factor models. [From fork made by **ak4631**](https://github.com/ak4631/ai-hedge-fund/tree/feature/jim_simons).
-
-### Portfolio Management
-- **Portfolio Manager** - Aggregates all signals and makes final trading decisions within risk limits
-
-For detailed strategy implementations and thresholds, see [Trading Agent Strategies](docs/trading_agent_strategies.md).
-
-**Note**: The system does not actually make any trades - all outputs are for educational purposes only.
-
-[![Twitter Follow](https://img.shields.io/twitter/follow/virattt?style=social)](https://twitter.com/virattt)
+That command (now also available as `poetry run hedge rebalance ...`) is the core workflow: load the current IBKR-exported CSV, score every ticker in `borsdata_universe.txt` with the selected analysts, and save `portfolio_YYYYMMDD.csv` ready for the next week. A new Typer CLI mirrors the legacy Click script but adds shortcuts for IBKR ingestion, transcript exports, and backtesting.
 
 ---
 
-## 📋 Table of Contents
-- [Disclaimer](#disclaimer)
-- [How to Install](#how-to-install)
-- [How to Run](#how-to-run)
-  - [1. Analysis CLI](#1-analysis-cli)
-  - [2. Backtester CLI](#2-backtester-cli)
-  - [3. Portfolio Manager CLI](#3-portfolio-manager-cli)
-  - [Web Application](#web-application)
-- [Documentation](#documentation)
-- [Contributing](#contributing)
-- [License](#license)
+## Why This Fork Exists
+
+- **Börsdata-first ingestion**: Nordic + Global tickers, rate limiting, KPI/line-item assemblers, insider trades, calendars, and cached price history.
+- **Concentrated long-only portfolios**: 5–10 holdings, multi-currency cost basis, ATR-derived slippage bands, deterministic analysts mixed with LLM personas.
+- **Durable analyst queue**: Analyst×ticker tasks are recorded in `data/analyst_tasks.db`, so same-day reruns reuse cached signals even if the previous session crashed or you temporarily lost network access.
+- **Agent ergonomics**: 17 analysts (13 legendary investor personas + 4 core analysts + news sentiment) driven via `EnhancedPortfolioManager` with automatic parallel prefetch, caching, and transcript storage.
+- **Unified CLI**: `poetry run hedge rebalance` (weekly), `poetry run hedge backtest`, plus the original `src/main.py` (graph-based analysis) and FastAPI app for the React UI.
 
 ---
 
-## ⚠️ Disclaimer
-
-This project is for **educational and research purposes only**.
-
-- Not intended for real trading or investment
-- No investment advice or guarantees provided
-- Creator assumes no liability for financial losses
-- Consult a financial advisor for investment decisions
-- Past performance does not indicate future results
-
-By using this software, you agree to use it solely for learning purposes.
-
----
-
-## 📦 How to Install
-
-### 1. Clone the Repository
+## Installation
 
 ```bash
 git clone https://github.com/chhib/ai-hedge-fund.git
 cd ai-hedge-fund
-```
 
-### 2. Set up API keys
-
-Create a `.env` file for your API keys:
-```bash
-# Create .env file for your API keys (in the root directory)
-cp .env.example .env
-```
-
-Open and edit the `.env` file to add your API keys:
-```bash
-# For running LLMs hosted by openai (gpt-4o, gpt-4o-mini, etc.)
-OPENAI_API_KEY=your-openai-api-key
-
-# For getting financial data to power the hedge fund
-BORSDATA_API_KEY=your-borsdata-api-key
-```
-
-**Important**: You must set at least one LLM API key (e.g. `OPENAI_API_KEY`, `GROQ_API_KEY`, `ANTHROPIC_API_KEY`, or `DEEPSEEK_API_KEY`) for the hedge fund to work.
-
-**Financial Data**: All Börsdata endpoints require the `BORSDATA_API_KEY`. Get yours at https://borsdata.se/en/mypage/api
-
-### 3. Install Dependencies
-
-```bash
-# Install Poetry (if not already installed)
-curl -sSL https://install.python-poetry.org | python3 -
-
-# Install dependencies
+# install dependencies
+curl -sSL https://install.python-poetry.org | python3 -  # if Poetry is missing
 poetry install
+
+# configure API keys
+cp .env.example .env
+$EDITOR .env   # set BORSDATA_API_KEY + preferred LLM keys
 ```
+
+**Required keys**
+
+| Variable | Purpose |
+| --- | --- |
+| `BORSDATA_API_KEY` | Mandatory for all data pulls |
+| `OPENAI_API_KEY` (or Groq/Anthropic/Deepseek/Ollama) | Needed for LLM-based analysts |
+
+Optional: `IBKR_CLIENT_PORTAL` credentials aren’t stored in `.env`; run the local Client Portal Gateway and supply host/port flags when using `--portfolio-source ibkr`.
 
 ---
 
-## 🚀 How to Run
+## Command Surface
 
-## 1. Analysis CLI
+| Command | When to use |
+| --- | --- |
+| `poetry run hedge rebalance ...` | Weekly rebalance (CSV or live IBKR positions) with automatic transcript export option |
+| `poetry run python src/portfolio_manager.py ...` | Legacy Click CLI (same functionality, still handy for scripted runs) |
+| `poetry run hedge backtest ...` | Headless backtesting using the new Typer CLI (no interactive prompts) |
+| `poetry run python src/backtester.py ...` | Original backtester with interactive questionary prompts |
+| `poetry run python src/main.py ...` | Run the LangGraph multi-agent workflow for ad-hoc analysis |
+| `poetry run uvicorn app.backend.main:app --reload` | Start the FastAPI backend powering the React UI (`app/frontend`) |
 
-Real-time market analysis using AI agents to generate trading signals for specific tickers.
-
-### Basic Usage
-
-**Nordic/European companies** (via Börsdata Nordic instruments):
-```bash
-# Swedish companies (note the space in ticker symbols like "HM B", "MTG B")
-poetry run python src/main.py --tickers "HM B,MTG B,TELIA,ADVT"
-
-# Norwegian/Danish companies
-poetry run python src/main.py --tickers "FRO,ZAL,TRMD A"
-```
-
-**Global companies** (via Börsdata Global instruments):
-```bash
-# US tech stocks
-poetry run python src/main.py --tickers AAPL,MSFT,NVDA,META,TSLA
-
-# Mixed global companies
-poetry run python src/main.py --tickers AAPL,UBI,BABA
-```
-
-**Mixed analysis** (both Nordic and global - auto-detected):
-```bash
-poetry run python src/main.py --tickers "HM B,TELIA,AAPL,META"
-```
-
-**Quick test mode** (uses gpt-5-nano with fundamentals, technical, and sentiment analysts):
-```bash
-poetry run python src/main.py --tickers AAPL --test
-```
-
-### All CLI Options
+### Rebalance (Typer CLI)
 
 ```bash
-poetry run python src/main.py \
-  --tickers AAPL,MSFT \                    # Comma-separated tickers (auto-detects Nordic/Global)
-  --analysts warren_buffett,peter_lynch \  # Specific analysts to use
-  --analysts-all \                         # Use all 17 analysts
-  --test \                                 # Quick test mode (gpt-5-nano, 3 analysts)
-  --start-date 2024-01-01 \               # Analysis start date
-  --end-date 2024-03-01 \                 # Analysis end date
-  --initial-cash 100000 \                 # Starting capital
-  --margin-requirement 0.5 \              # Margin requirement for shorts (50%)
-  --show-reasoning \                      # Display agent reasoning
-  --verbose \                             # Detailed logging
-  --model-name gpt-4o \                   # Specific LLM model
-  --model-provider openai                 # LLM provider (openai, anthropic, groq, ollama)
-```
-
-### Using Local LLMs (Ollama)
-
-```bash
-poetry run python src/main.py --tickers AAPL,MSFT,NVDA --ollama
-```
-
----
-
-## 2. Backtester CLI
-
-Historical backtesting to evaluate strategy performance over time.
-
-### Basic Usage
-
-**Nordic/European companies:**
-```bash
-poetry run backtester --tickers TELIA,VOLV-B,ADVT
-```
-
-**Global companies:**
-```bash
-poetry run backtester --tickers AAPL,MSFT,NVDA
-```
-
-**Mixed analysis:**
-```bash
-poetry run backtester --tickers "TELIA,ADVT,AAPL,META"
-```
-
-### All CLI Options
-
-```bash
-poetry run backtester \
-  --tickers AAPL,MSFT \                    # Comma-separated tickers (auto-detects Nordic/Global)
-  --analysts fundamentals,technical \      # Specific analysts
-  --analysts-all \                         # Use all analysts
-  --test \                                 # Quick test mode
-  --start-date 2024-01-01 \               # Backtest start date
-  --end-date 2024-12-31 \                 # Backtest end date
-  --initial-cash 100000 \                 # Starting capital
-  --margin-requirement 0.5 \              # Margin for shorts
-  --verbose \                             # Detailed output
-  --model-name gpt-4o \                   # LLM model
-  --model-provider openai                 # LLM provider
-```
-
-**Example Output:**
-
-<img width="941" alt="Backtester Output" src="https://github.com/user-attachments/assets/00e794ea-8628-44e6-9a84-8f8a31ad3b47" />
-
----
-
-## 3. Portfolio Manager CLI
-
-Rebalance existing portfolios using AI analyst consensus for long-only concentrated positions (5-10 holdings).
-
-### Basic Usage
-
-**Starting from scratch (empty portfolio):**
-```bash
-poetry run python src/portfolio_manager.py \
-  --portfolio portfolios/empty_portfolio.csv \
-  --universe-tickers "AAPL,MSFT,NVDA,META,TSLA" \
-  --analysts all
-```
-
-**Multi-currency portfolio with automatic market detection:**
-```bash
-poetry run python src/portfolio_manager.py \
-  --portfolio example_portfolio.csv \
-  --universe-tickers "FDEV,TRMD A,AAPL,META,STNG,SBOK,HIVE,MKO" \
-  --analysts stanley_druckenmiller,technical_analyst,jim_simons,fundamentals_analyst \
+poetry run hedge rebalance \
+  --portfolio portfolio_20251107_actual.csv \
+  --universe portfolios/borsdata_universe.txt \
   --model gpt-5-nano \
-  --model-provider openai
+  --analysts stanley_druckenmiller,technical_analyst,jim_simons,fundamentals_analyst,news_sentiment_analyst \
+  --export-transcript
 ```
 
-**Output Example:**
-```
-ticker   shares  cost_basis  currency  date_acquired
-TRMD A   77      500.0       DKK       2025-01-15
-FDEV     2228    250.0       GBP       2025-01-15
-CASH     100.0               SEK
-SBOK     228     43.4        SEK       2025-10-01
-CASH     48.19               USD
-META     5       514.57      USD       2025-01-15
-STNG     74      56.05       USD       2025-10-01
-```
+Key flags:
 
-**Note**: The system automatically fetches correct currencies (GBP, DKK, SEK, USD) from Börsdata and rounds share quantities to whole numbers.
+- `--portfolio-source ibkr` – Pull holdings/cash straight from IBKR Client Portal gateway.
+- `--ibkr-account U1234567` – Force a specific account (defaults to the first returned account).
+- `--no-cache` / `--no-cache-agents` – Control KPI/analyst caching when you need a clean slate.
+- `--max-workers 4` – Tune concurrency to stay under the Börsdata 100 calls/10s limit.
+- `--export-transcript` – Immediately dump the analyst markdown transcript after the run.
 
-**Quick test with limited analysts:**
-```bash
-poetry run python src/portfolio_manager.py \
-  --portfolio portfolio.csv \
-  --universe-tickers "AAPL,MSFT" \
-  --test
-```
+### Rebalance (legacy Click)
 
-### All CLI Options
+Exactly the same options as the Typer CLI, still available if you prefer:
 
 ```bash
-poetry run python src/portfolio_manager.py \
-  --portfolio portfolio.csv \                # Path to current portfolio CSV
-  --universe-tickers "AAPL,MSFT,TELIA" \    # Tickers to consider (auto-detected)
-  --universe portfolio_universe.txt \       # Or path to universe file
-  --analysts all \                          # Analyst selection (see below)
-  --model gpt-4o \                          # LLM model
-  --model-provider openai \                 # LLM provider
-  --max-holdings 8 \                        # Maximum positions (default: 8)
-  --max-position 0.25 \                     # Max position size (25%)
-  --min-position 0.05 \                     # Min position size (5%)
-  --min-trade 500 \                         # Min trade size in USD
-  --verbose \                               # Show detailed analysis
-  --dry-run \                               # Preview without saving
-  --test                                    # Quick test mode (fundamentals only)
+poetry run python src/portfolio_manager.py --help
 ```
 
-### Analyst Selection Options
-
-- `"all"` - All 17 analysts with full LLM analysis (comprehensive consensus)
-- `"famous"` - 13 famous investor personas (Buffett, Munger, Druckenmiller, etc.)
-- `"core"` - 4 core analysts (Fundamentals, Technical, Sentiment, Valuation)
-- `"basic"` - Fundamentals only (fast testing)
-- Comma-separated list: `"warren_buffett,peter_lynch,fundamentals_analyst"`
-
-### Caching Behaviour
-
-The portfolio manager layers several caches so repeat runs avoid redundant Börsdata and LLM calls:
-
-- **Ticker data cache**: Prices, KPIs, line items, events, and insider trades fetched through the prefetch pipeline persist in `data/prefetch_cache.db`. Subsequent runs on the same analysis date reuse these payloads instantly.
-- **Analyst signal cache**: Each analyst stores its output per ticker, analysis date, model name, and model provider in the same database. Running the CLI again with the same universe/model replays the cached reasoning and confidence without issuing a new LLM request.
-- **LLM transcript storage**: Results are still written to `app/backend/hedge_fund.db` so transcripts remain available for later export, even when a cached response is served.
-
-To force fresh data and recompute every analyst, add the `--no-cache` flag when launching the CLI:
+### Backtest (Typer)
 
 ```bash
-poetry run python src/portfolio_manager.py --portfolio portfolio.csv --universe-tickers "AAPL,MSFT" --no-cache
+poetry run hedge backtest \
+  --tickers AAPL,MSFT,NVDA \
+  --start-date 2024-01-01 \
+  --end-date 2024-06-30 \
+  --initial-capital 150000 \
+  --analysts warren_buffett,charlie_munger \
+  --model-name gpt-4o
 ```
 
-This bypasses both the ticker prefetch cache and the analyst-signal cache, ensuring new Börsdata fetches and LLM calls for the session.
+Behind the scenes this wires `BacktestEngine` with the same prefetch + analyst graph infrastructure used in live runs.
 
-### Portfolio CSV Format
+### LangGraph Analysis CLI
 
-**Input Portfolio (`.csv`):**
+```bash
+poetry run python src/main.py --tickers "HM B,TELIA,AAPL" --analysts-all --model-name gpt-4o --model-provider openai
+```
 
-| ticker | shares | cost_basis | currency | date_acquired |
-| --- | ---: | ---: | --- | --- |
-| AAPL | 100 | 150.50 | USD | 2024-01-15 |
-| MSFT | 50 | 350.00 | USD | 2024-02-20 |
-| CASH | 50000 | N/A | USD | N/A |
+### Web UI
 
-**Output (`portfolio_YYYYMMDD.csv`):**
+```bash
+# backend
+poetry run uvicorn app.backend.main:app --reload
 
-| ticker | shares | cost_basis | currency | date_acquired |
-| --- | ---: | ---: | --- | --- |
-| AAPL | 120 | 152.25 | USD | 2024-01-15 |
-| MSFT | 50 | 350.00 | USD | 2024-02-20 |
-| NVDA | 25 | 580.00 | USD | 2025-10-01 |
-| CASH | 10000 | N/A | USD | N/A |
-
-The system automatically saves rebalanced portfolios with today's date so you can iterate on successive runs without manual bookkeeping.
+# frontend (Vite + React)
+cd app/frontend && npm install && npm run dev
+```
 
 ---
 
-## 🖥️ Web Application
+## Analyst Architecture
 
-The web application provides a user-friendly interface for those who prefer visual tools over command line.
-
-Please see detailed instructions on how to install and run the web application [here](https://github.com/chhib/ai-hedge-fund/tree/main/app).
-
-<img width="1721" alt="Web Interface" src="https://github.com/user-attachments/assets/b95ab696-c9f4-416c-9ad1-51feb1f5374b" />
-
----
-
-## 📚 Documentation
-
-### Börsdata API
-- [Börsdata Documentation](docs/borsdata/) - Complete API reference, metrics mappings, and integration guide
-- [Börsdata Swagger](docs/reference/swagger_v1.json) - OpenAPI specification
-
-### Trading Strategies
-- [Trading Agent Strategies](docs/trading_agent_strategies.md) - Detailed strategy implementations and thresholds for all 17 agents
-
-### Project Documentation
-- [docs/README.md](docs/README.md) - Full documentation index
-- [docs/archive/](docs/archive/) - Historical migration documents
+- **Core deterministic analysts**: fundamentals, technicals, valuation, sentiment, news sentiment.
+- **Investor personas**: Warren Buffett, Charlie Munger, Stanley Druckenmiller, Peter Lynch, Ben Graham, Phil Fisher, Bill Ackman, Cathie Wood, Michael Burry, Mohnish Pabrai, Rakesh Jhunjhunwala, Aswath Damodaran, Jim Simons.
+- **Task Queue**: `src/data/analyst_task_queue.py` records each analyst×ticker×model combo per analysis date so cached outputs are reused if you rerun the same day (post-crash or after toggling analysts back on). Coupled with `src/data/analysis_cache.py` for actual signal storage.
+- **Transcript storage**: analyst reasoning per ticker is stored in `app/backend/hedge_fund.db` via `src/data/analysis_storage.py`; export via CLI prompt or `--export-transcript`.
 
 ---
 
-## 🤝 Contributing
+## Working With IBKR
 
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
-
-**Important**: Please keep your pull requests small and focused. This will make it easier to review and merge.
+1. Start the IBKR Client Portal Gateway locally (default `https://localhost:5000`).
+2. Run `poetry run hedge rebalance --portfolio-source ibkr --ibkr-account <acct>` (host/port flags available if you proxy the gateway).
+3. The new `IBKRClient` maps positions + ledger cash into the same `Portfolio` dataclass consumed by the manager, so you can switch between CSV snapshots and live pulls without touching downstream logic.
 
 ---
 
-## 💡 Feature Requests
+## Testing
 
-If you have a feature request, please open an [issue](https://github.com/chhib/ai-hedge-fund/issues) and make sure it is tagged with `enhancement`.
+```bash
+PYTHONPATH=. pytest \
+  tests/data/test_analyst_task_queue.py \
+  tests/integrations/test_ibkr_client.py \
+  tests/test_enhanced_portfolio_manager.py
+```
+
+- Add Börsdata fixtures under `tests/fixtures/` when covering new endpoints.
+- Respect the 100 calls/10 seconds rule in any new integration tests (use recorded fixtures or the cache).
+
+### Manual Smoke Test (30 random tickers)
+
+```bash
+tickers=$(python - <<'PY'
+import random
+from pathlib import Path
+universe = [line.strip() for line in Path('portfolios/borsdata_universe.txt').read_text().splitlines() if line.strip() and not line.startswith('#')]
+print(','.join(random.sample(universe, 30)))
+PY
+)
+
+poetry run hedge rebalance \
+  --portfolio example_portfolio.csv \
+  --universe-tickers "$tickers" \
+  --model gpt-5-nano \
+  --analysts fundamentals_analyst \
+  --dry-run --test --max-workers 1 \
+  --export-transcript
+```
+
+This verifies Börsdata connectivity, the Typer CLI, transcript exports, and the analyst task queue on a smaller universe before running the full weekly job.
 
 ---
 
-## 📄 License
+## Documentation
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+- `PROJECT_LOG.md` – authoritative session log + decisions; update at the end of every working session.
+- `docs/borsdata_integration_plan.md`, `docs/reference/` – endpoint mappings, KPI schemas, and migration notes.
+- `README_Borsdata_API.md` – summarized API instructions pulled from the official swagger.
+
+---
+
+## Disclaimer
+
+Educational research only. No live trading. No warranties. Do your own diligence and consult professionals before investing real capital.
+
+---
+
+## License
+
+Same as upstream (see `LICENSE`).
