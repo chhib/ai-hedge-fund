@@ -7,14 +7,14 @@ Modernized fork of `virattt/ai-hedge-fund` tuned for Börsdata’s Nordic + Glob
 ## TL;DR – Weekly Command I Actually Run
 
 ```bash
-poetry run python src/portfolio_manager.py \
+poetry run hedge rebalance \
   --portfolio portfolio_20251107_actual.csv \
   --universe portfolios/borsdata_universe.txt \
   --model gpt-5-nano \
   --analysts stanley_druckenmiller,technical_analyst,jim_simons,fundamentals_analyst,news_sentiment_analyst
 ```
 
-That command (now also available as `poetry run hedge rebalance ...`) is the core workflow: load the current IBKR-exported CSV, score every ticker in `borsdata_universe.txt` with the selected analysts, and save `portfolio_YYYYMMDD.csv` ready for the next week. A new Typer CLI mirrors the legacy Click script but adds shortcuts for IBKR ingestion, transcript exports, and backtesting.
+That command (now also available as `poetry run hedge rebalance ...`) is the core workflow: load the current IBKR-exported CSV, score every ticker in `borsdata_universe.txt` with the selected analysts, and save `portfolio_YYYYMMDD.csv` ready for the next week. The new hedge CLI (Click-based) mirrors the legacy script but adds shortcuts for IBKR ingestion, transcript exports, and backtesting.
 
 ---
 
@@ -59,13 +59,13 @@ Optional: `IBKR_CLIENT_PORTAL` credentials aren’t stored in `.env`; run the lo
 | Command | When to use |
 | --- | --- |
 | `poetry run hedge rebalance ...` | Weekly rebalance (CSV or live IBKR positions) with automatic transcript export option |
-| `poetry run python src/portfolio_manager.py ...` | Legacy Click CLI (same functionality, still handy for scripted runs) |
-| `poetry run hedge backtest ...` | Headless backtesting using the new Typer CLI (no interactive prompts) |
+| `poetry run python src/portfolio_manager.py ...` | Legacy CLI (same functionality, still handy for scripted runs) |
+| `poetry run hedge backtest ...` | Headless backtesting using the same Hedge CLI infrastructure (no interactive prompts) |
 | `poetry run python src/backtester.py ...` | Original backtester with interactive questionary prompts |
 | `poetry run python src/main.py ...` | Run the LangGraph multi-agent workflow for ad-hoc analysis |
 | `poetry run uvicorn app.backend.main:app --reload` | Start the FastAPI backend powering the React UI (`app/frontend`) |
 
-### Rebalance (Typer CLI)
+### Rebalance (`hedge` CLI)
 
 ```bash
 poetry run hedge rebalance \
@@ -84,15 +84,15 @@ Key flags:
 - `--max-workers 4` – Tune concurrency to stay under the Börsdata 100 calls/10s limit.
 - `--export-transcript` – Immediately dump the analyst markdown transcript after the run.
 
-### Rebalance (legacy Click)
+### Rebalance (legacy script)
 
-Exactly the same options as the Typer CLI, still available if you prefer:
+Exactly the same options as the hedge CLI, still available if you prefer:
 
 ```bash
 poetry run python src/portfolio_manager.py --help
 ```
 
-### Backtest (Typer)
+### Backtest (`hedge` CLI)
 
 ```bash
 poetry run hedge backtest \
@@ -173,7 +173,7 @@ poetry run hedge rebalance \
   --export-transcript
 ```
 
-This verifies Börsdata connectivity, the Typer CLI, transcript exports, and the analyst task queue on a smaller universe before running the full weekly job.
+This verifies Börsdata connectivity, the hedge CLI, transcript exports, and the analyst task queue on a smaller universe before running the full weekly job.
 
 ---
 

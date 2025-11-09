@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import List, Optional
 
-import typer
+import click
 from dotenv import load_dotenv
 
 from src.services.portfolio_runner import RebalanceConfig, run_rebalance
@@ -11,43 +11,71 @@ from src.services.portfolio_runner import RebalanceConfig, run_rebalance
 
 load_dotenv()
 
-app = typer.Typer(help="Unified CLI for the AI Hedge Fund workflows.")
+
+@click.group(help="Unified CLI for the AI Hedge Fund workflows.")
+def cli() -> None:
+    """Top-level command group."""
 
 
-@app.command()
+@cli.command()
+@click.option("--portfolio", type=click.Path(path_type=Path, exists=True), help="Path to the current portfolio CSV (required for CSV source)")
+@click.option("--universe", type=click.Path(path_type=Path, exists=True), help="Path to a universe list")
+@click.option("--universe-tickers", type=str, help="Comma-separated tickers if no file is provided")
+@click.option("--analysts", default="all", show_default=True, help="Analyst preset or comma-separated list")
+@click.option("--model", default="gpt-4o", show_default=True, help="LLM model name")
+@click.option("--model-provider", help="Optional model provider override")
+@click.option("--max-workers", default=4, show_default=True, type=int, help="Parallel worker cap for analyst tasks")
+@click.option("--max-holdings", default=8, show_default=True, type=int, help="Maximum holdings in the target portfolio")
+@click.option("--max-position", default=0.25, show_default=True, type=float, help="Maximum position size as decimal")
+@click.option("--min-position", default=0.05, show_default=True, type=float, help="Minimum position size as decimal")
+@click.option("--min-trade", default=500.0, show_default=True, type=float, help="Minimum trade size in USD equivalent")
+@click.option("--home-currency", default="SEK", show_default=True, help="Home currency for portfolio calculations")
+@click.option("--no-cache", is_flag=True, help="Bypass all cached Börsdata payloads")
+@click.option("--no-cache-agents", is_flag=True, help="Reuse KPI cache but refresh analyst runs")
+@click.option("--dry-run", is_flag=True, help="Show recommendations without saving a CSV")
+@click.option("--verbose", is_flag=True, help="Show detailed analyst output")
+@click.option("--test", is_flag=True, help="Quick validation using the fundamentals analyst")
+@click.option("--export-transcript", is_flag=True, help="Export analyst transcript automatically")
+@click.option("--output-dir", type=click.Path(path_type=Path), help="Directory for the generated CSV (defaults to CWD)")
+@click.option("--portfolio-source", type=click.Choice(["csv", "ibkr"], case_sensitive=False), default="csv", show_default=True, help="Source of the current holdings")
+@click.option("--ibkr-account", help="Optional IBKR account override (defaults to first account)")
+@click.option("--ibkr-host", default="https://localhost", show_default=True, help="Client Portal host (scheme optional)")
+@click.option("--ibkr-port", default=5000, show_default=True, type=int, help="Client Portal port")
+@click.option("--ibkr-verify-ssl/--no-ibkr-verify-ssl", default=False, show_default=True, help="Verify SSL certificates for IBKR calls")
+@click.option("--ibkr-timeout", default=30.0, show_default=True, type=float, help="Timeout in seconds for IBKR API calls")
 def rebalance(
-    portfolio: Optional[Path] = typer.Option(None, metavar="CSV", help="Path to the current portfolio CSV"),
-    universe: Optional[Path] = typer.Option(None, help="Path to a universe list"),
-    universe_tickers: Optional[str] = typer.Option(None, help="Comma-separated tickers if no file is provided"),
-    analysts: str = typer.Option("all", help="Analyst selection preset or comma-separated list"),
-    model: str = typer.Option("gpt-4o", help="LLM model name"),
-    model_provider: Optional[str] = typer.Option(None, help="Optional model provider override"),
-    max_workers: int = typer.Option(4, min=1, help="Parallel worker cap for analyst tasks"),
-    max_holdings: int = typer.Option(8, min=1, help="Maximum holdings in the target portfolio"),
-    max_position: float = typer.Option(0.25, help="Maximum position size as decimal"),
-    min_position: float = typer.Option(0.05, help="Minimum position size as decimal"),
-    min_trade: float = typer.Option(500.0, help="Minimum trade size in USD equivalent"),
-    home_currency: str = typer.Option("SEK", help="Home currency for portfolio calculations"),
-    no_cache: bool = typer.Option(False, help="Bypass all cached Börsdata payloads"),
-    no_cache_agents: bool = typer.Option(False, help="Reuse KPI cache but refresh analyst runs"),
-    dry_run: bool = typer.Option(False, help="Show recommendations without saving a CSV"),
-    verbose: bool = typer.Option(False, help="Show detailed analyst output"),
-    test: bool = typer.Option(False, help="Quick validation using the fundamentals analyst"),
-    export_transcript: bool = typer.Option(False, "--export-transcript", help="Export analyst transcript automatically"),
-    output_dir: Optional[Path] = typer.Option(None, help="Directory for the generated CSV (defaults to CWD)"),
-    portfolio_source: str = typer.Option("csv", help="Source for portfolio data (csv or ibkr)"),
-    ibkr_account: Optional[str] = typer.Option(None, help="Optional IBKR account override (defaults to first account)"),
-    ibkr_host: str = typer.Option("https://localhost", help="Client Portal host (scheme optional)"),
-    ibkr_port: int = typer.Option(5000, help="Client Portal port"),
-    ibkr_verify_ssl: bool = typer.Option(False, help="Verify SSL certificates for IBKR calls"),
-    ibkr_timeout: float = typer.Option(30.0, help="Timeout in seconds for IBKR API calls"),
-):
+    portfolio: Optional[Path],
+    universe: Optional[Path],
+    universe_tickers: Optional[str],
+    analysts: str,
+    model: str,
+    model_provider: Optional[str],
+    max_workers: int,
+    max_holdings: int,
+    max_position: float,
+    min_position: float,
+    min_trade: float,
+    home_currency: str,
+    no_cache: bool,
+    no_cache_agents: bool,
+    dry_run: bool,
+    verbose: bool,
+    test: bool,
+    export_transcript: bool,
+    output_dir: Optional[Path],
+    portfolio_source: str,
+    ibkr_account: Optional[str],
+    ibkr_host: str,
+    ibkr_port: int,
+    ibkr_verify_ssl: bool,
+    ibkr_timeout: float,
+) -> None:
     """Run the weekly long-only rebalance flow."""
 
     normalized_source = portfolio_source.lower()
     if normalized_source == "csv" and portfolio is None:
-        typer.secho("--portfolio is required when portfolio-source=csv", fg=typer.colors.RED)
-        raise typer.Exit(code=1)
+        click.secho("Error: --portfolio is required when --portfolio-source=csv", fg="red")
+        raise click.Abort()
 
     config = RebalanceConfig(
         portfolio_path=portfolio,
@@ -79,31 +107,40 @@ def rebalance(
     try:
         outcome = run_rebalance(config)
     except Exception as exc:  # pragma: no cover - CLI level guardrail
-        typer.secho(f"Error: {exc}", fg=typer.colors.RED)
-        raise typer.Exit(code=1)
+        click.secho(f"Error: {exc}", fg="red")
+        raise click.Abort()
 
     if export_transcript:
         _export_transcript(outcome.session_id)
 
 
-@app.command()
+@cli.command()
+@click.option("--tickers", required=True, help="Comma-separated tickers")
+@click.option("--start-date", required=True, help="Backtest start date (YYYY-MM-DD)")
+@click.option("--end-date", required=True, help="Backtest end date (YYYY-MM-DD)")
+@click.option("--initial-capital", default=100_000.0, show_default=True, type=float, help="Starting capital")
+@click.option("--initial-currency", default="USD", show_default=True, help="Currency for the starting capital")
+@click.option("--margin-requirement", default=0.0, show_default=True, type=float, help="Margin requirement percentage")
+@click.option("--analysts", help="Comma-separated analysts for the run")
+@click.option("--model-name", default="gpt-4.1", show_default=True, help="LLM model name")
+@click.option("--model-provider", default="OpenAI", show_default=True, help="LLM provider")
 def backtest(
-    tickers: str = typer.Option(..., help="Comma-separated tickers"),
-    start_date: str = typer.Option(..., help="Backtest start date (YYYY-MM-DD)"),
-    end_date: str = typer.Option(..., help="Backtest end date (YYYY-MM-DD)"),
-    initial_capital: float = typer.Option(100_000.0, help="Starting capital"),
-    initial_currency: str = typer.Option("USD", help="Currency for the starting capital"),
-    margin_requirement: float = typer.Option(0.0, help="Margin requirement percentage"),
-    analysts: Optional[str] = typer.Option(None, help="Comma-separated analysts for the run"),
-    model_name: str = typer.Option("gpt-4.1", help="LLM model name"),
-    model_provider: str = typer.Option("OpenAI", help="LLM provider"),
-):
+    tickers: str,
+    start_date: str,
+    end_date: str,
+    initial_capital: float,
+    initial_currency: str,
+    margin_requirement: float,
+    analysts: Optional[str],
+    model_name: str,
+    model_provider: str,
+) -> None:
     """Backtest the hedge-fund agent pipeline without interactive prompts."""
 
     ticker_list = _parse_ticker_list(tickers)
     if not ticker_list:
-        typer.secho("At least one ticker must be provided", fg=typer.colors.RED)
-        raise typer.Exit(code=1)
+        click.secho("Error: At least one ticker must be provided", fg="red")
+        raise click.Abort()
 
     selected_analysts = [item.strip() for item in analysts.split(",") if item.strip()] if analysts else []
 
@@ -148,7 +185,7 @@ def _build_ticker_markets(tickers: List[str]) -> dict[str, str]:
             unknown.append(ticker)
 
     if unknown:
-        typer.secho("Warning: tickers missing from Börsdata mapping: " + ", ".join(unknown), fg=typer.colors.YELLOW)
+        click.secho("Warning: tickers missing from Börsdata mapping: " + ", ".join(unknown), fg="yellow")
     set_ticker_markets(markets)
     return markets
 
@@ -159,10 +196,10 @@ def _export_transcript(session_id: str) -> None:
     try:
         output = export_to_markdown(session_id)
     except Exception as exc:  # pragma: no cover - filesystem / DB errors
-        typer.secho(f"Transcript export failed: {exc}", fg=typer.colors.RED)
+        click.secho(f"Transcript export failed: {exc}", fg="red")
         return
-    typer.secho(f"Transcript saved to {output}", fg=typer.colors.GREEN)
+    click.secho(f"Transcript saved to {output}", fg="green")
 
 
 if __name__ == "__main__":
-    app()
+    cli()
