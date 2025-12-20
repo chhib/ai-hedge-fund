@@ -59,21 +59,24 @@ def load_portfolio(portfolio_file: str) -> Portfolio:
     return Portfolio(positions=positions, cash_holdings=cash_holdings, last_updated=datetime.now())
 
 
-def load_universe(universe_file: Optional[str] = None, tickers_str: Optional[str] = None) -> List[str]:
+def load_universe(universe_file: Optional[str] = None, tickers_str: Optional[str] = None, verbose: bool = False) -> List[str]:
     """
     Load investment universe from various sources.
 
     Supports both comma-separated and line-separated formats.
     Supports comments: lines starting with # or --, and inline comments after #.
+    Supports delisted markers: # DELISTED: TICKER - Reason (these are tracked and skipped).
     Market detection (Nordic vs Global) is handled automatically via borsdata_ticker_mapping.
 
     Args:
         universe_file: Path to a file containing tickers (line-separated or CSV)
         tickers_str: Comma-separated string of tickers
+        verbose: If True, print info about skipped delisted tickers
 
     Returns:
         List of ticker symbols
     """
+    delisted_tickers: List[str] = []
 
     def clean_ticker(ticker: str) -> Optional[str]:
         """Extract ticker from string, removing inline comments and whitespace"""
@@ -89,11 +92,30 @@ def load_universe(universe_file: Optional[str] = None, tickers_str: Optional[str
         stripped = line.strip()
         return stripped.startswith("#") or stripped.startswith("--")
 
+    def extract_delisted(line: str) -> Optional[str]:
+        """Extract ticker from DELISTED comment line, returns ticker if found"""
+        stripped = line.strip().upper()
+        if stripped.startswith("# DELISTED:"):
+            # Format: # DELISTED: TICKER - Reason
+            rest = line.strip()[11:].strip()  # After "# DELISTED:"
+            if " - " in rest:
+                ticker = rest.split(" - ")[0].strip()
+            else:
+                ticker = rest.split()[0].strip() if rest.split() else None
+            return ticker
+        return None
+
     universe = set()
 
     if universe_file:
         with open(universe_file, "r") as f:
             content = f.read().strip()
+
+            # First pass: extract delisted tickers from DELISTED comments
+            for line in content.split("\n"):
+                delisted = extract_delisted(line)
+                if delisted:
+                    delisted_tickers.append(delisted)
 
             # Detect and parse format
             if "," in content:
@@ -124,5 +146,9 @@ def load_universe(universe_file: Optional[str] = None, tickers_str: Optional[str
                 cleaned = clean_ticker(ticker)
                 if cleaned:
                     universe.add(cleaned)
+
+    # Report delisted tickers if any were found
+    if delisted_tickers and verbose:
+        print(f"ℹ️  Skipping {len(delisted_tickers)} delisted ticker(s): {', '.join(delisted_tickers)}")
 
     return list(universe)

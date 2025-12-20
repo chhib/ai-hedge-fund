@@ -79,6 +79,7 @@ def run_rebalance(config: RebalanceConfig) -> RebalanceOutcome:
     universe_list = load_universe(
         str(config.universe_path) if config.universe_path else None,
         config.universe_tickers,
+        verbose=True,  # Show skipped delisted tickers
     )
     if not universe_list:
         raise ValueError("Universe is empty. Provide valid tickers via file or --universe-tickers.")
@@ -219,6 +220,8 @@ def _resolve_analyst_list(selection: str, test_mode: bool) -> List[str]:
         ]
     if normalized == "core":
         return ["fundamentals", "technical", "sentiment", "valuation"]
+    if normalized == "favorites":
+        return ["fundamentals", "technical", "jim_simons", "news_sentiment_analyst", "stanley_druckenmiller"]
     return [part.strip() for part in selection.split(",") if part.strip()]
 
 

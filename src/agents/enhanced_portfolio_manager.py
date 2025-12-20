@@ -111,6 +111,9 @@ class EnhancedPortfolioManager:
                 "sentiment_analyst": "sentiment_analyst",
                 "valuation": "valuation_analyst",
                 "valuation_analyst": "valuation_analyst",
+                # News sentiment
+                "news_sentiment": "news_sentiment_analyst",
+                "news_sentiment_analyst": "news_sentiment_analyst",
             }
 
             analysts = []

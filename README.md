@@ -8,10 +8,10 @@ Modernized fork of `virattt/ai-hedge-fund` tuned for Börsdata’s Nordic + Glob
 
 ```bash
 poetry run hedge rebalance \
-  --portfolio portfolio_20251107_actual.csv \
+  --portfolio portfolio_20251220_actual.csv \
   --universe portfolios/borsdata_universe.txt \
   --model gpt-5-nano \
-  --analysts stanley_druckenmiller,technical_analyst,jim_simons,fundamentals_analyst,news_sentiment_analyst
+  --analysts favorites
 ```
 
 That command (now also available as `poetry run hedge rebalance ...`) is the core workflow: load the current IBKR-exported CSV, score every ticker in `borsdata_universe.txt` with the selected analysts, and save `portfolio_YYYYMMDD.csv` ready for the next week. The new hedge CLI (Click-based) mirrors the legacy script but adds shortcuts for IBKR ingestion, transcript exports, and backtesting.
@@ -69,20 +69,35 @@ Optional: `IBKR_CLIENT_PORTAL` credentials aren’t stored in `.env`; run the lo
 
 ```bash
 poetry run hedge rebalance \
-  --portfolio portfolio_20251107_actual.csv \
+  --portfolio portfolio_20251220_actual.csv \
   --universe portfolios/borsdata_universe.txt \
   --model gpt-5-nano \
-  --analysts stanley_druckenmiller,technical_analyst,jim_simons,fundamentals_analyst,news_sentiment_analyst \
+  --analysts favorites \
   --export-transcript
 ```
 
 Key flags:
 
-- `--portfolio-source ibkr` – Pull holdings/cash straight from IBKR Client Portal gateway.
-- `--ibkr-account U1234567` – Force a specific account (defaults to the first returned account).
-- `--no-cache` / `--no-cache-agents` – Control KPI/analyst caching when you need a clean slate.
-- `--max-workers 4` – Tune concurrency to stay under the Börsdata 100 calls/10s limit.
-- `--export-transcript` – Immediately dump the analyst markdown transcript after the run.
+- `--portfolio` – Path to current holdings CSV (required for CSV source)
+- `--universe` – Path to universe file (e.g., `portfolios/borsdata_universe.txt`)
+- `--universe-tickers` – Alternative: comma-separated tickers inline
+- `--analysts` – Preset or comma-separated list (see below)
+- `--home-currency SEK` – Reporting currency (default: SEK)
+- `--portfolio-source ibkr` – Pull holdings/cash straight from IBKR Client Portal gateway
+- `--ibkr-account U1234567` – Force a specific account (defaults to the first returned account)
+- `--no-cache` / `--no-cache-agents` – Control KPI/analyst caching when you need a clean slate
+- `--max-workers 4` – Tune concurrency to stay under the Börsdata 100 calls/10s limit
+- `--export-transcript` – Immediately dump the analyst markdown transcript after the run
+
+**Analyst presets:**
+
+| Preset | Analysts |
+| --- | --- |
+| `favorites` | fundamentals, technical, jim_simons, news_sentiment_analyst, stanley_druckenmiller |
+| `core` | fundamentals, technical, sentiment, valuation |
+| `famous` | 13 legendary investor personas |
+| `all` | All 17 analysts |
+| `basic` | fundamentals only (fast testing) |
 
 ### Rebalance (legacy script)
 

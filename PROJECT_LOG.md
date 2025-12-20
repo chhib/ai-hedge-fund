@@ -1,6 +1,6 @@
 # Börsdata Integration Project Log
 
-_Last updated: 2025-11-08 (Session 57)_
+_Last updated: 2025-12-20 (Session 58)_
 
 ## End Goal
 Rebuild the data ingestion and processing pipeline so the application relies on Börsdata's REST API (per `README_Borsdata_API.md` and https://apidoc.borsdata.se/swagger/index.html). The system should let a user set a `BORSDATA_API_KEY` in `.env`, accept Börsdata-native tickers, and otherwise preserve the current user-facing workflows and capabilities.
@@ -894,3 +894,22 @@ The system now operates efficiently at scale with comprehensive financial data i
 - Registered the new CLI in `pyproject.toml` and created automated coverage in `tests/integrations/test_ibkr_client.py` (run with `PYTHONPATH=. pytest tests/integrations/test_ibkr_client.py tests/test_enhanced_portfolio_manager.py`).
 - Added a persistent analyst task queue (`src/data/analyst_task_queue.py`) wired into `EnhancedPortfolioManager` so analyst×ticker results are re-used for the same analysis day even after failures; covered by `tests/data/test_analyst_task_queue.py`.
 - Smoke-tested the hedge CLI against a random 30-ticker slice of `borsdata_universe.txt` to confirm Börsdata access, exchange-rate handling, and transcript export (`poetry run hedge rebalance ... --export-transcript`), transcript saved as `analyst_transcript_20251109_083159.md`.
+
+### Session 58 (Delisted Ticker Handling)
+- **Issue Investigated**: Warnings for SOZAP and EMX tickers not found in Börsdata mapping.
+- **Root Cause**:
+  - **SOZAP**: Swedish gaming company delisted from Nasdaq Stockholm First North in late 2023/early 2024 after financial difficulties
+  - **EMX**: EMX Royalty Corp (NYSE American) is not in Börsdata's global coverage despite 15,807 instruments
+- **Solution Implemented**: Added delisted ticker marking and skip functionality
+  - **Universe Format**: New `# DELISTED: TICKER - Reason` comment format marks unavailable tickers
+  - **Auto-Skip**: `load_universe()` in `src/utils/portfolio_loader.py` now extracts and reports delisted tickers
+  - **User Feedback**: Shows `ℹ️  Skipping N delisted ticker(s): ...` when loading universe with verbose=True
+- **Files Modified**:
+  - `portfolios/borsdata_universe.txt` - Marked SOZAP and EMX as delisted with explanatory comments
+  - `src/utils/portfolio_loader.py` - Added `extract_delisted()` helper and verbose reporting
+  - `src/services/portfolio_runner.py` - Enabled verbose flag for delisted ticker reporting
+- **Validation**: Confirmed SOZAP and EMX are excluded from loaded universe (206 tickers loaded, 2 delisted skipped)
+- **Bug Fix**: Fixed `news_sentiment` analyst not found in favorites preset
+  - Updated favorites preset to use correct registry key `news_sentiment_analyst`
+  - Added `news_sentiment` → `news_sentiment_analyst` alias in `enhanced_portfolio_manager.py`
+  - Updated README.md documentation
