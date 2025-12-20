@@ -23,7 +23,8 @@ That command (now also available as `poetry run hedge rebalance ...`) is the cor
 - **Börsdata-first ingestion**: Nordic + Global tickers, rate limiting, KPI/line-item assemblers, insider trades, calendars, and cached price history.
 - **Concentrated long-only portfolios**: 5–10 holdings, multi-currency cost basis, ATR-derived slippage bands, deterministic analysts mixed with LLM personas.
 - **Durable analyst queue**: Analyst×ticker tasks are recorded in `data/analyst_tasks.db`, so same-day reruns reuse cached signals even if the previous session crashed or you temporarily lost network access.
-- **Agent ergonomics**: 17 analysts (13 legendary investor personas + 4 core analysts + news sentiment) driven via `EnhancedPortfolioManager` with automatic parallel prefetch, caching, and transcript storage.
+- **Agent ergonomics**: 18 analysts (13 legendary investor personas + 5 core analysts including news sentiment) driven via `EnhancedPortfolioManager` with automatic parallel prefetch, caching, and transcript storage.
+- **Position-aware news sentiment**: News sentiment analyst analyzes events since each position's acquisition date (not just last 30 days), providing context-aware sentiment for existing holdings vs. new candidates.
 - **Unified CLI**: `poetry run hedge rebalance` (weekly), `poetry run hedge backtest`, plus the original `src/main.py` (graph-based analysis) and FastAPI app for the React UI.
 
 ---
@@ -86,8 +87,10 @@ Key flags:
 - `--portfolio-source ibkr` – Pull holdings/cash straight from IBKR Client Portal gateway
 - `--ibkr-account U1234567` – Force a specific account (defaults to the first returned account)
 - `--no-cache` / `--no-cache-agents` – Control KPI/analyst caching when you need a clean slate
-- `--max-workers 4` – Tune concurrency to stay under the Börsdata 100 calls/10s limit
+- `--max-workers 4` – Tune concurrency to stay under the Börsdata 100 calls/10s limit (also configurable via `PARALLEL_MAX_WORKERS` env var, default: 8)
 - `--export-transcript` – Immediately dump the analyst markdown transcript after the run
+
+**Portfolio validation**: CSV portfolios are automatically validated for negative shares (warns about potential short positions), negative cost_basis, and invalid currency codes (ISO 4217 check).
 
 **Analyst presets:**
 
@@ -141,8 +144,9 @@ cd app/frontend && npm install && npm run dev
 
 ## Analyst Architecture
 
-- **Core deterministic analysts**: fundamentals, technicals, valuation, sentiment, news sentiment.
-- **Investor personas**: Warren Buffett, Charlie Munger, Stanley Druckenmiller, Peter Lynch, Ben Graham, Phil Fisher, Bill Ackman, Cathie Wood, Michael Burry, Mohnish Pabrai, Rakesh Jhunjhunwala, Aswath Damodaran, Jim Simons.
+- **Core deterministic analysts** (5): fundamentals, technicals, valuation, sentiment, news_sentiment.
+- **Investor personas** (13): Warren Buffett, Charlie Munger, Stanley Druckenmiller, Peter Lynch, Ben Graham, Phil Fisher, Bill Ackman, Cathie Wood, Michael Burry, Mohnish Pabrai, Rakesh Jhunjhunwala, Aswath Damodaran, Jim Simons.
+- **Position-aware analysis**: News sentiment analyst filters events based on each position's acquisition date (from portfolio CSV's `date_acquired` column), analyzing events since purchase for existing holdings or last 30 days for new candidates.
 - **Task Queue**: `src/data/analyst_task_queue.py` records each analyst×ticker×model combo per analysis date so cached outputs are reused if you rerun the same day (post-crash or after toggling analysts back on). Coupled with `src/data/analysis_cache.py` for actual signal storage.
 - **Transcript storage**: analyst reasoning per ticker is stored in `app/backend/hedge_fund.db` via `src/data/analysis_storage.py`; export via CLI prompt or `--export-transcript`.
 
