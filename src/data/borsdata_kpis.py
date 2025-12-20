@@ -94,7 +94,10 @@ class FinancialMetricsAssembler:
             start_time = time.time()
             try:
                 kpi_id = config['kpi_id']
-                calc_group = config.get('screener_calc_group', 'last')
+                # Use period-specific calc_group override if available
+                period_key = period.strip().lower() if period else "ttm"
+                overrides = config.get('screener_calc_group_overrides', {})
+                calc_group = overrides.get(period_key, config.get('screener_calc_group', 'last'))
                 calc = config.get('screener_calc', 'latest')
 
                 cache_key = f"{kpi_id}_{calc_group}_{calc}_{use_global}"

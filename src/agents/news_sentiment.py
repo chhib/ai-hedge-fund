@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timedelta
 from typing import Dict, List
 
 from langchain_core.messages import HumanMessage
@@ -18,6 +19,9 @@ from src.utils.progress import progress
 
 # Limit the LLM workload while still sampling recent company events
 MAX_EVENTS_TO_ANALYZE = 5
+
+# Default lookback for tickers not in portfolio (new positions under evaluation)
+DEFAULT_LOOKBACK_DAYS = 30
 
 
 class EventSentiment(BaseModel):
@@ -41,12 +45,30 @@ class ClassifiedEvent(BaseModel):
 
 
 def news_sentiment_agent(state: AgentState, agent_id: str = "news_sentiment_agent"):
-    """Analyze recent company calendar events and derive a sentiment signal."""
+    """Analyze recent company calendar events and derive a sentiment signal.
+
+    For existing portfolio positions, analyzes events since the position was acquired.
+    For new positions under evaluation, analyzes events from the last 30 days.
+    """
 
     data = state.get("data", {})
     end_date = data.get("end_date")
     tickers = data.get("tickers")
     api_key = get_api_key_from_state(state, "BORSDATA_API_KEY")
+
+    # Get position's acquisition date if available (passed from portfolio manager)
+    position_date_acquired = data.get("position_date_acquired")
+
+    # Determine the start date for event filtering
+    if position_date_acquired:
+        # Existing position: analyze events since acquisition
+        event_start_date = position_date_acquired
+        lookback_mode = f"since {position_date_acquired}"
+    else:
+        # New position: use default lookback
+        default_start = (datetime.now() - timedelta(days=DEFAULT_LOOKBACK_DAYS)).strftime("%Y-%m-%d")
+        event_start_date = default_start
+        lookback_mode = f"last {DEFAULT_LOOKBACK_DAYS} days"
 
     sentiment_analysis: Dict[str, Dict[str, object]] = {}
 
@@ -58,15 +80,19 @@ def news_sentiment_agent(state: AgentState, agent_id: str = "news_sentiment_agen
 
         # Fallback to API call if events not prefetched
         if company_events is None:
-            progress.update_status(agent_id, ticker, "Fetching company events")
+            progress.update_status(agent_id, ticker, f"Fetching events ({lookback_mode})")
             company_events = get_company_events(
                 ticker=ticker,
+                start_date=event_start_date,
                 end_date=end_date,
                 limit=MAX_EVENTS_TO_ANALYZE * 4,
                 api_key=api_key,
             )
         else:
-            progress.update_status(agent_id, ticker, "Using prefetched events")
+            # Filter prefetched events by date
+            progress.update_status(agent_id, ticker, f"Filtering events ({lookback_mode})")
+            if event_start_date:
+                company_events = _filter_events_by_date(company_events, event_start_date, end_date)
 
         classified_events: List[ClassifiedEvent] = []
         if company_events:
@@ -242,4 +268,40 @@ def _calculate_confidence_score(
         return round(0.7 * avg_confidence + 0.3 * signal_proportion, 2)
 
     return round(signal_proportion, 2)
+
+
+def _filter_events_by_date(
+    events: List[CompanyEvent],
+    start_date: str,
+    end_date: str | None,
+) -> List[CompanyEvent]:
+    """Filter events to only include those within the date range.
+
+    Args:
+        events: List of CompanyEvent objects
+        start_date: ISO date string (YYYY-MM-DD) - include events on or after this date
+        end_date: ISO date string (YYYY-MM-DD) - include events on or before this date
+
+    Returns:
+        Filtered list of events within the date range
+    """
+    try:
+        start_dt = datetime.strptime(start_date, "%Y-%m-%d").date()
+        end_dt = datetime.strptime(end_date, "%Y-%m-%d").date() if end_date else datetime.now().date()
+    except (ValueError, TypeError):
+        # If date parsing fails, return all events
+        return events
+
+    filtered = []
+    for event in events:
+        try:
+            # CompanyEvent has a `date` attribute which is a string
+            event_date = datetime.strptime(event.date, "%Y-%m-%d").date()
+            if start_dt <= event_date <= end_dt:
+                filtered.append(event)
+        except (ValueError, TypeError, AttributeError):
+            # If event date parsing fails, include the event
+            filtered.append(event)
+
+    return filtered
 

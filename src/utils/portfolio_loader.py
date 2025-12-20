@@ -4,8 +4,17 @@ from datetime import datetime
 from io import StringIO
 from pathlib import Path
 from typing import Dict, List, Optional
+import warnings
 
 import pandas as pd
+
+
+# Common ISO 4217 currency codes used in markets supported by Börsdata
+VALID_CURRENCIES = {
+    "USD", "EUR", "GBP", "SEK", "DKK", "NOK", "CHF", "CAD", "AUD", "JPY",
+    "HKD", "SGD", "CNY", "PLN", "CZK", "HUF", "ISK", "TRY", "RUB", "INR",
+    "BRL", "MXN", "ZAR", "NZD", "KRW", "TWD", "THB", "IDR", "MYR", "PHP",
+}
 
 
 @dataclass
@@ -24,11 +33,42 @@ class Portfolio:
     last_updated: datetime
 
 
-def load_portfolio(portfolio_file: str) -> Portfolio:
-    """Load portfolio from CSV file"""
+def validate_portfolio_data(
+    ticker: str,
+    shares: float,
+    cost_basis: float,
+    currency: str,
+    row_num: int
+) -> List[str]:
+    """Validate portfolio position data and return list of warnings."""
+    warnings_list = []
+
+    if shares < 0:
+        warnings_list.append(f"Row {row_num}: Negative shares ({shares}) for {ticker} - is this intentional (short position)?")
+
+    if cost_basis < 0:
+        warnings_list.append(f"Row {row_num}: Negative cost_basis ({cost_basis}) for {ticker}")
+
+    if currency.upper() not in VALID_CURRENCIES:
+        warnings_list.append(f"Row {row_num}: Unknown currency '{currency}' for {ticker} - not in ISO 4217 list")
+
+    return warnings_list
+
+
+def load_portfolio(portfolio_file: str, validate: bool = True) -> Portfolio:
+    """Load portfolio from CSV file.
+
+    Args:
+        portfolio_file: Path to CSV file with columns: ticker, shares, [cost_basis, currency, date_acquired]
+        validate: If True, emit warnings for suspicious data (negative shares, invalid currencies)
+
+    Returns:
+        Portfolio object with positions and cash holdings
+    """
 
     positions = []
     cash_holdings = {}
+    validation_warnings = []
 
     df = pd.read_csv(portfolio_file)
     required_cols = ["ticker", "shares"]
@@ -36,25 +76,38 @@ def load_portfolio(portfolio_file: str) -> Portfolio:
     if not all(col in df.columns for col in required_cols):
         raise ValueError(f"CSV must contain columns: {required_cols}")
 
-    for _, row in df.iterrows():
+    for row_num, (_, row) in enumerate(df.iterrows(), start=2):  # Start at 2 for header row
         ticker = row["ticker"].strip()
+        shares = float(row["shares"])
+        cost_basis = float(row["cost_basis"]) if "cost_basis" in row and pd.notna(row["cost_basis"]) else 0
+        currency = row["currency"] if "currency" in row and pd.notna(row["currency"]) else "USD"
 
         # Handle cash entries
         if ticker.upper() == "CASH":
-            currency = row["currency"] if "currency" in row and pd.notna(row["currency"]) else "USD"
-            cash_holdings[currency] = float(row["shares"])
+            cash_holdings[currency] = shares
             continue
+
+        # Validate position data
+        if validate:
+            validation_warnings.extend(
+                validate_portfolio_data(ticker, shares, cost_basis, currency, row_num)
+            )
 
         # Regular position
         positions.append(
             Position(
                 ticker=ticker,
-                shares=float(row["shares"]),
-                cost_basis=float(row["cost_basis"]) if "cost_basis" in row and pd.notna(row["cost_basis"]) else 0,
-                currency=row["currency"] if "currency" in row and pd.notna(row["currency"]) else "USD",
+                shares=shares,
+                cost_basis=cost_basis,
+                currency=currency,
                 date_acquired=pd.to_datetime(row["date_acquired"]) if "date_acquired" in row and pd.notna(row["date_acquired"]) else None,
             )
         )
+
+    # Emit validation warnings
+    if validation_warnings:
+        for warning in validation_warnings:
+            warnings.warn(warning, UserWarning)
 
     return Portfolio(positions=positions, cash_holdings=cash_holdings, last_updated=datetime.now())
 

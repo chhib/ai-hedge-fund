@@ -39,6 +39,12 @@ from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from typing import Dict, List, Optional, Any, Union
 import time
+import os
+
+# Configurable max workers for thread pool - helps with rate limit management
+# Lower values (4-8) are more reliable for strict rate limits
+# Higher values (16-20) maximize throughput when rate limits are generous
+DEFAULT_PARALLEL_MAX_WORKERS = int(os.getenv("PARALLEL_MAX_WORKERS", "8"))
 
 # Import existing working API functions
 from src.tools.api import (
@@ -55,20 +61,22 @@ from src.utils.progress import progress
 from src.data.prefetch_store import PrefetchParameters, PrefetchStore
 
 
-async def _run_in_thread_pool(func, *args, **kwargs):
+async def _run_in_thread_pool(func, *args, max_workers: int = None, **kwargs):
     """Run a blocking function in a thread pool."""
     loop = asyncio.get_event_loop()
-    with ThreadPoolExecutor(max_workers=20) as executor:
+    workers = max_workers or DEFAULT_PARALLEL_MAX_WORKERS
+    with ThreadPoolExecutor(max_workers=workers) as executor:
         partial_func = partial(func, *args, **kwargs)
         return await loop.run_in_executor(executor, partial_func)
 
 
-async def _timed_run_in_thread_pool(func, data_type, *args, **kwargs):
+async def _timed_run_in_thread_pool(func, data_type, *args, max_workers: int = None, **kwargs):
     """Run a blocking function in a thread pool and log its execution time."""
     ticker = args[0]
     start_time = time.time()
     loop = asyncio.get_event_loop()
-    with ThreadPoolExecutor(max_workers=20) as executor:
+    workers = max_workers or DEFAULT_PARALLEL_MAX_WORKERS
+    with ThreadPoolExecutor(max_workers=workers) as executor:
         partial_func = partial(func, *args, **kwargs)
         result = await loop.run_in_executor(executor, partial_func)
     end_time = time.time()

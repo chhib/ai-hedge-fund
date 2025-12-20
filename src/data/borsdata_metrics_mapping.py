@@ -261,7 +261,7 @@ FINANCIAL_METRICS_MAPPING: dict[str, MetricMapping] = {
         "default_report_type": "year",
         "screener_calc_group": "1year",
         "screener_calc": "cagr",
-        "screener_calc_group_overrides": {"quarter": "1year", "3year": "3year", "5year": "5year", "r12": "1year"},
+        "screener_calc_group_overrides": {"quarter": "1year", "3year": "3year", "5year": "5year", "r12": "1year", "ttm": "1year"},
         "is_percentage": True,
     },
     "earnings_growth": {
@@ -271,7 +271,7 @@ FINANCIAL_METRICS_MAPPING: dict[str, MetricMapping] = {
         "default_report_type": "year",
         "screener_calc_group": "1year",
         "screener_calc": "cagr",
-        "screener_calc_group_overrides": {"quarter": "1year", "3year": "3year", "5year": "5year"},
+        "screener_calc_group_overrides": {"quarter": "1year", "3year": "3year", "5year": "5year", "ttm": "1year", "r12": "1year"},
         "is_percentage": True,
     },
     "book_value_growth": {
@@ -296,7 +296,7 @@ FINANCIAL_METRICS_MAPPING: dict[str, MetricMapping] = {
         "default_report_type": "year",
         "screener_calc_group": "1year",
         "screener_calc": "cagr",
-        "screener_calc_group_overrides": {"quarter": "1year", "3year": "3year", "5year": "5year"},
+        "screener_calc_group_overrides": {"quarter": "1year", "3year": "3year", "5year": "5year", "ttm": "1year", "r12": "1year"},
         "is_percentage": True,
     },
     "operating_income_growth": {

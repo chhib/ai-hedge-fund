@@ -84,9 +84,9 @@ def call_llm(
                 # Reconstruct pydantic model from cached dict
                 return pydantic_model(**cached_response)
         except Exception as e:
-            # Cache miss or error - proceed with LLM call
+            # Cache miss or error - log the error type and proceed with LLM call
             if agent_name:
-                progress.update_status(agent_name, ticker, f"Cache miss - calling LLM")
+                progress.update_status(agent_name, ticker, f"Cache error ({type(e).__name__}) - calling LLM")
 
     model_info = get_model_info(model_name, model_provider)
     llm = get_model(model_name, model_provider_enum, api_keys)
@@ -129,7 +129,7 @@ def call_llm(
                     )
                 except Exception as cache_error:
                     # Log cache storage error but don't fail the request
-                    pass
+                    print(f"Warning: Failed to cache LLM response for {ticker}/{agent_name}: {type(cache_error).__name__}")
 
             return response_model
 

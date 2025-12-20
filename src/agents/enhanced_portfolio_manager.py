@@ -464,12 +464,21 @@ class EnhancedPortfolioManager:
             for analyst_info in self.analysts
         ]
 
+        # Build a lookup of ticker -> acquisition date for existing positions
+        position_dates = {
+            p.ticker: p.date_acquired.strftime("%Y-%m-%d") if p.date_acquired else None
+            for p in self.portfolio.positions
+        }
+
         # Process all combinations in parallel with configurable workers to avoid rate limits
         max_workers = min(len(analyst_ticker_combinations), self.max_workers)
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             future_to_combo = {}
             for analyst_info, ticker_idx, ticker in analyst_ticker_combinations:
                 ticker_data = prefetched_data.get(ticker, {})
+
+                # Get position's acquisition date if this ticker is in the portfolio
+                position_date_acquired = position_dates.get(ticker)
 
                 # Create AgentState with prefetched data (same pattern as main.py)
                 state: AgentState = {
@@ -479,6 +488,7 @@ class EnhancedPortfolioManager:
                         "ticker": ticker,
                         "start_date": start_date,
                         "end_date": end_date,
+                        "position_date_acquired": position_date_acquired,  # For position-aware news sentiment
                         "api_key": api_key,
                         "model_config": self.model_config,
                         "prefetched_financial_data": {

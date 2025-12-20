@@ -1,6 +1,6 @@
 # Börsdata Integration Project Log
 
-_Last updated: 2025-12-20 (Session 58)_
+_Last updated: 2025-12-20 (Session 59)_
 
 ## End Goal
 Rebuild the data ingestion and processing pipeline so the application relies on Börsdata's REST API (per `README_Borsdata_API.md` and https://apidoc.borsdata.se/swagger/index.html). The system should let a user set a `BORSDATA_API_KEY` in `.env`, accept Börsdata-native tickers, and otherwise preserve the current user-facing workflows and capabilities.
@@ -913,3 +913,34 @@ The system now operates efficiently at scale with comprehensive financial data i
   - Updated favorites preset to use correct registry key `news_sentiment_analyst`
   - Added `news_sentiment` → `news_sentiment_analyst` alias in `enhanced_portfolio_manager.py`
   - Updated README.md documentation
+
+### Session 59 (Repository Cleanup & Position-Aware News Sentiment)
+- **Repository Cleanup**: Comprehensive codebase audit and cleanup:
+  - **Deleted unused files**:
+    - `src/data/parallel_borsdata_client.py` - Async parallel client superseded by `parallel_api_wrapper.py`
+    - `docs/reference/borsdata_swagger_v1.json` - Duplicate of `swagger_v1.json`
+  - **Removed legacy credential**: Removed `FINANCIAL_DATASETS_API_KEY` line from `.env`
+  - **Fixed silent error handlers**: Added logging to cache errors in `src/utils/llm.py:86-89, 130-132`
+- **TTM Revenue Growth Fix**:
+  - Fixed period-specific `screener_calc_group_overrides` lookup in `src/data/borsdata_kpis.py`
+  - Added `"ttm": "1year"` override to `revenue_growth`, `earnings_growth`, and `free_cash_flow_growth` mappings
+  - Fixed test stub bug (duplicate `self.screener` overwrite) in `tests/data/test_borsdata_kpis.py`
+  - Uncommented and validated revenue_growth assertion in TTM test
+- **ThreadPoolExecutor Consolidation**:
+  - Made `max_workers` configurable via `PARALLEL_MAX_WORKERS` env var (default: 8)
+  - Updated `src/data/parallel_api_wrapper.py` to use configurable workers instead of hardcoded 20
+  - Provides better rate limit management for Börsdata API
+- **Portfolio Input Validation**:
+  - Added `validate_portfolio_data()` function in `src/utils/portfolio_loader.py`
+  - Validates: negative shares (warning for short positions), negative cost_basis, invalid currency codes
+  - Added `VALID_CURRENCIES` set with ISO 4217 codes supported by Börsdata markets
+  - Validation enabled by default, can be disabled via `validate=False` parameter
+- **Position-Aware News Sentiment** (Feature):
+  - **Implementation**: News sentiment analyst now filters events based on position acquisition date
+  - For existing positions: analyzes events SINCE the position was acquired
+  - For new positions (universe evaluation): uses 30-day default lookback
+  - **Files Modified**:
+    - `src/agents/enhanced_portfolio_manager.py:467-471,491` - Build position_dates lookup, pass to AgentState
+    - `src/agents/news_sentiment.py:59-71,82-95,273-306` - Use position_date_acquired for filtering, added `_filter_events_by_date()` helper
+  - **Progress Display**: Shows lookback mode (e.g., "since 2025-10-03" or "last 30 days")
+- **System Status**: Repository cleaned up with improved error handling, configurable parallelism, input validation, and position-aware news sentiment for smarter rebalancing decisions.

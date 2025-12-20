@@ -36,11 +36,13 @@ class StubBorsdataClient:
             ]
         }
         self.screener = {
-            (26, "1year", "cagr"): {"value": {"n": 0.125}},
+            # Revenue growth values in percentage form (12.5% = 0.125 after /100)
+            (26, "1year", "cagr"): {"value": {"n": 12.5}},
             (26, "quarter", "percent"): {"value": {"n": 3.5}},
-            (26, "r12", "cagr"): {"value": {"n": 0.125}},
-            (26, "year", "cagr"): {"value": {"n": 0.125}},
-            (26, "ttm", "cagr"): {"value": {"n": 0.125}},
+            (26, "r12", "cagr"): {"value": {"n": 12.5}},
+            (26, "year", "cagr"): {"value": {"n": 12.5}},
+            (26, "ttm", "cagr"): {"value": {"n": 12.5}},
+            (210, "1year", "percent"): {"value": {"n": 12.5}},
         }
         self.reports = {
             "reports": [
@@ -66,7 +68,6 @@ class StubBorsdataClient:
                 },
             ]
         }
-        self.screener = {(210, "1year", "percent"): {"value": {"n": 12.5}}}
 
     def get_instrument(self, ticker: str, *, api_key=None, force_refresh: bool = False, use_global: bool = False):
         return self.instrument
@@ -114,8 +115,7 @@ def test_financial_metrics_assembler_builds_metrics_from_summary_and_reports():
     assert math.isclose(latest.operating_cash_flow_ratio, 4.0)
     expected_operating_cycle = 30.0 + (365.0 / 10.0)
     assert math.isclose(latest.operating_cycle, expected_operating_cycle)
-    # TODO: Fix revenue_growth mapping for ttm period
-    # assert math.isclose(latest.revenue_growth, 0.125)
+    assert math.isclose(latest.revenue_growth, 0.125)
     assert latest.earnings_per_share == 5.5
     assert latest.free_cash_flow_per_share == 4.5
 
