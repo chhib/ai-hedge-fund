@@ -113,6 +113,17 @@ class IBKRClient:
         """Submit an order to the what-if endpoint."""
         return self._request("POST", f"/iserver/account/{account_id}/orders/whatif", json={"orders": [order]})
 
+    def preview_orders_batch(self, account_id: str, orders: List[Dict[str, Any]]) -> Any:
+        """Submit multiple orders to the what-if endpoint in a single request.
+
+        This avoids the cash depletion issue where IBKR's what-if endpoint treats
+        sequential previews as pending orders, causing subsequent previews to fail
+        with "Cash needed for this order and other pending orders" errors.
+        """
+        if not orders:
+            return []
+        return self._request("POST", f"/iserver/account/{account_id}/orders/whatif", json={"orders": orders})
+
     def place_order(self, account_id: str, order: Dict[str, Any]) -> Any:
         """Place an order."""
         return self._request("POST", f"/iserver/account/{account_id}/orders", json={"orders": [order]})

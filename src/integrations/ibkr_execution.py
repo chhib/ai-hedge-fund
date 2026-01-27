@@ -162,40 +162,20 @@ def execute_ibkr_rebalance_trades(
     snapshot = ibkr.get_marketdata_snapshot([order.conid for order in resolved_orders])
     _apply_snapshot_prices(resolved_orders, snapshot, report)
 
-    for resolved in resolved_orders:
-        order_payload = _build_order_payload(resolved, resolved_account)
+    # Build all order payloads upfront
+    order_payloads = [_build_order_payload(resolved, resolved_account) for resolved in resolved_orders]
 
-        try:
-            preview_response = ibkr.preview_order(resolved_account, order_payload)
-        except IBKRError as exc:
-            message = str(exc)
-            report.warnings.append(f"{resolved.intent.ticker}: Preview failed ({message})")
-            report.skipped.append(
-                OrderSkip(ticker=resolved.intent.ticker, action=resolved.intent.action, reason="Preview failed")
-            )
-            if _is_permission_error(message):
-                report.warnings.append("IBKR trading permissions missing; aborting remaining previews.")
-                report.aborted = True
-                break
+    # Try batch preview first to avoid cash depletion issue
+    batch_preview_results = _run_batch_preview(ibkr, resolved_account, resolved_orders, order_payloads, report)
+
+    # Process preview results and handle execution
+    for i, resolved in enumerate(resolved_orders):
+        preview_result = batch_preview_results.get(i)
+        if preview_result is None:
+            # Already handled in _run_batch_preview (skipped or error)
             continue
 
-        report.previews.append({"intent": resolved.intent, "response": preview_response})
-
-        error_message = _extract_error_message(preview_response)
-        if error_message:
-            report.warnings.append(f"{resolved.intent.ticker}: Preview error ({error_message})")
-            report.skipped.append(
-                OrderSkip(
-                    ticker=resolved.intent.ticker,
-                    action=resolved.intent.action,
-                    reason=f"Preview error: {error_message}",
-                )
-            )
-            if _is_permission_error(error_message):
-                report.warnings.append("IBKR trading permissions missing; aborting remaining previews.")
-                report.aborted = True
-                break
-            continue
+        preview_response, order_payload = preview_result
 
         warning = _extract_reply(preview_response)
         if warning:
@@ -229,6 +209,157 @@ def execute_ibkr_rebalance_trades(
                 report.skipped.append(OrderSkip(ticker=resolved.intent.ticker, action=resolved.intent.action, reason="Submission warning declined"))
 
     return report
+
+
+def _run_batch_preview(
+    ibkr: IBKRClient,
+    account_id: str,
+    resolved_orders: List[ResolvedOrder],
+    order_payloads: List[Dict[str, Any]],
+    report: ExecutionReport,
+) -> Dict[int, tuple]:
+    """Run batch preview and return mapping of order index to (preview_response, order_payload).
+
+    Returns None for orders that failed or were skipped.
+    Falls back to sequential previews if batch preview fails entirely.
+    """
+    results: Dict[int, tuple] = {}
+
+    # Try batch preview first
+    try:
+        batch_response = ibkr.preview_orders_batch(account_id, order_payloads)
+    except IBKRError as exc:
+        message = str(exc)
+        if _is_permission_error(message):
+            report.warnings.append(f"IBKR trading permissions missing: {message}")
+            report.aborted = True
+            for resolved in resolved_orders:
+                report.skipped.append(
+                    OrderSkip(ticker=resolved.intent.ticker, action=resolved.intent.action, reason="Permission error")
+                )
+            return results
+        # Fall back to sequential preview on batch failure
+        return _run_sequential_preview(ibkr, account_id, resolved_orders, order_payloads, report)
+
+    # Process batch response
+    # IBKR batch response can be a list of order results or a dict with error
+    if isinstance(batch_response, dict):
+        error_message = _extract_error_message(batch_response)
+        if error_message:
+            if _is_permission_error(error_message):
+                report.warnings.append(f"IBKR trading permissions missing: {error_message}")
+                report.aborted = True
+                for resolved in resolved_orders:
+                    report.skipped.append(
+                        OrderSkip(ticker=resolved.intent.ticker, action=resolved.intent.action, reason="Permission error")
+                    )
+                return results
+            # Fall back to sequential preview
+            return _run_sequential_preview(ibkr, account_id, resolved_orders, order_payloads, report)
+
+    # Parse batch response - it may be a list of results or nested structure
+    preview_items = _extract_batch_preview_items(batch_response, len(resolved_orders))
+
+    for i, resolved in enumerate(resolved_orders):
+        order_payload = order_payloads[i]
+        preview_response = preview_items[i] if i < len(preview_items) else None
+
+        if preview_response is None:
+            report.warnings.append(f"{resolved.intent.ticker}: No preview response in batch")
+            report.skipped.append(
+                OrderSkip(ticker=resolved.intent.ticker, action=resolved.intent.action, reason="No preview response")
+            )
+            continue
+
+        report.previews.append({"intent": resolved.intent, "response": preview_response})
+
+        error_message = _extract_error_message(preview_response)
+        if error_message:
+            report.warnings.append(f"{resolved.intent.ticker}: Preview error ({error_message})")
+            report.skipped.append(
+                OrderSkip(
+                    ticker=resolved.intent.ticker,
+                    action=resolved.intent.action,
+                    reason=f"Preview error: {error_message}",
+                )
+            )
+            if _is_permission_error(error_message):
+                report.warnings.append("IBKR trading permissions missing; aborting remaining previews.")
+                report.aborted = True
+                break
+            continue
+
+        results[i] = (preview_response, order_payload)
+
+    return results
+
+
+def _run_sequential_preview(
+    ibkr: IBKRClient,
+    account_id: str,
+    resolved_orders: List[ResolvedOrder],
+    order_payloads: List[Dict[str, Any]],
+    report: ExecutionReport,
+) -> Dict[int, tuple]:
+    """Fallback to sequential preview when batch preview fails."""
+    results: Dict[int, tuple] = {}
+
+    for i, resolved in enumerate(resolved_orders):
+        order_payload = order_payloads[i]
+
+        try:
+            preview_response = ibkr.preview_order(account_id, order_payload)
+        except IBKRError as exc:
+            message = str(exc)
+            report.warnings.append(f"{resolved.intent.ticker}: Preview failed ({message})")
+            report.skipped.append(
+                OrderSkip(ticker=resolved.intent.ticker, action=resolved.intent.action, reason="Preview failed")
+            )
+            if _is_permission_error(message):
+                report.warnings.append("IBKR trading permissions missing; aborting remaining previews.")
+                report.aborted = True
+                break
+            continue
+
+        report.previews.append({"intent": resolved.intent, "response": preview_response})
+
+        error_message = _extract_error_message(preview_response)
+        if error_message:
+            report.warnings.append(f"{resolved.intent.ticker}: Preview error ({error_message})")
+            report.skipped.append(
+                OrderSkip(
+                    ticker=resolved.intent.ticker,
+                    action=resolved.intent.action,
+                    reason=f"Preview error: {error_message}",
+                )
+            )
+            if _is_permission_error(error_message):
+                report.warnings.append("IBKR trading permissions missing; aborting remaining previews.")
+                report.aborted = True
+                break
+            continue
+
+        results[i] = (preview_response, order_payload)
+
+    return results
+
+
+def _extract_batch_preview_items(batch_response: Any, expected_count: int) -> List[Any]:
+    """Extract individual preview results from batch response."""
+    if isinstance(batch_response, list):
+        return batch_response
+
+    # Handle nested response structures
+    if isinstance(batch_response, dict):
+        # Some IBKR responses nest results under 'orders' or 'order'
+        if "orders" in batch_response:
+            return batch_response["orders"] if isinstance(batch_response["orders"], list) else [batch_response["orders"]]
+        if "order" in batch_response:
+            return batch_response["order"] if isinstance(batch_response["order"], list) else [batch_response["order"]]
+        # Single order response wrapped in dict
+        return [batch_response]
+
+    return []
 
 
 def _resolve_contracts(

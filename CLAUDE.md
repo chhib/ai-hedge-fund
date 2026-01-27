@@ -27,7 +27,17 @@ This configuration supports the AI hedge fund project's development workflow, in
 # Repository Guidelines
 
 ## Start Here
-Always open `PROJECT_LOG.md` at the start of every session to capture current context. Check any agent-specific logs or instructions after reviewing the project log and reconcile conflicts before proceeding; update the relevant log when you wrap up.
+At the start of every session:
+1. Read `logs/PROJECT_SUMMARY.md` for current status, goals, and architecture overview
+2. Read the latest session file (currently `logs/sessions/session_061.md`) for recent context
+3. Check any agent-specific logs and reconcile conflicts before proceeding
+
+When wrapping up a session:
+1. Add your session entry to the current session file (e.g., `logs/sessions/session_061.md`)
+2. Update `logs/PROJECT_SUMMARY.md` if there are significant status changes
+3. When a session file reaches 10 sessions, create the next file (e.g., `session_071.md`)
+
+**Session file structure**: `logs/sessions/session_NNN.md` contains sessions N through N+9.
 
 ## Project Structure & Module Organization
 Core Python sources live under `src/` (agents, tools, backtesting). CLI entry points are in `src/main.py` and `src/backtester.py`. The web app sits in `app/` with FastAPI backend code in `app/backend/` and the Vite/React frontend in `app/frontend/`. Tests mirror runtime code in `tests/`, with Börsdata work tracked via fixtures under `tests/backtesting/`.
