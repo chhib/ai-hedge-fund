@@ -158,6 +158,41 @@ cd app/frontend && npm install && npm run dev
 2. Run `poetry run hedge rebalance --portfolio-source ibkr --ibkr-account <acct>` (host/port flags available if you proxy the gateway).
 3. The new `IBKRClient` maps positions + ledger cash into the same `Portfolio` dataclass consumed by the manager, so you can switch between CSV snapshots and live pulls without touching downstream logic.
 
+### IBKR Order Preview + Execution
+
+- `--ibkr-whatif` runs Client Portal "what-if" previews for each rebalance order (no trades placed).
+- `--ibkr-execute` submits orders after previews, with a per-order confirmation prompt (use `--ibkr-yes` to auto-confirm).
+- `--dry-run` always disables execution even if `--ibkr-execute` is set.
+
+Example (preview only):
+
+```bash
+poetry run hedge rebalance \
+  --portfolio-source ibkr \
+  --universe portfolios/borsdata_universe.txt \
+  --analysts favorites \
+  --ibkr-whatif
+```
+
+### Resolving Ambiguous Contracts
+
+If IBKR returns multiple contract matches for a ticker, execution will skip that order for safety. You can provide an explicit override in `data/ibkr_contract_mappings.json`:
+
+```json
+{
+  "contracts": {
+    "LUG": { "conid": 123456, "exchange": "TSE", "currency": "CAD" },
+    "FDEV": { "conid": 234567, "exchange": "LSE", "currency": "GBP" }
+  }
+}
+```
+
+Only use overrides after validating the conid/exchange in Client Portal or TWS. The execution flow will only accept overrides that also appear in IBKR contract search results.
+
+### Trading Permissions
+
+If preview responses show `No trading permissions`, the preview loop aborts to avoid any accidental order attempts. Update your IBKR trading permissions for the relevant markets and re-run the preview.
+
 ---
 
 ## Testing

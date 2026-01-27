@@ -1,6 +1,6 @@
 # Börsdata Integration Project Log
 
-_Last updated: 2026-01-17 (Session 60)_
+_Last updated: 2026-01-27 (Session 68)_
 
 ## End Goal
 Rebuild the data ingestion and processing pipeline so the application relies on Börsdata's REST API (per `README_Borsdata_API.md` and https://apidoc.borsdata.se/swagger/index.html). The system should let a user set a `BORSDATA_API_KEY` in `.env`, accept Börsdata-native tickers, and otherwise preserve the current user-facing workflows and capabilities.
@@ -982,3 +982,29 @@ The system now operates efficiently at scale with comprehensive financial data i
   - Network errors now get 3 retries with exponential backoff (1s, 2s, 4s max 10s)
   - Error messages now include exception type and details, e.g., `Börsdata request failed (ConnectionError: Connection refused)`
 - **Verification**: All 24 data module tests pass; no regressions in existing functionality
+
+### Session 64 (IBKR Rebalance Execution Planning)
+- **Planning**: Captured an implementation plan to translate hedge rebalance recommendations into IBKR Client Portal order previews and submissions, including contract lookup, market data snapshots, and reply confirmation handling.
+- **Next Steps**: Implement order-intent conversion plus IBKR order/what-if/reply endpoints, then wire into the hedge CLI with safety prompts and logging.
+
+### Session 65 (IBKR Rebalance Execution Implementation)
+- **IBKR Execution Module**: Added `src/integrations/ibkr_execution.py` to convert rebalance recommendations into IBKR order intents, resolve contracts, snapshot prices, run what-if previews, and (optionally) submit orders with per-order confirmations.
+- **Safety Gates**: Order placement now requires explicit `--ibkr-execute` plus confirmation (or `--ibkr-yes`). Preview-only mode is default; dry-run disables execution automatically.
+- **IBKR Client Extensions**: Added account resolution, contract lookup/search, market data snapshot, what-if, order submission, and reply helpers in `src/integrations/ibkr_client.py`.
+- **Ticker Mapping**: Implemented Börsdata→IBKR reverse mapping helper to improve symbol resolution when executing trades.
+- **CLI Wiring**: Added `--ibkr-whatif`, `--ibkr-execute`, and `--ibkr-yes` flags to both `poetry run hedge rebalance` and `python src/portfolio_manager.py`, with execution summaries printed after rebalances.
+- **Tests**: Added `tests/integrations/test_ibkr_execution.py`, updated IBKR client tests for account resolution + ledger shape, and ran `poetry run pytest tests/integrations/test_ibkr_client.py tests/integrations/test_ibkr_execution.py -q` (9 passed).
+
+### Session 66 (IBKR API Prefix Fix)
+- **Fix**: Normalized `/iserver/*` and `/trsrv/*` calls in `src/integrations/ibkr_client.py` to auto-prefix `/v1/api`, fixing 404 errors from Client Portal Gateway.
+- **Tests**: Added coverage ensuring `/iserver/accounts` requests are correctly prefixed; reran IBKR integration tests (`poetry run pytest tests/integrations/test_ibkr_client.py tests/integrations/test_ibkr_execution.py -q`, 10 passed).
+
+### Session 67 (IBKR Preview Error Guard)
+- **Fix**: Catch IBKR preview errors during what-if calls, record a warning + skip instead of crashing the rebalance flow.
+- **Tests**: Added regression test ensuring preview errors never trigger order placement; ran `poetry run pytest tests/integrations/test_ibkr_execution.py -q` (6 passed).
+
+### Session 68 (IBKR Contract Overrides + Permission Abort)
+- **Execution Safety**: Added explicit contract overrides via `data/ibkr_contract_mappings.json`, plus smarter contract selection (exact symbol/local symbol or unique SMART exchange).
+- **Permission Guard**: Preview errors now surface IBKR error messages; "No trading permissions" aborts remaining previews to avoid repeated failures.
+- **Docs**: Documented IBKR order preview/execute workflow, override file format, and permission handling in `README.md`.
+- **Tests**: Added coverage for contract overrides and SMART selection, plus enforced empty overrides for test isolation.

@@ -15,10 +15,11 @@ def test_fetch_portfolio_transforms_positions_and_cash(monkeypatch):
             {"symbol": "ERIC B", "position": 5, "avgCost": "95.5", "currency": "SEK"},
             {"symbol": None, "conid": 999, "position": 1, "avgCost": 1.0, "currency": "USD"},
         ],
-        ("GET", "/v1/api/portfolio/U123/ledger"): [
-            {"currency": "USD", "cashbalance": 1250.0},
-            {"currency": "SEK", "cashbalance": "900"},
-        ],
+        ("GET", "/v1/api/portfolio/U123/ledger"): {
+            "USD": {"cashbalance": 1250.0},
+            "SEK": {"cashbalance": "900"},
+            "BASE": {"cashbalance": 0.0},
+        },
     }
 
     def _fake_request(method, path):
@@ -41,3 +42,55 @@ def test_fetch_portfolio_raises_when_no_accounts(monkeypatch):
 
     with pytest.raises(IBKRError):
         client.fetch_portfolio()
+
+
+def test_resolve_account_id_prefers_selected(monkeypatch):
+    client = IBKRClient(base_url="https://example.com")
+
+    def _fake_request(method, path, params=None, json=None):
+        if path == "/iserver/accounts":
+            return {"accounts": ["U111", "U222"], "selectedAccount": "U222"}
+        if path == "/v1/api/portfolio/accounts":
+            return [{"accountId": "U123"}]
+        return []
+
+    monkeypatch.setattr(client, "_request", _fake_request)
+
+    assert client.resolve_account_id() == "U222"
+
+
+def test_resolve_account_id_falls_back_to_portfolio_accounts(monkeypatch):
+    client = IBKRClient(base_url="https://example.com")
+
+    def _fake_request(method, path, params=None, json=None):
+        if path == "/iserver/accounts":
+            return {}
+        if path == "/v1/api/portfolio/accounts":
+            return [{"accountId": "U999"}]
+        return []
+
+    monkeypatch.setattr(client, "_request", _fake_request)
+
+    assert client.resolve_account_id() == "U999"
+
+
+def test_request_prefixes_iserver_paths(monkeypatch):
+    client = IBKRClient(base_url="https://example.com")
+
+    seen = {}
+
+    class DummyResponse:
+        status_code = 200
+
+        def json(self):
+            return {}
+
+    def _fake_request(method, url, timeout=None, params=None, json=None):
+        seen["url"] = url
+        return DummyResponse()
+
+    monkeypatch.setattr(client.session, "request", _fake_request)
+
+    client._request("GET", "/iserver/accounts")
+
+    assert seen["url"] == "https://example.com/v1/api/iserver/accounts"

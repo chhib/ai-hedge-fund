@@ -6,6 +6,7 @@ Analyzes current portfolio and investment universe using selected analysts,
 then generates rebalancing recommendations.
 """
 
+import sys
 import warnings
 
 # Suppress LangChain deprecation warnings about debug imports
@@ -53,7 +54,10 @@ load_dotenv()
 @click.option("--ibkr-port", type=int, default=5000, show_default=True, help="Client Portal port")
 @click.option("--ibkr-verify-ssl/--no-ibkr-verify-ssl", default=False, show_default=True, help="Verify SSL certificates when calling IBKR")
 @click.option("--ibkr-timeout", type=float, default=30.0, show_default=True, help="Timeout in seconds for IBKR requests")
-def main(portfolio, universe, universe_tickers, analysts, model, model_provider, max_workers, max_holdings, max_position, min_position, min_trade, home_currency, no_cache, no_cache_agents, verbose, dry_run, test, portfolio_source, ibkr_account, ibkr_host, ibkr_port, ibkr_verify_ssl, ibkr_timeout):
+@click.option("--ibkr-whatif", is_flag=True, help="Preview IBKR orders using what-if (no trades)")
+@click.option("--ibkr-execute", is_flag=True, help="Place IBKR orders (requires confirmation)")
+@click.option("--ibkr-yes", is_flag=True, help="Skip IBKR trade confirmation prompts")
+def main(portfolio, universe, universe_tickers, analysts, model, model_provider, max_workers, max_holdings, max_position, min_position, min_trade, home_currency, no_cache, no_cache_agents, verbose, dry_run, test, portfolio_source, ibkr_account, ibkr_host, ibkr_port, ibkr_verify_ssl, ibkr_timeout, ibkr_whatif, ibkr_execute, ibkr_yes):
     """
     AI Hedge Fund Portfolio Manager - Long-only portfolio rebalancing
 
@@ -113,6 +117,37 @@ def main(portfolio, universe, universe_tickers, analysts, model, model_provider,
         click.echo(f"Error: {exc}", err=True)
         raise click.Abort()
 
+    if ibkr_whatif or ibkr_execute:
+        if dry_run and ibkr_execute:
+            click.secho("⚠️  Dry-run mode: IBKR execution disabled (preview only).", fg="yellow")
+            ibkr_execute = False
+        if ibkr_execute and not ibkr_yes and not sys.stdin.isatty():
+            click.secho("Error: --ibkr-execute requires interactive confirmation or --ibkr-yes in non-interactive mode.", fg="red")
+            raise click.Abort()
+
+        from src.integrations.ibkr_execution import execute_ibkr_rebalance_trades
+        from src.services.portfolio_runner import _ensure_ibkr_gateway
+
+        base_url = _ensure_ibkr_gateway(config)
+        confirm = None
+        if ibkr_execute:
+            if ibkr_yes:
+                confirm = lambda _: True
+            else:
+                confirm = lambda msg: click.confirm(msg, default=False)
+
+        report = execute_ibkr_rebalance_trades(
+            outcome.results.get("recommendations", []),
+            base_url=base_url,
+            account_id=ibkr_account,
+            verify_ssl=ibkr_verify_ssl,
+            timeout=ibkr_timeout,
+            preview_only=True,
+            execute=ibkr_execute,
+            confirm=confirm,
+        )
+        _render_ibkr_report(report)
+
     print("\n" + "=" * 60)
     response = click.prompt("Export full analyst transcript to markdown? (y/N)", default="N", show_default=False)
     if response.lower() in ["y", "yes"]:
@@ -123,6 +158,25 @@ def main(portfolio, universe, universe_tickers, analysts, model, model_provider,
             print(f"\n✅ Analyst transcript saved to: {output_path}")
         except Exception as e:
             click.echo(f"\n⚠️  Error exporting transcript: {e}", err=True)
+
+
+def _render_ibkr_report(report) -> None:
+    click.echo("\n" + "-" * 40)
+    title = "IBKR ORDER EXECUTION" if report.executed else "IBKR ORDER PREVIEW"
+    click.echo(title)
+    click.echo("-" * 40)
+    click.echo(f"Account: {report.account_id or 'n/a'}")
+    click.echo(f"Intents: {len(report.intents)} | Resolved: {len(report.resolved)} | Skipped: {len(report.skipped)}")
+    if getattr(report, "aborted", False):
+        click.echo("Status: aborted due to trading permissions")
+    if report.warnings:
+        click.echo("Warnings:")
+        for warning in report.warnings:
+            click.echo(f"  • {warning}")
+    if report.skipped:
+        click.echo("Skipped:")
+        for skip in report.skipped:
+            click.echo(f"  • {skip.ticker} ({skip.action}): {skip.reason}")
 
 
 if __name__ == "__main__":

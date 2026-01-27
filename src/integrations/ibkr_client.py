@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterable, List, Optional
 
 import requests
 
@@ -57,6 +57,70 @@ class IBKRClient:
     def get_ledger(self, account_id: str) -> Dict[str, Any]:
         return self._request("GET", f"/v1/api/portfolio/{account_id}/ledger") or {}
 
+    def get_trading_accounts(self) -> Any:
+        """Return the list of trading accounts from the /iserver namespace."""
+        return self._request("GET", "/iserver/accounts")
+
+    def resolve_account_id(self, preferred: Optional[str] = None) -> Optional[str]:
+        """Resolve an IBKR trading account id."""
+        if preferred:
+            return preferred
+
+        accounts = self.get_trading_accounts()
+        if isinstance(accounts, dict):
+            selected = accounts.get("selectedAccount")
+            if selected:
+                return selected
+            account_list = accounts.get("accounts") or accounts.get("accountIds")
+            if isinstance(account_list, list) and account_list:
+                return account_list[0]
+        elif isinstance(accounts, list) and accounts:
+            first = accounts[0]
+            if isinstance(first, dict):
+                return first.get("accountId") or first.get("acctId")
+            if isinstance(first, str):
+                return first
+
+        # Fallback to portfolio account listing
+        accounts = self.list_accounts()
+        if accounts:
+            first = accounts[0]
+            return first.get("accountId") or first.get("acctId")
+        return None
+
+    def get_stock_contracts(self, symbols: Iterable[str] | str) -> Any:
+        """Lookup stock contracts for one or more symbols."""
+        if isinstance(symbols, str):
+            joined = symbols
+        else:
+            joined = ",".join(symbols)
+        return self._request("GET", "/trsrv/stocks", params={"symbols": joined})
+
+    def search_contracts(self, symbol: str, sec_type: str = "STK") -> Any:
+        """Search for contracts using the security definition endpoint."""
+        return self._request("GET", "/iserver/secdef/search", params={"symbol": symbol, "secType": sec_type})
+
+    def get_contract_info(self, conid: int) -> Any:
+        """Fetch contract details for a conid."""
+        return self._request("GET", f"/iserver/contract/{conid}/info")
+
+    def get_marketdata_snapshot(self, conids: Iterable[int], fields: str = "31,84,86") -> Any:
+        """Fetch a market data snapshot for conids."""
+        joined = ",".join(str(c) for c in conids)
+        return self._request("GET", "/iserver/marketdata/snapshot", params={"conids": joined, "fields": fields})
+
+    def preview_order(self, account_id: str, order: Dict[str, Any]) -> Any:
+        """Submit an order to the what-if endpoint."""
+        return self._request("POST", f"/iserver/account/{account_id}/orders/whatif", json={"orders": [order]})
+
+    def place_order(self, account_id: str, order: Dict[str, Any]) -> Any:
+        """Place an order."""
+        return self._request("POST", f"/iserver/account/{account_id}/orders", json={"orders": [order]})
+
+    def reply(self, reply_id: str, confirmed: bool = True) -> Any:
+        """Reply to an order warning/confirmation prompt."""
+        return self._request("POST", f"/iserver/reply/{reply_id}", json={"confirmed": confirmed})
+
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
@@ -67,10 +131,14 @@ class IBKRClient:
         first = accounts[0]
         return first.get("accountId") or first.get("acctId")
 
-    def _request(self, method: str, path: str) -> Any:
-        url = f"{self.base_url}{path}"
+    def _request(self, method: str, path: str, params: Optional[Dict[str, Any]] = None, json: Optional[Dict[str, Any]] = None) -> Any:
+        normalized_path = path
+        if not path.startswith("/v1/api") and (path.startswith("/iserver") or path.startswith("/trsrv")):
+            normalized_path = f"/v1/api{path}"
+
+        url = f"{self.base_url}{normalized_path}"
         try:
-            response = self.session.request(method=method.upper(), url=url, timeout=self.timeout)
+            response = self.session.request(method=method.upper(), url=url, timeout=self.timeout, params=params, json=json)
         except requests.RequestException as exc:  # pragma: no cover - network failure path
             raise IBKRError(f"IBKR request failed: {exc}") from exc
 

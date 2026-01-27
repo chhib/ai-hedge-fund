@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 from typing import List, Optional
 
@@ -43,6 +44,9 @@ def cli() -> None:
 @click.option("--ibkr-port", default=5000, show_default=True, type=int, help="Client Portal port")
 @click.option("--ibkr-verify-ssl/--no-ibkr-verify-ssl", default=False, show_default=True, help="Verify SSL certificates for IBKR calls")
 @click.option("--ibkr-timeout", default=30.0, show_default=True, type=float, help="Timeout in seconds for IBKR API calls")
+@click.option("--ibkr-whatif", is_flag=True, help="Preview IBKR orders using what-if (no trades)")
+@click.option("--ibkr-execute", is_flag=True, help="Place IBKR orders (requires confirmation)")
+@click.option("--ibkr-yes", is_flag=True, help="Skip IBKR trade confirmation prompts")
 def rebalance(
     portfolio: Optional[Path],
     universe: Optional[Path],
@@ -69,6 +73,9 @@ def rebalance(
     ibkr_port: int,
     ibkr_verify_ssl: bool,
     ibkr_timeout: float,
+    ibkr_whatif: bool,
+    ibkr_execute: bool,
+    ibkr_yes: bool,
 ) -> None:
     """Run the weekly long-only rebalance flow."""
 
@@ -109,6 +116,37 @@ def rebalance(
     except Exception as exc:  # pragma: no cover - CLI level guardrail
         click.secho(f"Error: {exc}", fg="red")
         raise click.Abort()
+
+    if ibkr_whatif or ibkr_execute:
+        if dry_run and ibkr_execute:
+            click.secho("⚠️  Dry-run mode: IBKR execution disabled (preview only).", fg="yellow")
+            ibkr_execute = False
+        if ibkr_execute and not ibkr_yes and not sys.stdin.isatty():
+            click.secho("Error: --ibkr-execute requires interactive confirmation or --ibkr-yes in non-interactive mode.", fg="red")
+            raise click.Abort()
+
+        from src.integrations.ibkr_execution import execute_ibkr_rebalance_trades
+        from src.services.portfolio_runner import _ensure_ibkr_gateway
+
+        base_url = _ensure_ibkr_gateway(config)
+        confirm = None
+        if ibkr_execute:
+            if ibkr_yes:
+                confirm = lambda _: True
+            else:
+                confirm = lambda msg: click.confirm(msg, default=False)
+
+        report = execute_ibkr_rebalance_trades(
+            outcome.results.get("recommendations", []),
+            base_url=base_url,
+            account_id=ibkr_account,
+            verify_ssl=ibkr_verify_ssl,
+            timeout=ibkr_timeout,
+            preview_only=True,
+            execute=ibkr_execute,
+            confirm=confirm,
+        )
+        _render_ibkr_report(report)
 
     if export_transcript:
         _export_transcript(outcome.session_id)
@@ -199,6 +237,25 @@ def _export_transcript(session_id: str) -> None:
         click.secho(f"Transcript export failed: {exc}", fg="red")
         return
     click.secho(f"Transcript saved to {output}", fg="green")
+
+
+def _render_ibkr_report(report) -> None:
+    click.echo("\n" + "-" * 40)
+    title = "IBKR ORDER EXECUTION" if report.executed else "IBKR ORDER PREVIEW"
+    click.echo(title)
+    click.echo("-" * 40)
+    click.echo(f"Account: {report.account_id or 'n/a'}")
+    click.echo(f"Intents: {len(report.intents)} | Resolved: {len(report.resolved)} | Skipped: {len(report.skipped)}")
+    if getattr(report, "aborted", False):
+        click.echo("Status: aborted due to trading permissions")
+    if report.warnings:
+        click.echo("Warnings:")
+        for warning in report.warnings:
+            click.echo(f"  • {warning}")
+    if report.skipped:
+        click.echo("Skipped:")
+        for skip in report.skipped:
+            click.echo(f"  • {skip.ticker} ({skip.action}): {skip.reason}")
 
 
 @cli.group()

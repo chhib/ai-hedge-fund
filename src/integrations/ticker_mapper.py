@@ -149,6 +149,22 @@ class TickerMapper:
         """Get list of tickers that couldn't be mapped."""
         return sorted(self._unmapped)
 
+    def map_borsdata_to_ibkr(self, borsdata_ticker: str) -> str:
+        """Map a Börsdata ticker back to IBKR format when possible."""
+        if not borsdata_ticker:
+            return borsdata_ticker
+
+        upper = borsdata_ticker.upper()
+        for ibkr, borsdata in self._mappings.items():
+            if borsdata.upper() == upper:
+                return ibkr
+
+        match = re.match(r'^(.+)\s([A-C])$', upper)
+        if match:
+            return f"{match.group(1)}.{match.group(2)}"
+
+        return borsdata_ticker
+
 
 # Global singleton
 _mapper: Optional[TickerMapper] = None
@@ -165,3 +181,8 @@ def get_ticker_mapper() -> TickerMapper:
 def map_ibkr_to_borsdata(ibkr_ticker: str) -> str:
     """Convenience function to map a single ticker."""
     return get_ticker_mapper().map_ticker(ibkr_ticker)
+
+
+def map_borsdata_to_ibkr(borsdata_ticker: str) -> str:
+    """Convenience function to map a single Börsdata ticker to IBKR."""
+    return get_ticker_mapper().map_borsdata_to_ibkr(borsdata_ticker)
