@@ -972,3 +972,13 @@ The system now operates efficiently at scale with comprehensive financial data i
   - `poetry run hedge cache clear --tickers DORO,LUND.B`: Clear specific tickers
   - `poetry run hedge cache clear`: Clear entire cache (with confirmation)
 - **Usage**: Users can clear stale cache with `--no-cache` flag or `hedge cache clear --tickers <failed_tickers>`
+
+### Session 63 (Börsdata Retry Logic & Error Logging)
+- **Issue**: Network errors during Börsdata API requests were not retried, and error messages lacked detail about the failure cause.
+- **Root Cause** (`src/data/borsdata_client.py:_request`):
+  - `requests.RequestException` was caught but immediately broke out of the retry loop instead of retrying
+  - Error message was generic "Börsdata request failed" without including the actual exception type or message
+- **Fix Implemented**:
+  - Network errors now get 3 retries with exponential backoff (1s, 2s, 4s max 10s)
+  - Error messages now include exception type and details, e.g., `Börsdata request failed (ConnectionError: Connection refused)`
+- **Verification**: All 24 data module tests pass; no regressions in existing functionality

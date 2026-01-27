@@ -117,9 +117,14 @@ class BorsdataClient:
             self.rate_limiter.acquire()
             try:
                 response = self.session.request(method.upper(), url, params=query_params, json=json)
-            except requests.RequestException as exc:  # pragma: no cover - network failure path
+            except requests.RequestException as exc:
                 last_error = exc
-                break
+                if attempt < self._max_retries:
+                    # Exponential backoff for network errors: 1s, 2s, 4s
+                    backoff = min(2 ** attempt, 10)
+                    self._sleep(backoff)
+                    continue
+                break  # Give up after all retries
 
             if response.status_code == 429 and attempt < self._max_retries:
                 retry_after_header = response.headers.get("Retry-After", "")
@@ -139,7 +144,8 @@ class BorsdataClient:
                 raise BorsdataAPIError(f"Failed to decode JSON for {path}") from exc
 
         if last_error is not None:
-            raise BorsdataAPIError("Börsdata request failed") from last_error
+            error_type = type(last_error).__name__
+            raise BorsdataAPIError(f"Börsdata request failed ({error_type}: {last_error})") from last_error
         raise BorsdataAPIError(f"Exceeded retry budget for {path}")
 
     def _refresh_instrument_cache(self, *, api_key: Optional[str]) -> None:
