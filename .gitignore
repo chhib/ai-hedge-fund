@@ -73,3 +73,9 @@ analyst_transcript_*.md
 portfolio_*.csv
 !portfolios/example_portfolio.csv
 !portfolios/empty_portfolio.csv
+
+# IBKR Client Portal Gateway (user-specific installation)
+clientportal.gw/
+
+# IBKR to Börsdata ticker mappings (user-specific)
+data/ibkr_borsdata_mappings.json

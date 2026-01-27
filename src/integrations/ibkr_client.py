@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional
 
 import requests
 
+from src.integrations.ticker_mapper import get_ticker_mapper, map_ibkr_to_borsdata
 from src.utils.portfolio_loader import Portfolio, Position
 
 
@@ -17,7 +18,7 @@ class IBKRError(RuntimeError):
 
 @dataclass(slots=True)
 class IBKRConnectionConfig:
-    base_url: str = "https://localhost:5000"
+    base_url: str = "https://localhost:5001"
     verify_ssl: bool = False
     timeout: float = 30.0
 
@@ -36,6 +37,9 @@ class IBKRClient:
         if not target_account:
             raise IBKRError("No IBKR account could be resolved")
 
+        # Load Börsdata tickers for smart mapping
+        _load_borsdata_tickers_for_mapper()
+
         positions = self.get_positions(target_account)
         ledger = self.get_ledger(target_account)
 
@@ -50,8 +54,8 @@ class IBKRClient:
     def get_positions(self, account_id: str) -> List[Dict[str, Any]]:
         return self._request("GET", f"/v1/api/portfolio/{account_id}/positions/0") or []
 
-    def get_ledger(self, account_id: str) -> List[Dict[str, Any]]:
-        return self._request("GET", f"/v1/api/portfolio/{account_id}/ledger") or []
+    def get_ledger(self, account_id: str) -> Dict[str, Any]:
+        return self._request("GET", f"/v1/api/portfolio/{account_id}/ledger") or {}
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -78,6 +82,25 @@ class IBKRClient:
             raise IBKRError("Failed to decode IBKR response") from exc
 
 
+def _load_borsdata_tickers_for_mapper() -> None:
+    """Load Börsdata instruments into the ticker mapper for smart matching."""
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+        from src.data.borsdata_client import BorsdataClient
+
+        mapper = get_ticker_mapper()
+        if mapper._borsdata_tickers:  # Already loaded
+            return
+
+        client = BorsdataClient()
+        nordic = client.get_instruments()
+        global_ = client.get_all_instruments()
+        mapper.load_borsdata_tickers(nordic, global_)
+    except Exception:
+        pass  # Continue without verification if Börsdata unavailable
+
+
 def _transform_positions(rows: List[Dict[str, Any]]) -> List[Position]:
     positions: List[Position] = []
     for row in rows:
@@ -89,12 +112,15 @@ def _transform_positions(rows: List[Dict[str, Any]]) -> List[Position]:
         except (TypeError, ValueError):
             continue
 
-        symbol = row.get("symbol") or row.get("localSymbol")
+        symbol = row.get("contractDesc") or row.get("symbol") or row.get("localSymbol")
         if not symbol:
             conid = row.get("conid")
             symbol = str(conid) if conid is not None else None
         if not symbol:
             continue
+
+        # Map to Börsdata format (learns and persists mappings)
+        symbol = map_ibkr_to_borsdata(symbol)
 
         avg_cost_raw = row.get("avgCost") or row.get("averageCost")
         try:
@@ -116,18 +142,24 @@ def _transform_positions(rows: List[Dict[str, Any]]) -> List[Position]:
     return positions
 
 
-def _transform_ledger_balances(rows: List[Dict[str, Any]]) -> Dict[str, float]:
+def _transform_ledger_balances(ledger: Dict[str, Any]) -> Dict[str, float]:
+    """Transform IBKR ledger response to cash balances dict.
+
+    Ledger format: {"USD": {"cashbalance": 100.0, ...}, "SEK": {...}, "BASE": {...}}
+    """
     balances: Dict[str, float] = {}
-    for row in rows:
-        currency = row.get("currency") or row.get("fxCurrency")
-        if not currency:
+    for currency, data in ledger.items():
+        if currency == "BASE":  # Skip the aggregate BASE entry
             continue
-        balance_raw = row.get("cashbalance") or row.get("cashBalance")
+        if not isinstance(data, dict):
+            continue
+        balance_raw = data.get("cashbalance") or data.get("cashBalance")
         try:
-            balance = float(balance_raw)
+            balance = float(balance_raw) if balance_raw is not None else 0.0
         except (TypeError, ValueError):
             continue
-        balances[currency] = balance
+        if balance != 0.0:  # Only include non-zero balances
+            balances[currency] = balance
     return balances
 
 

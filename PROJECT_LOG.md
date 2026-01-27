@@ -1,6 +1,6 @@
 # Börsdata Integration Project Log
 
-_Last updated: 2025-12-20 (Session 59)_
+_Last updated: 2026-01-17 (Session 60)_
 
 ## End Goal
 Rebuild the data ingestion and processing pipeline so the application relies on Börsdata's REST API (per `README_Borsdata_API.md` and https://apidoc.borsdata.se/swagger/index.html). The system should let a user set a `BORSDATA_API_KEY` in `.env`, accept Börsdata-native tickers, and otherwise preserve the current user-facing workflows and capabilities.
@@ -944,3 +944,31 @@ The system now operates efficiently at scale with comprehensive financial data i
     - `src/agents/news_sentiment.py:59-71,82-95,273-306` - Use position_date_acquired for filtering, added `_filter_events_by_date()` helper
   - **Progress Display**: Shows lookback mode (e.g., "since 2025-10-03" or "last 30 days")
 - **System Status**: Repository cleaned up with improved error handling, configurable parallelism, input validation, and position-aware news sentiment for smarter rebalancing decisions.
+
+### Session 60 (IBKR Trade Execution Planning)
+- **Investigation**: Confirmed existing Interactive Brokers Client Portal integration already pulls live positions + cash via `src/integrations/ibkr_client.py` (`/v1/api/portfolio/accounts`, `/positions/0`, `/ledger`) and is wired into the rebalance CLI through `--portfolio-source ibkr`.
+- **Planning**: Outlined a phased IBKR execution plan: extend the client with contract lookup + market data snapshots, translate recommendations into limit orders, add order preview + confirmation handling, and enforce interactive approval before submission.
+- **Requirements Captured**: Documented inputs needed to run against a real IBKR account (Client Portal Gateway/TWS running, account ID, API access enabled, market data subscriptions, and symbol/contract mappings for ambiguous tickers).
+
+### Session 61 (IBKR Execution Interface Selection)
+- **Decision**: Standardize on the IBKR Client Portal Gateway (REST) for execution work to stay aligned with the existing positions/cash integration and avoid adding TWS/IB Gateway dependencies.
+- **Safety Plan**: Defined an execution flow that remains read-only by default, uses order "what-if"/preview endpoints, and requires explicit per-order approvals before submission on live accounts.
+
+### Session 62 (Fix Failed Fetch Caching)
+- **Issue**: Failed API fetches (e.g., "Ticker 'DORO' not found") were being cached, causing subsequent runs to load stale empty data instead of retrying.
+- **Root Cause Analysis**:
+  - API functions in `src/tools/api.py` catch `BorsdataAPIError` and return empty lists `[]` instead of raising
+  - The parallel wrapper caches all results, including empty ones from failures
+  - Subsequent runs load from cache without retrying failed tickers
+- **Fix Implemented** (`src/data/parallel_api_wrapper.py`):
+  - Track tickers where API calls throw exceptions → mark as failed
+  - Detect tickers with multiple empty critical data types (prices, metrics, line_items) → mark as failed
+  - Exclude failed tickers from cache storage with warning message
+- **Cache Management Added** (`src/data/prefetch_store.py`):
+  - `delete_tickers()`: Remove cache entries for specific tickers
+  - `get_cached_tickers()`: List all cached tickers
+- **CLI Commands Added** (`src/cli/hedge.py`):
+  - `poetry run hedge cache list`: Show all cached tickers
+  - `poetry run hedge cache clear --tickers DORO,LUND.B`: Clear specific tickers
+  - `poetry run hedge cache clear`: Clear entire cache (with confirmation)
+- **Usage**: Users can clear stale cache with `--no-cache` flag or `hedge cache clear --tickers <failed_tickers>`

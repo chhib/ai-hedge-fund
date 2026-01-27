@@ -516,6 +516,11 @@ async def parallel_fetch_ticker_data(
         for ticker, payload in cached_payloads.items():
             ticker_data[ticker] = dict(payload)
 
+        # Track tickers that had fetch failures - these should NOT be cached
+        failed_tickers: set = set()
+        # Track empty results that may indicate API failures (printed errors in api.py)
+        empty_critical_data: Dict[str, set] = {}
+
         for item in results_with_info:
             if isinstance(item, Exception):
                 # This case might be complex to handle if we don't know which task failed.
@@ -527,8 +532,22 @@ async def parallel_fetch_ticker_data(
             if isinstance(result, Exception):
                 vprint(f"⚠️  Error fetching {data_type} for {ticker}: {result}")
                 ticker_data[ticker][data_type] = []
+                failed_tickers.add(ticker)  # Mark for cache exclusion
             else:
                 ticker_data[ticker][data_type] = result
+                # Track empty critical data types (prices, metrics, line_items)
+                # These often indicate API errors that were caught and logged
+                if data_type in ("prices", "metrics", "line_items") and not result:
+                    if ticker not in empty_critical_data:
+                        empty_critical_data[ticker] = set()
+                    empty_critical_data[ticker].add(data_type)
+
+        # Mark tickers with multiple empty critical data types as failed
+        # (Having one empty type could be legitimate, but multiple usually means API errors)
+        for ticker, empty_types in empty_critical_data.items():
+            if len(empty_types) >= 2:
+                failed_tickers.add(ticker)
+                vprint(f"⚠️  Marking {ticker} as failed (empty: {', '.join(sorted(empty_types))})")
 
         # Post-process to extract market_cap from metrics if requested
         if include_market_caps:
@@ -547,14 +566,17 @@ async def parallel_fetch_ticker_data(
                     ticker_data[ticker]["market_cap"] = ticker_data[ticker].get("market_cap")
 
         # Persist newly fetched payloads so future runs can reuse them
+        # IMPORTANT: Exclude tickers that had fetch failures - they should be retried
         if tickers_to_fetch:
             payloads_to_store = {
                 ticker: ticker_data.get(ticker, {})
                 for ticker in tickers_to_fetch
-                if ticker_data.get(ticker)
+                if ticker_data.get(ticker) and ticker not in failed_tickers
             }
             if payloads_to_store:
                 store.store_batch(payloads_to_store, params)
+            if failed_tickers:
+                vprint(f"⚠️  Not caching {len(failed_tickers)} ticker(s) with fetch failures: {', '.join(sorted(failed_tickers))}")
 
         return ticker_data
     # End of PrefetchStore context manager

@@ -201,5 +201,50 @@ def _export_transcript(session_id: str) -> None:
     click.secho(f"Transcript saved to {output}", fg="green")
 
 
+@cli.group()
+def cache() -> None:
+    """Manage the Börsdata prefetch cache."""
+
+
+@cache.command("clear")
+@click.option("--tickers", help="Comma-separated tickers to clear (clears all if omitted)")
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt")
+def cache_clear(tickers: Optional[str], yes: bool) -> None:
+    """Clear cache entries for specific tickers or all cache."""
+    from src.data.prefetch_store import PrefetchStore
+
+    with PrefetchStore() as store:
+        if tickers:
+            ticker_list = [t.strip().upper() for t in tickers.split(",") if t.strip()]
+            if not yes:
+                click.confirm(f"Clear cache for {len(ticker_list)} ticker(s)?", abort=True)
+            deleted = store.delete_tickers(ticker_list)
+            click.secho(f"✓ Cleared {deleted} cache entries for: {', '.join(ticker_list)}", fg="green")
+        else:
+            cached = store.get_cached_tickers()
+            if not cached:
+                click.secho("Cache is empty", fg="yellow")
+                return
+            if not yes:
+                click.confirm(f"Clear ALL {len(cached)} cached tickers?", abort=True)
+            deleted = store.delete_tickers(cached)
+            click.secho(f"✓ Cleared {deleted} cache entries", fg="green")
+
+
+@cache.command("list")
+def cache_list() -> None:
+    """List all tickers currently in the cache."""
+    from src.data.prefetch_store import PrefetchStore
+
+    with PrefetchStore() as store:
+        cached = store.get_cached_tickers()
+        if not cached:
+            click.secho("Cache is empty", fg="yellow")
+            return
+        click.echo(f"Cached tickers ({len(cached)}):")
+        for ticker in sorted(cached):
+            click.echo(f"  • {ticker}")
+
+
 if __name__ == "__main__":
     cli()

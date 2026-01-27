@@ -132,6 +132,27 @@ class PrefetchStore:
                     (ticker, params.end_date, params.start_date, fields_json, payload_json, timestamp),
                 )
 
+    def delete_tickers(self, tickers: Iterable[str]) -> int:
+        """Remove cache entries for the specified tickers.
+
+        Returns the number of rows deleted.
+        """
+        deleted = 0
+        with self._conn:
+            for raw_ticker in tickers:
+                ticker = raw_ticker.upper()
+                cursor = self._conn.execute(
+                    "DELETE FROM prefetch_cache WHERE ticker = ?",
+                    (ticker,),
+                )
+                deleted += cursor.rowcount
+        return deleted
+
+    def get_cached_tickers(self) -> list[str]:
+        """Return a list of all tickers in the cache."""
+        cursor = self._conn.execute("SELECT DISTINCT ticker FROM prefetch_cache")
+        return [row["ticker"] for row in cursor.fetchall()]
+
 
 # ----------------------------------------------------------------------
 # Serialization helpers
