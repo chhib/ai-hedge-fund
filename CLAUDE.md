@@ -55,4 +55,4 @@ Run `poetry run pytest` from the repo root; backtesting suites live in `tests/ba
 Follow the existing Conventional Commit style (`fix:`, `feat:`, `chore:`) observed in `git log`. Each PR should summarize scope, link any tracked issues, and note updates to Börsdata integration or rate-limiting logic. Include screenshots or CLI output when changes affect user-visible behavior.
 
 ## Börsdata Integration Focus
-Every contribution must advance or respect the ongoing migration to Börsdata. Verify `.env` handling for `BORSDATA_API_KEY`, retire legacy FinancialDatasets code paths, and document new endpoint usage in `PROJECT_LOG.md` before concluding work.
+Every contribution must advance or respect the ongoing migration to Börsdata. Verify `.env` handling for `BORSDATA_API_KEY`, retire legacy FinancialDatasets code paths, and document new endpoint usage in the session log before concluding work.

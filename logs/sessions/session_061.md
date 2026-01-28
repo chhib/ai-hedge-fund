@@ -72,6 +72,19 @@ _This is the active session file. New sessions should be added here._
   - Modified `execute_ibkr_rebalance_trades()` to use batch preview by default with sequential fallback
   - Updated tests to cover batch preview handling and error scenarios
 
+## Session 70 (IBKR Tick Size Rounding + Contract Mappings)
+- **Issue**: IBKR order previews failing for certain instruments due to price precision errors (e.g., "price 6.3667 does not conform to minimum price variation of 0.02") and multiple contract matches for ambiguous symbols.
+- **Tick Size Fix**: Added dynamic tick size rounding to conform to IBKR's minimum price variation rules:
+  - Added `get_contract_rules()` method to `IBKRClient` for fetching contract rules including tick size
+  - Added `_get_tick_size()` helper to extract increment from IBKR rules response
+  - Added `_round_to_tick()` helper to round prices to nearest valid tick
+  - Modified `execute_ibkr_rebalance_trades()` to fetch tick sizes and apply rounding before order submission
+- **Contract Mappings**: Created `data/ibkr_contract_mappings.json` with overrides for ambiguous tickers:
+  - TK → Teekay Corp Ltd (conid: 732027280, NYSE, USD)
+  - SFL → SFL Corp Ltd (conid: 390603973, NYSE, USD)
+  - LUMI → Lundin Mining Corp (conid: 278544593, SFB, SEK)
+- **Tests**: Updated fake IBKR client with `get_contract_rules()` mock; all 16 IBKR tests pass
+
 ---
 
 **IMPORTANT**: Update this log at the end of each work session. Use session numbers (Session 69, Session 70, etc.) for progress entries. When this file reaches Session 70, create a new file `session_071.md`.
