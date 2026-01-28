@@ -162,8 +162,17 @@ def execute_ibkr_rebalance_trades(
     snapshot = ibkr.get_marketdata_snapshot([order.conid for order in resolved_orders])
     _apply_snapshot_prices(resolved_orders, snapshot, report)
 
+    # Fetch contract rules for tick size rounding
+    tick_sizes: Dict[int, Optional[float]] = {}
+    for resolved in resolved_orders:
+        try:
+            rules_response = ibkr.get_contract_rules(resolved.conid, is_buy=(resolved.intent.side == "BUY"))
+            tick_sizes[resolved.conid] = _get_tick_size(rules_response)
+        except IBKRError:
+            tick_sizes[resolved.conid] = None
+
     # Build all order payloads upfront
-    order_payloads = [_build_order_payload(resolved, resolved_account) for resolved in resolved_orders]
+    order_payloads = [_build_order_payload(resolved, resolved_account, tick_sizes.get(resolved.conid)) for resolved in resolved_orders]
 
     # Try batch preview first to avoid cash depletion issue
     batch_preview_results = _run_batch_preview(ibkr, resolved_account, resolved_orders, order_payloads, report)
@@ -234,9 +243,7 @@ def _run_batch_preview(
             report.warnings.append(f"IBKR trading permissions missing: {message}")
             report.aborted = True
             for resolved in resolved_orders:
-                report.skipped.append(
-                    OrderSkip(ticker=resolved.intent.ticker, action=resolved.intent.action, reason="Permission error")
-                )
+                report.skipped.append(OrderSkip(ticker=resolved.intent.ticker, action=resolved.intent.action, reason="Permission error"))
             return results
         # Fall back to sequential preview on batch failure
         return _run_sequential_preview(ibkr, account_id, resolved_orders, order_payloads, report)
@@ -250,9 +257,7 @@ def _run_batch_preview(
                 report.warnings.append(f"IBKR trading permissions missing: {error_message}")
                 report.aborted = True
                 for resolved in resolved_orders:
-                    report.skipped.append(
-                        OrderSkip(ticker=resolved.intent.ticker, action=resolved.intent.action, reason="Permission error")
-                    )
+                    report.skipped.append(OrderSkip(ticker=resolved.intent.ticker, action=resolved.intent.action, reason="Permission error"))
                 return results
             # Fall back to sequential preview
             return _run_sequential_preview(ibkr, account_id, resolved_orders, order_payloads, report)
@@ -266,9 +271,7 @@ def _run_batch_preview(
 
         if preview_response is None:
             report.warnings.append(f"{resolved.intent.ticker}: No preview response in batch")
-            report.skipped.append(
-                OrderSkip(ticker=resolved.intent.ticker, action=resolved.intent.action, reason="No preview response")
-            )
+            report.skipped.append(OrderSkip(ticker=resolved.intent.ticker, action=resolved.intent.action, reason="No preview response"))
             continue
 
         report.previews.append({"intent": resolved.intent, "response": preview_response})
@@ -312,9 +315,7 @@ def _run_sequential_preview(
         except IBKRError as exc:
             message = str(exc)
             report.warnings.append(f"{resolved.intent.ticker}: Preview failed ({message})")
-            report.skipped.append(
-                OrderSkip(ticker=resolved.intent.ticker, action=resolved.intent.action, reason="Preview failed")
-            )
+            report.skipped.append(OrderSkip(ticker=resolved.intent.ticker, action=resolved.intent.action, reason="Preview failed"))
             if _is_permission_error(message):
                 report.warnings.append("IBKR trading permissions missing; aborting remaining previews.")
                 report.aborted = True
@@ -539,13 +540,13 @@ def _apply_snapshot_prices(orders: List[ResolvedOrder], snapshot: Any, report: E
         order.intent.limit_price = new_price
 
 
-def _build_order_payload(order: ResolvedOrder, account_id: str) -> Dict[str, Any]:
+def _build_order_payload(order: ResolvedOrder, account_id: str, tick_size: Optional[float] = None) -> Dict[str, Any]:
     return {
         "conid": order.conid,
         "secType": "STK",
         "orderType": "LMT",
         "side": order.intent.side,
-        "price": round(order.intent.limit_price, 4),
+        "price": _round_to_tick(order.intent.limit_price, tick_size),
         "quantity": int(order.intent.quantity),
         "tif": "DAY",
         "exchange": order.exchange or "SMART",
@@ -618,6 +619,32 @@ def _to_float(value: Any) -> float:
         return float(value)
     except (TypeError, ValueError):
         return 0.0
+
+
+def _get_tick_size(rules_response: Any) -> Optional[float]:
+    """Extract tick size (increment) from contract rules response."""
+    if not isinstance(rules_response, dict):
+        return None
+    rules = rules_response.get("rules")
+    if isinstance(rules, dict):
+        increment = rules.get("increment")
+        if increment and float(increment) > 0:
+            return float(increment)
+    elif isinstance(rules, list) and rules:
+        rule = rules[0]
+        if isinstance(rule, dict):
+            increment = rule.get("increment")
+            if increment and float(increment) > 0:
+                return float(increment)
+    return None
+
+
+def _round_to_tick(price: float, tick_size: Optional[float]) -> float:
+    """Round price to nearest valid tick."""
+    if tick_size is None or tick_size <= 0:
+        return round(price, 4)
+    # Round to nearest tick
+    return round(round(price / tick_size) * tick_size, 10)
 
 
 __all__ = [

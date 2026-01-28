@@ -27,6 +27,10 @@ class FakeIBKRClient:
     def get_marketdata_snapshot(self, conids, fields="31,84,86"):
         return self.snapshot
 
+    def get_contract_rules(self, conid, is_buy):
+        # Return a mock response with a default tick size of 0.01
+        return {"rules": {"increment": 0.01}}
+
     def preview_order(self, account_id, order):
         self.preview_calls.append(order)
         return {"order_status": "PreSubmitted"}

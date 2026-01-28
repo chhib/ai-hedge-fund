@@ -1,0 +1,22 @@
+{
+  "contracts": {
+    "TK": {
+      "conid": 732027280,
+      "exchange": "NYSE",
+      "currency": "USD",
+      "description": "Teekay Corp Ltd"
+    },
+    "SFL": {
+      "conid": 390603973,
+      "exchange": "NYSE",
+      "currency": "USD",
+      "description": "SFL Corp Ltd"
+    },
+    "LUMI": {
+      "conid": 278544593,
+      "exchange": "SFB",
+      "currency": "SEK",
+      "description": "Lundin Mining Corp"
+    }
+  }
+}

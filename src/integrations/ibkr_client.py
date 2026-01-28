@@ -104,6 +104,10 @@ class IBKRClient:
         """Fetch contract details for a conid."""
         return self._request("GET", f"/iserver/contract/{conid}/info")
 
+    def get_contract_rules(self, conid: int, is_buy: bool) -> Any:
+        """Fetch contract rules including tick size for a conid."""
+        return self._request("GET", f"/iserver/contract/{conid}/info-and-rules", params={"isBuy": str(is_buy).lower()})
+
     def get_marketdata_snapshot(self, conids: Iterable[int], fields: str = "31,84,86") -> Any:
         """Fetch a market data snapshot for conids."""
         joined = ",".join(str(c) for c in conids)
@@ -165,6 +169,7 @@ def _load_borsdata_tickers_for_mapper() -> None:
     """Load Börsdata instruments into the ticker mapper for smart matching."""
     try:
         from dotenv import load_dotenv
+
         load_dotenv()
         from src.data.borsdata_client import BorsdataClient
 
