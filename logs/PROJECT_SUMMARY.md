@@ -1,6 +1,6 @@
 # Börsdata Integration Project Summary
 
-_Last updated: 2026-01-28 (Session 70)_
+_Last updated: 2026-03-14 (Session 89)_
 
 ## End Goal
 Rebuild the data ingestion and processing pipeline so the application relies on Börsdata's REST API. The system accepts Börsdata-native tickers, supports both Nordic and Global markets, and maintains compatibility with the original user-facing workflows.
@@ -18,11 +18,16 @@ The AI hedge fund system is fully operational with both CLI and web interfaces:
 - ✅ **Performance Optimized**: 95% API call reduction, parallel processing, caching
 
 ## Current Focus
-- IBKR order execution workflow hardening
-- Tick size compliance and contract disambiguation
+- IBKR execution pipeline hardened (sessions 71-85 on `feat/ibkr-hardening` branch)
+- ISIN-based contract resolution: 198/206 tickers mapped (96% coverage)
+- Live order lifecycle validated end-to-end (place, confirm, cancel)
+- Contract override stale-checking: `hedge ibkr validate` with `--fix` auto-refresh
+- Error recovery: retry on connection failures, order status polling with partial fill detection
+- `hedge ibkr orders` command for live order monitoring
+- Next: portfolio reconciliation
 
 ## Active Session File
-**`logs/sessions/session_061.md`** - Sessions 61-70
+**`logs/sessions/session_081.md`** - Sessions 81-90
 
 ## Decision Log (Key Decisions)
 
@@ -65,7 +70,9 @@ Sessions are organized into files of 10 sessions each:
 - `logs/sessions/session_031.md` - Sessions 31-40 (Jim Simons agent, portfolio CLI)
 - `logs/sessions/session_041.md` - Sessions 41-50 (Caching, multi-currency, news sentiment)
 - `logs/sessions/session_051.md` - Sessions 51-60 (Performance profiling, IBKR planning)
-- `logs/sessions/session_061.md` - Sessions 61-70 (IBKR execution, current)
+- `logs/sessions/session_061.md` - Sessions 61-70 (IBKR execution)
+- `logs/sessions/session_071.md` - Sessions 71-80 (IBKR hardening)
+- `logs/sessions/session_081.md` - Sessions 81-90 (current)
 
 ## Quick Reference
 
@@ -81,6 +88,14 @@ poetry run pytest tests/data/                       # Data layer tests
 poetry run hedge cache list                         # Show cached tickers
 poetry run hedge cache clear --tickers DORO,LUND.B  # Clear specific
 poetry run hedge cache clear                        # Clear all
+```
+
+### IBKR Validation
+```bash
+poetry run hedge ibkr check                        # Test all 5 pipeline stages
+poetry run hedge ibkr validate                     # Check all contract overrides for staleness
+poetry run hedge ibkr validate --fix               # Auto-refresh invalid contracts
+poetry run hedge ibkr orders                       # Show live orders from the gateway
 ```
 
 ### IBKR Execution

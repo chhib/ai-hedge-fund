@@ -4,6 +4,8 @@ import sys
 from pathlib import Path
 from typing import List, Optional
 
+import os
+
 import click
 from dotenv import load_dotenv
 
@@ -40,10 +42,10 @@ def cli() -> None:
 @click.option("--output-dir", type=click.Path(path_type=Path), help="Directory for the generated CSV (defaults to CWD)")
 @click.option("--portfolio-source", type=click.Choice(["csv", "ibkr"], case_sensitive=False), default="csv", show_default=True, help="Source of the current holdings")
 @click.option("--ibkr-account", help="Optional IBKR account override (defaults to first account)")
-@click.option("--ibkr-host", default="https://localhost", show_default=True, help="Client Portal host (scheme optional)")
-@click.option("--ibkr-port", default=5000, show_default=True, type=int, help="Client Portal port")
-@click.option("--ibkr-verify-ssl/--no-ibkr-verify-ssl", default=False, show_default=True, help="Verify SSL certificates for IBKR calls")
-@click.option("--ibkr-timeout", default=30.0, show_default=True, type=float, help="Timeout in seconds for IBKR API calls")
+@click.option("--ibkr-host", default=os.environ.get("IBKR_HOST", "https://localhost"), show_default=True, help="Client Portal host (scheme optional)")
+@click.option("--ibkr-port", default=int(os.environ.get("IBKR_PORT", "5001")), show_default=True, type=int, help="Client Portal port")
+@click.option("--ibkr-verify-ssl/--no-ibkr-verify-ssl", default=os.environ.get("IBKR_VERIFY_SSL", "false").lower() in ("true", "1", "yes"), show_default=True, help="Verify SSL certificates for IBKR calls")
+@click.option("--ibkr-timeout", default=float(os.environ.get("IBKR_TIMEOUT", "30")), show_default=True, type=float, help="Timeout in seconds for IBKR API calls")
 @click.option("--ibkr-whatif", is_flag=True, help="Preview IBKR orders using what-if (no trades)")
 @click.option("--ibkr-execute", is_flag=True, help="Place IBKR orders (requires confirmation)")
 @click.option("--ibkr-yes", is_flag=True, help="Skip IBKR trade confirmation prompts")
@@ -240,6 +242,8 @@ def _export_transcript(session_id: str) -> None:
 
 
 def _render_ibkr_report(report) -> None:
+    from src.integrations.ibkr_execution import summarize_submissions
+
     click.echo("\n" + "-" * 40)
     title = "IBKR ORDER EXECUTION" if report.executed else "IBKR ORDER PREVIEW"
     click.echo(title)
@@ -256,6 +260,309 @@ def _render_ibkr_report(report) -> None:
         click.echo("Skipped:")
         for skip in report.skipped:
             click.echo(f"  • {skip.ticker} ({skip.action}): {skip.reason}")
+    if report.executed:
+        final_summaries = summarize_submissions(getattr(report, "final_submissions", []))
+        click.echo(f"Submitted: {len(final_summaries)}")
+        if final_summaries:
+            click.echo("Execution results:")
+            for summary in final_summaries:
+                click.echo(f"  • {summary}")
+
+
+@cli.group()
+def ibkr() -> None:
+    """Interactive Brokers gateway tools."""
+
+
+@ibkr.command()
+@click.option("--ibkr-host", default=os.environ.get("IBKR_HOST", "https://localhost"), show_default=True, help="Client Portal host")
+@click.option("--ibkr-port", default=int(os.environ.get("IBKR_PORT", "5001")), show_default=True, type=int, help="Client Portal port")
+@click.option("--ibkr-verify-ssl/--no-ibkr-verify-ssl", default=os.environ.get("IBKR_VERIFY_SSL", "false").lower() in ("true", "1", "yes"), show_default=True, help="Verify SSL certificates")
+@click.option("--ibkr-timeout", default=float(os.environ.get("IBKR_TIMEOUT", "30")), show_default=True, type=float, help="Timeout in seconds")
+def orders(ibkr_host: str, ibkr_port: int, ibkr_verify_ssl: bool, ibkr_timeout: float) -> None:
+    """Show live orders from the IBKR gateway."""
+    from src.services.portfolio_runner import _check_ibkr_gateway
+    from src.integrations.ibkr_client import IBKRClient
+
+    base_url = f"{ibkr_host}:{ibkr_port}"
+
+    click.echo("Checking IBKR gateway ... ", nl=False)
+    is_running, is_authenticated = _check_ibkr_gateway(base_url, timeout=ibkr_timeout)
+    if not is_running:
+        click.secho("FAIL (not reachable)", fg="red")
+        sys.exit(1)
+    if not is_authenticated:
+        click.secho("FAIL (not authenticated)", fg="red")
+        sys.exit(1)
+    click.secho("OK", fg="green")
+
+    client = IBKRClient(base_url, verify_ssl=ibkr_verify_ssl, timeout=ibkr_timeout)
+
+    try:
+        response = client.get_orders()
+    except Exception as exc:
+        click.secho(f"Error fetching orders: {exc}", fg="red")
+        sys.exit(1)
+
+    rows = _parse_orders_response(response)
+    if not rows:
+        click.secho("No open orders.", fg="yellow")
+        return
+
+    # Render table
+    header = f"{'ID':<12} {'Ticker':<10} {'Side':<6} {'Qty':>6} {'Filled':>6} {'Price':>10} {'Status':<14}"
+    click.echo(header)
+    click.echo("-" * len(header))
+    for row in rows:
+        click.echo(
+            f"{row['id']:<12} {row['ticker']:<10} {row['side']:<6} {row['qty']:>6} {row['filled']:>6} {row['price']:>10} {row['status']:<14}"
+        )
+
+
+def _parse_orders_response(response) -> List[dict]:
+    """Parse IBKR orders response into a flat list of row dicts."""
+    items: list = []
+    if isinstance(response, list):
+        items = response
+    elif isinstance(response, dict):
+        items = response.get("orders") or response.get("order") or ([response] if response.get("orderId") or response.get("order_id") else [])
+
+    rows: List[dict] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        order_id = item.get("orderId") or item.get("order_id") or ""
+        ticker = item.get("ticker") or item.get("symbol") or item.get("contractDesc") or ""
+        side = item.get("side") or item.get("orderSide") or ""
+        qty = item.get("totalSize") or item.get("quantity") or item.get("totalQuantity") or ""
+        filled = item.get("filledQuantity") or item.get("filled_qty") or item.get("cumFill") or "0"
+        price = item.get("price") or item.get("auxPrice") or item.get("limitPrice") or ""
+        status = item.get("status") or item.get("orderStatus") or item.get("order_status") or ""
+        rows.append({
+            "id": str(order_id),
+            "ticker": str(ticker),
+            "side": str(side),
+            "qty": str(qty),
+            "filled": str(filled),
+            "price": str(price),
+            "status": str(status),
+        })
+    return rows
+
+
+@ibkr.command()
+@click.option("--ibkr-host", default=os.environ.get("IBKR_HOST", "https://localhost"), show_default=True, help="Client Portal host")
+@click.option("--ibkr-port", default=int(os.environ.get("IBKR_PORT", "5001")), show_default=True, type=int, help="Client Portal port")
+@click.option("--ibkr-verify-ssl/--no-ibkr-verify-ssl", default=os.environ.get("IBKR_VERIFY_SSL", "false").lower() in ("true", "1", "yes"), show_default=True, help="Verify SSL certificates")
+@click.option("--ibkr-timeout", default=float(os.environ.get("IBKR_TIMEOUT", "30")), show_default=True, type=float, help="Timeout in seconds")
+def check(ibkr_host: str, ibkr_port: int, ibkr_verify_ssl: bool, ibkr_timeout: float) -> None:
+    """Validate each IBKR pipeline stage against the live gateway."""
+    from src.services.portfolio_runner import _check_ibkr_gateway
+    from src.integrations.ibkr_client import IBKRClient
+    from src.integrations.ibkr_contract_mapper import load_contract_overrides
+
+    base_url = f"{ibkr_host}:{ibkr_port}"
+    failures = 0
+
+    # Stage 1: Gateway connectivity
+    click.echo("1/5  Gateway connectivity ... ", nl=False)
+    is_running, is_authenticated = _check_ibkr_gateway(base_url, timeout=ibkr_timeout)
+    if not is_running:
+        click.secho("FAIL (not reachable)", fg="red")
+        click.secho("     Start the gateway and authenticate before running this check.", fg="yellow")
+        sys.exit(1)
+    if not is_authenticated:
+        click.secho("FAIL (not authenticated)", fg="red")
+        click.secho(f"     Open {base_url} in a browser and log in.", fg="yellow")
+        sys.exit(1)
+    click.secho("PASS", fg="green")
+
+    client = IBKRClient(base_url, verify_ssl=ibkr_verify_ssl, timeout=ibkr_timeout)
+
+    # Stage 2: Account resolution
+    click.echo("2/5  Account resolution ... ", nl=False)
+    account_id = None
+    try:
+        account_id = client.resolve_account_id()
+        if account_id:
+            click.secho(f"PASS ({account_id})", fg="green")
+        else:
+            click.secho("FAIL (no account found)", fg="red")
+            failures += 1
+    except Exception as exc:
+        click.secho(f"FAIL ({exc})", fg="red")
+        failures += 1
+
+    # Stage 3: Contract resolution
+    click.echo("3/5  Contract resolution ... ", nl=False)
+    overrides = load_contract_overrides()
+    if not overrides:
+        click.secho("SKIP (no contract mappings found)", fg="yellow")
+    else:
+        sample_tickers = list(overrides.keys())[:3]
+        sample_conids = [overrides[t].conid for t in sample_tickers]
+        resolved = 0
+        for conid in sample_conids:
+            try:
+                info = client.get_contract_info(conid)
+                if info:
+                    resolved += 1
+            except Exception:
+                pass
+        if resolved == len(sample_conids):
+            click.secho(f"PASS ({resolved}/{len(sample_conids)} - {', '.join(sample_tickers)})", fg="green")
+        else:
+            click.secho(f"FAIL ({resolved}/{len(sample_conids)} resolved)", fg="red")
+            failures += 1
+
+    # Stage 4: Market data
+    click.echo("4/5  Market data ... ", nl=False)
+    if not overrides:
+        click.secho("SKIP (no conids to query)", fg="yellow")
+    else:
+        sample_conids = [overrides[t].conid for t in list(overrides.keys())[:3]]
+        try:
+            snap = client.get_marketdata_snapshot(sample_conids)
+            if snap and isinstance(snap, list) and len(snap) > 0:
+                click.secho(f"PASS ({len(snap)} snapshot(s))", fg="green")
+            else:
+                click.secho("FAIL (empty response)", fg="red")
+                failures += 1
+        except Exception as exc:
+            click.secho(f"FAIL ({exc})", fg="red")
+            failures += 1
+
+    # Stage 5: Order preview (what-if)
+    click.echo("5/5  Order preview ... ", nl=False)
+    if not account_id or not overrides:
+        click.secho("SKIP (need account + conids)", fg="yellow")
+    else:
+        first_ticker = list(overrides.keys())[0]
+        first_conid = overrides[first_ticker].conid
+        order = {
+            "conid": first_conid,
+            "orderType": "MKT",
+            "side": "BUY",
+            "quantity": 1,
+            "tif": "DAY",
+        }
+        try:
+            result = client.preview_order(account_id, order)
+            if result:
+                click.secho(f"PASS (whatif for {first_ticker})", fg="green")
+            else:
+                click.secho("FAIL (empty response)", fg="red")
+                failures += 1
+        except Exception as exc:
+            click.secho(f"FAIL ({exc})", fg="red")
+            failures += 1
+
+    # Summary
+    click.echo()
+    if failures:
+        click.secho(f"{failures} stage(s) failed.", fg="red")
+        sys.exit(1)
+    else:
+        click.secho("All stages passed.", fg="green")
+
+
+@ibkr.command()
+@click.option("--ibkr-host", default=os.environ.get("IBKR_HOST", "https://localhost"), show_default=True, help="Client Portal host")
+@click.option("--ibkr-port", default=int(os.environ.get("IBKR_PORT", "5001")), show_default=True, type=int, help="Client Portal port")
+@click.option("--ibkr-verify-ssl/--no-ibkr-verify-ssl", default=os.environ.get("IBKR_VERIFY_SSL", "false").lower() in ("true", "1", "yes"), show_default=True, help="Verify SSL certificates")
+@click.option("--ibkr-timeout", default=float(os.environ.get("IBKR_TIMEOUT", "30")), show_default=True, type=float, help="Timeout in seconds")
+@click.option("--fix", is_flag=True, help="Auto-refresh invalid contracts via 3-tier resolution")
+@click.option("--delay", default=0.15, show_default=True, type=float, help="Delay between IBKR API calls (seconds)")
+def validate(ibkr_host: str, ibkr_port: int, ibkr_verify_ssl: bool, ibkr_timeout: float, fix: bool, delay: float) -> None:
+    """Validate contract overrides against the live IBKR gateway."""
+    from src.services.portfolio_runner import _check_ibkr_gateway
+    from src.integrations.ibkr_client import IBKRClient
+    from src.integrations.ibkr_contract_mapper import (
+        load_contract_overrides,
+        save_contract_overrides,
+        validate_all_contracts,
+    )
+
+    base_url = f"{ibkr_host}:{ibkr_port}"
+
+    # Check gateway
+    click.echo("Checking IBKR gateway ... ", nl=False)
+    is_running, is_authenticated = _check_ibkr_gateway(base_url, timeout=ibkr_timeout)
+    if not is_running:
+        click.secho("FAIL (not reachable)", fg="red")
+        sys.exit(1)
+    if not is_authenticated:
+        click.secho("FAIL (not authenticated)", fg="red")
+        sys.exit(1)
+    click.secho("OK", fg="green")
+
+    overrides = load_contract_overrides()
+    if not overrides:
+        click.secho("No contract mappings found.", fg="yellow")
+        return
+
+    client = IBKRClient(base_url, verify_ssl=ibkr_verify_ssl, timeout=ibkr_timeout)
+    total = len(overrides)
+    click.echo(f"Validating {total} contracts (delay={delay}s) ...")
+
+    def _progress(ticker: str, result) -> None:
+        status_colors = {"valid": "green", "invalid": "red", "exchange_changed": "yellow", "error": "red"}
+        color = status_colors.get(result.status, "white")
+        label = result.status.upper()
+        extra = ""
+        if result.status == "exchange_changed":
+            extra = f" ({result.stored_exchange} -> {result.live_exchange})"
+        elif result.status == "invalid":
+            extra = f" ({result.error})"
+        elif result.status == "error":
+            extra = f" ({result.error})"
+        click.echo(f"  {ticker:<12} {result.conid:>12}  ", nl=False)
+        click.secho(f"{label}{extra}", fg=color)
+
+    results = validate_all_contracts(client, overrides, delay=delay, progress_cb=_progress)
+
+    # Summary
+    valid = sum(1 for r in results if r.status == "valid")
+    invalid = sum(1 for r in results if r.status == "invalid")
+    exchange_changed = sum(1 for r in results if r.status == "exchange_changed")
+    errors = sum(1 for r in results if r.status == "error")
+
+    click.echo()
+    click.echo(f"Valid:            {valid}")
+    click.echo(f"Invalid:          {invalid}")
+    click.echo(f"Exchange changed: {exchange_changed}")
+    click.echo(f"Errors:           {errors}")
+
+    if fix and invalid:
+        click.echo()
+        click.echo(f"Attempting to fix {invalid} invalid contract(s) ...")
+        from scripts.build_ibkr_contract_overrides import resolve_single_ticker
+
+        fixed = 0
+        for r in results:
+            if r.status != "invalid":
+                continue
+            resolved = resolve_single_ticker(client, r.ticker, delay=delay)
+            if resolved:
+                from src.integrations.ibkr_contract_mapper import ContractOverride
+
+                overrides[r.ticker] = ContractOverride(
+                    conid=int(resolved["conid"]),
+                    exchange=resolved.get("exchange"),
+                    currency=resolved.get("currency"),
+                    description=resolved.get("description"),
+                )
+                fixed += 1
+                click.secho(f"  Fixed {r.ticker} -> conid {resolved['conid']}", fg="green")
+            else:
+                click.secho(f"  Could not resolve {r.ticker}", fg="red")
+
+        if fixed:
+            save_contract_overrides(overrides)
+            click.secho(f"Saved {fixed} updated mapping(s).", fg="green")
+
+    if invalid or errors:
+        sys.exit(1)
 
 
 @cli.group()

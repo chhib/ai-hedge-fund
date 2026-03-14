@@ -105,6 +105,12 @@ def _ensure_ibkr_gateway(config: "RebalanceConfig") -> str:
     if found_url:
         if is_authenticated:
             return found_url  # Ready to use
+        # Give the gateway a brief window to finish authentication
+        for _ in range(5):
+            time.sleep(2)
+            _, is_authenticated = _check_ibkr_gateway(found_url, timeout=config.ibkr_timeout)
+            if is_authenticated:
+                return found_url
         # Running but not authenticated
         raise RuntimeError(
             f"IBKR Gateway running but not authenticated.\n"

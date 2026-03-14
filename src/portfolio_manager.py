@@ -6,6 +6,7 @@ Analyzes current portfolio and investment universe using selected analysts,
 then generates rebalancing recommendations.
 """
 
+import os
 import sys
 import warnings
 
@@ -50,10 +51,10 @@ load_dotenv()
 @click.option("--test", is_flag=True, help="Run in test mode with limited analysts for quick validation")
 @click.option("--portfolio-source", type=click.Choice(["csv", "ibkr"]), default="csv", show_default=True, help="Where to load the current holdings from")
 @click.option("--ibkr-account", type=str, help="Optional IBKR account identifier")
-@click.option("--ibkr-host", type=str, default="https://localhost", show_default=True, help="Client Portal host (scheme optional)")
-@click.option("--ibkr-port", type=int, default=5000, show_default=True, help="Client Portal port")
-@click.option("--ibkr-verify-ssl/--no-ibkr-verify-ssl", default=False, show_default=True, help="Verify SSL certificates when calling IBKR")
-@click.option("--ibkr-timeout", type=float, default=30.0, show_default=True, help="Timeout in seconds for IBKR requests")
+@click.option("--ibkr-host", type=str, default=os.environ.get("IBKR_HOST", "https://localhost"), show_default=True, help="Client Portal host (scheme optional)")
+@click.option("--ibkr-port", type=int, default=int(os.environ.get("IBKR_PORT", "5001")), show_default=True, help="Client Portal port")
+@click.option("--ibkr-verify-ssl/--no-ibkr-verify-ssl", default=os.environ.get("IBKR_VERIFY_SSL", "false").lower() in ("true", "1", "yes"), show_default=True, help="Verify SSL certificates when calling IBKR")
+@click.option("--ibkr-timeout", type=float, default=float(os.environ.get("IBKR_TIMEOUT", "30")), show_default=True, help="Timeout in seconds for IBKR requests")
 @click.option("--ibkr-whatif", is_flag=True, help="Preview IBKR orders using what-if (no trades)")
 @click.option("--ibkr-execute", is_flag=True, help="Place IBKR orders (requires confirmation)")
 @click.option("--ibkr-yes", is_flag=True, help="Skip IBKR trade confirmation prompts")
@@ -161,6 +162,8 @@ def main(portfolio, universe, universe_tickers, analysts, model, model_provider,
 
 
 def _render_ibkr_report(report) -> None:
+    from src.integrations.ibkr_execution import summarize_submissions
+
     click.echo("\n" + "-" * 40)
     title = "IBKR ORDER EXECUTION" if report.executed else "IBKR ORDER PREVIEW"
     click.echo(title)
@@ -177,6 +180,13 @@ def _render_ibkr_report(report) -> None:
         click.echo("Skipped:")
         for skip in report.skipped:
             click.echo(f"  • {skip.ticker} ({skip.action}): {skip.reason}")
+    if report.executed:
+        final_summaries = summarize_submissions(getattr(report, "final_submissions", []))
+        click.echo(f"Submitted: {len(final_summaries)}")
+        if final_summaries:
+            click.echo("Execution results:")
+            for summary in final_summaries:
+                click.echo(f"  • {summary}")
 
 
 if __name__ == "__main__":

@@ -1,10 +1,8 @@
-# AI Hedge Fund – Börsdata Edition
+# AI Hedge Fund -- Borsdata Edition
 
-Modernized fork of `virattt/ai-hedge-fund` tuned for Börsdata’s Nordic + Global coverage, long-only portfolio management, and weekly rebalance workflows. All data pulls rely on Börsdata, LLM access is abstracted behind the agents, and Interactive Brokers (IBKR) positions can be imported directly from the Client Portal API.
+Fork of [virattt/ai-hedge-fund](https://github.com/virattt/ai-hedge-fund) rebuilt around Borsdata's Nordic + Global coverage, concentrated long-only portfolios, 18 analyst agents, and Interactive Brokers execution.
 
----
-
-## TL;DR – Weekly Command I Actually Run
+## Quick Start
 
 ```bash
 poetry run hedge rebalance \
@@ -14,169 +12,163 @@ poetry run hedge rebalance \
   --analysts favorites
 ```
 
-That command (now also available as `poetry run hedge rebalance ...`) is the core workflow: load the current IBKR-exported CSV, score every ticker in `borsdata_universe.txt` with the selected analysts, and save `portfolio_YYYYMMDD.csv` ready for the next week. The new hedge CLI (Click-based) mirrors the legacy script but adds shortcuts for IBKR ingestion, transcript exports, and backtesting.
+That's the weekly command: load current holdings CSV, score every ticker in the 206-ticker universe with the selected analysts, and output `portfolio_YYYYMMDD.csv` for next week.
 
----
+## Why This Fork
 
-## Why This Fork Exists
-
-- **Börsdata-first ingestion**: Nordic + Global tickers, rate limiting, KPI/line-item assemblers, insider trades, calendars, and cached price history.
-- **Concentrated long-only portfolios**: 5–10 holdings, multi-currency cost basis, ATR-derived slippage bands, deterministic analysts mixed with LLM personas.
-- **Durable analyst queue**: Analyst×ticker tasks are recorded in `data/analyst_tasks.db`, so same-day reruns reuse cached signals even if the previous session crashed or you temporarily lost network access.
-- **Agent ergonomics**: 18 analysts (13 legendary investor personas + 5 core analysts including news sentiment) driven via `EnhancedPortfolioManager` with automatic parallel prefetch, caching, and transcript storage.
-- **Position-aware news sentiment**: News sentiment analyst analyzes events since each position's acquisition date (not just last 30 days), providing context-aware sentiment for existing holdings vs. new candidates.
-- **Unified CLI**: `poetry run hedge rebalance` (weekly), `poetry run hedge backtest`, plus the original `src/main.py` (graph-based analysis) and FastAPI app for the React UI.
-
----
+- **Borsdata-first**: 108 KPI mappings, Nordic + Global tickers, rate-limited parallel fetcher, insider trades, report calendars, cached price history. Zero legacy FinancialDatasets code.
+- **Concentrated long-only**: 5-10 holdings, multi-currency cost basis (SEK default), ATR-derived slippage bands, deterministic analysts mixed with LLM personas.
+- **18 analysts**: 13 legendary investor personas + 5 core deterministic analysts (including position-aware news sentiment that analyzes events since each holding's acquisition date).
+- **IBKR execution**: Live positions, order preview (`--ibkr-whatif`), execution (`--ibkr-execute`), ISIN-based contract resolution with 96% universe coverage.
+- **Crash recovery**: Analyst x ticker tasks recorded in SQLite so same-day reruns reuse cached signals even after crashes or network loss.
 
 ## Installation
 
 ```bash
 git clone https://github.com/chhib/ai-hedge-fund.git
 cd ai-hedge-fund
-
-# install dependencies
-curl -sSL https://install.python-poetry.org | python3 -  # if Poetry is missing
 poetry install
-
-# configure API keys
 cp .env.example .env
-$EDITOR .env   # set BORSDATA_API_KEY + preferred LLM keys
+$EDITOR .env
 ```
 
-**Required keys**
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `BORSDATA_API_KEY` | Yes | All data pulls (100 calls/10s rate limit) |
+| `OPENAI_API_KEY` | Pick one | LLM-based analysts (OpenAI) |
+| `ANTHROPIC_API_KEY` | Pick one | LLM-based analysts (Anthropic) |
+| `GROQ_API_KEY` | Pick one | LLM-based analysts (Groq) |
+| `DEEPSEEK_API_KEY` | Pick one | LLM-based analysts (DeepSeek) |
+| IBKR Gateway | Optional | Live positions and order execution |
 
-| Variable | Purpose |
+IBKR credentials aren't stored in `.env`; run the Client Portal Gateway locally and supply host/port flags.
+
+## CLI Reference
+
+### Primary commands
+
+| Command | Description |
 | --- | --- |
-| `BORSDATA_API_KEY` | Mandatory for all data pulls |
-| `OPENAI_API_KEY` (or Groq/Anthropic/Deepseek/Ollama) | Needed for LLM-based analysts |
+| `hedge rebalance` | Weekly rebalance (CSV or live IBKR positions) |
+| `hedge backtest` | Headless backtesting with the same analyst pipeline |
+| `hedge ibkr check` | Validate all 5 IBKR pipeline stages against the live gateway |
+| `hedge ibkr validate` | Check contract overrides for staleness (`--fix` to auto-refresh) |
+| `hedge ibkr orders` | Show live orders from the IBKR gateway |
+| `hedge cache list` | List all tickers currently in the cache |
+| `hedge cache clear` | Clear cache entries (`--tickers DORO,LUND.B` or all) |
 
-Optional: `IBKR_CLIENT_PORTAL` credentials aren’t stored in `.env`; run the local Client Portal Gateway and supply host/port flags when using `--portfolio-source ibkr`.
+### Rebalance flags
 
----
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--portfolio` | | Path to current holdings CSV |
+| `--universe` | | Path to universe file (e.g. `portfolios/borsdata_universe.txt`) |
+| `--universe-tickers` | | Comma-separated tickers inline (alternative to `--universe`) |
+| `--analysts` | `all` | Preset name or comma-separated list |
+| `--model` | `gpt-4o` | LLM model name |
+| `--home-currency` | `SEK` | Reporting currency |
+| `--max-workers` | `8` | Parallel workers (also `PARALLEL_MAX_WORKERS` env var) |
+| `--no-cache` | | Bypass KPI cache |
+| `--no-cache-agents` | | Bypass analyst signal cache |
+| `--export-transcript` | | Dump analyst markdown transcript after the run |
+| `--portfolio-source` | `csv` | `csv` or `ibkr` |
+| `--ibkr-account` | | Force a specific IBKR account ID |
+| `--ibkr-whatif` | | Preview orders without placing them |
+| `--ibkr-execute` | | Submit orders after preview |
+| `--ibkr-yes` | | Auto-confirm orders (skip per-order prompt) |
+| `--dry-run` | | Disables execution even if `--ibkr-execute` is set |
 
-## Command Surface
+### Legacy entry points
 
-| Command | When to use |
+| Command | Description |
 | --- | --- |
-| `poetry run hedge rebalance ...` | Weekly rebalance (CSV or live IBKR positions) with automatic transcript export option |
-| `poetry run python src/portfolio_manager.py ...` | Legacy CLI (same functionality, still handy for scripted runs) |
-| `poetry run hedge backtest ...` | Headless backtesting using the same Hedge CLI infrastructure (no interactive prompts) |
-| `poetry run python src/backtester.py ...` | Original backtester with interactive questionary prompts |
-| `poetry run python src/main.py ...` | Run the LangGraph multi-agent workflow for ad-hoc analysis |
-| `poetry run uvicorn app.backend.main:app --reload` | Start the FastAPI backend powering the React UI (`app/frontend`) |
-
-### Rebalance (`hedge` CLI)
-
-```bash
-poetry run hedge rebalance \
-  --portfolio portfolio_20251220_actual.csv \
-  --universe portfolios/borsdata_universe.txt \
-  --model gpt-5-nano \
-  --analysts favorites \
-  --export-transcript
-```
-
-Key flags:
-
-- `--portfolio` – Path to current holdings CSV (required for CSV source)
-- `--universe` – Path to universe file (e.g., `portfolios/borsdata_universe.txt`)
-- `--universe-tickers` – Alternative: comma-separated tickers inline
-- `--analysts` – Preset or comma-separated list (see below)
-- `--home-currency SEK` – Reporting currency (default: SEK)
-- `--portfolio-source ibkr` – Pull holdings/cash straight from IBKR Client Portal gateway
-- `--ibkr-account U1234567` – Force a specific account (defaults to the first returned account)
-- `--no-cache` / `--no-cache-agents` – Control KPI/analyst caching when you need a clean slate
-- `--max-workers 4` – Tune concurrency to stay under the Börsdata 100 calls/10s limit (also configurable via `PARALLEL_MAX_WORKERS` env var, default: 8)
-- `--export-transcript` – Immediately dump the analyst markdown transcript after the run
-
-**Portfolio validation**: CSV portfolios are automatically validated for negative shares (warns about potential short positions), negative cost_basis, and invalid currency codes (ISO 4217 check).
-
-**Analyst presets:**
-
-| Preset | Analysts |
-| --- | --- |
-| `favorites` | fundamentals, technical, jim_simons, news_sentiment_analyst, stanley_druckenmiller |
-| `core` | fundamentals, technical, sentiment, valuation |
-| `famous` | 13 legendary investor personas |
-| `all` | All 17 analysts |
-| `basic` | fundamentals only (fast testing) |
-
-### Rebalance (legacy script)
-
-Exactly the same options as the hedge CLI, still available if you prefer:
-
-```bash
-poetry run python src/portfolio_manager.py --help
-```
-
-### Backtest (`hedge` CLI)
-
-```bash
-poetry run hedge backtest \
-  --tickers AAPL,MSFT,NVDA \
-  --start-date 2024-01-01 \
-  --end-date 2024-06-30 \
-  --initial-capital 150000 \
-  --analysts warren_buffett,charlie_munger \
-  --model-name gpt-4o
-```
-
-Behind the scenes this wires `BacktestEngine` with the same prefetch + analyst graph infrastructure used in live runs.
-
-### LangGraph Analysis CLI
-
-```bash
-poetry run python src/main.py --tickers "HM B,TELIA,AAPL" --analysts-all --model-name gpt-4o --model-provider openai
-```
+| `python src/main.py` | LangGraph multi-agent workflow for ad-hoc analysis |
+| `python src/portfolio_manager.py` | Legacy rebalance CLI (same options as `hedge rebalance`) |
+| `poetry run backtester` | Original backtester with interactive prompts |
 
 ### Web UI
 
 ```bash
-# backend
+# Backend
 poetry run uvicorn app.backend.main:app --reload
 
-# frontend (Vite + React)
+# Frontend (Vite + React)
 cd app/frontend && npm install && npm run dev
 ```
 
----
+## Analyst Presets
 
-## Analyst Architecture
+| Preset | Count | Members |
+| --- | --- | --- |
+| `favorites` | 5 | fundamentals, technical, jim_simons, news_sentiment, stanley_druckenmiller |
+| `core` | 4 | fundamentals, technical, sentiment, valuation |
+| `famous` | 13 | All 13 investor personas |
+| `all` | 17 | All investor personas + core analysts |
+| `basic` | 1 | fundamentals only (fast testing) |
 
-- **Core deterministic analysts** (5): fundamentals, technicals, valuation, sentiment, news_sentiment.
-- **Investor personas** (13): Warren Buffett, Charlie Munger, Stanley Druckenmiller, Peter Lynch, Ben Graham, Phil Fisher, Bill Ackman, Cathie Wood, Michael Burry, Mohnish Pabrai, Rakesh Jhunjhunwala, Aswath Damodaran, Jim Simons.
-- **Position-aware analysis**: News sentiment analyst filters events based on each position's acquisition date (from portfolio CSV's `date_acquired` column), analyzing events since purchase for existing holdings or last 30 days for new candidates.
-- **Task Queue**: `src/data/analyst_task_queue.py` records each analyst×ticker×model combo per analysis date so cached outputs are reused if you rerun the same day (post-crash or after toggling analysts back on). Coupled with `src/data/analysis_cache.py` for actual signal storage.
-- **Transcript storage**: analyst reasoning per ticker is stored in `app/backend/hedge_fund.db` via `src/data/analysis_storage.py`; export via CLI prompt or `--export-transcript`.
+Custom: pass a comma-separated list, e.g. `--analysts warren_buffett,peter_lynch,fundamentals`.
 
----
+## Analyst Roster
 
-## Working With IBKR
+### Investor personas (13, LLM-based)
 
-1. Start the IBKR Client Portal Gateway locally (default `https://localhost:5000`).
-2. Run `poetry run hedge rebalance --portfolio-source ibkr --ibkr-account <acct>` (host/port flags available if you proxy the gateway).
-3. The new `IBKRClient` maps positions + ledger cash into the same `Portfolio` dataclass consumed by the manager, so you can switch between CSV snapshots and live pulls without touching downstream logic.
+| Agent | Style |
+| --- | --- |
+| Warren Buffett | The Oracle of Omaha -- quality compounders at fair prices |
+| Charlie Munger | The Rational Thinker -- mental models and margin of safety |
+| Stanley Druckenmiller | The Macro Investor -- top-down macro with bottom-up stock picks |
+| Peter Lynch | The 10-Bagger Hunter -- growth at a reasonable price |
+| Ben Graham | The Father of Value Investing -- deep value and net-nets |
+| Phil Fisher | The Scuttlebutt Investor -- qualitative growth analysis |
+| Bill Ackman | The Activist Investor -- concentrated positions in catalysts |
+| Cathie Wood | The Queen of Growth -- disruptive innovation and ARK-style bets |
+| Michael Burry | The Big Short Contrarian -- deep dives into overlooked value |
+| Mohnish Pabrai | The Dhandho Investor -- low risk, high uncertainty bets |
+| Rakesh Jhunjhunwala | The Big Bull of India -- emerging-market growth plays |
+| Aswath Damodaran | The Dean of Valuation -- DCF and intrinsic value models |
+| Jim Simons | The Quant King -- statistical arbitrage and mean reversion |
 
-### IBKR Order Preview + Execution
+### Core analysts (5, deterministic)
 
-- `--ibkr-whatif` runs Client Portal "what-if" previews for each rebalance order (no trades placed).
-- `--ibkr-execute` submits orders after previews, with a per-order confirmation prompt (use `--ibkr-yes` to auto-confirm).
-- `--dry-run` always disables execution even if `--ibkr-execute` is set.
+| Agent | Focus |
+| --- | --- |
+| Fundamentals | Financial statement analysis -- margins, growth, returns |
+| Technical | Chart patterns -- moving averages, RSI, volume |
+| Sentiment | Market sentiment -- insider activity, report calendars |
+| Valuation | Intrinsic value -- DCF, comparables, owner earnings |
+| News Sentiment | Position-aware news analysis -- events since acquisition date for existing holdings, last 30 days for new candidates |
 
-Example (preview only):
+## IBKR Integration
+
+### Gateway setup
 
 ```bash
+cd clientportal.gw && bin/run.sh root/conf.yaml
+# Authenticate at https://localhost:5001
+```
+
+### Preview and execution
+
+```bash
+# Preview only (no trades placed)
 poetry run hedge rebalance \
   --portfolio-source ibkr \
   --universe portfolios/borsdata_universe.txt \
   --analysts favorites \
   --ibkr-whatif
+
+# Execute with per-order confirmation
+poetry run hedge rebalance \
+  --portfolio-source ibkr --ibkr-execute
+
+# Execute without confirmation (use with caution)
+poetry run hedge rebalance \
+  --portfolio-source ibkr --ibkr-execute --ibkr-yes
 ```
 
-### Resolving Ambiguous Contracts
+### Contract overrides
 
-If IBKR returns multiple contract matches for a ticker, execution will skip that order for safety. You can provide an explicit override in `data/ibkr_contract_mappings.json`:
+When IBKR returns multiple contract matches for a ticker, execution skips that order for safety. Provide explicit overrides in `data/ibkr_contract_mappings.json`:
 
 ```json
 {
@@ -187,36 +179,65 @@ If IBKR returns multiple contract matches for a ticker, execution will skip that
 }
 ```
 
-Only use overrides after validating the conid/exchange in Client Portal or TWS. The execution flow will only accept overrides that also appear in IBKR contract search results.
+Validate overrides haven't gone stale:
 
-### Trading Permissions
+```bash
+poetry run hedge ibkr validate            # Check all overrides
+poetry run hedge ibkr validate --fix      # Auto-refresh invalid contracts
+poetry run hedge ibkr orders              # Show live orders
+```
 
-If preview responses show `No trading permissions`, the preview loop aborts to avoid any accidental order attempts. Update your IBKR trading permissions for the relevant markets and re-run the preview.
+### Trading permissions
 
----
+If preview responses show `No trading permissions`, the preview loop aborts. Update your IBKR trading permissions for the relevant markets and re-run.
+
+## Architecture
+
+```
+Borsdata API --> Parallel Fetcher --> 3-Layer Cache --> 18 Analysts --> Portfolio Manager
+                                                                             |
+                                                                    IBKR Client Portal
+                                                                             |
+                                                                     Order Execution
+```
+
+**Cache layers**: In-memory LLM cache, SQLite KPI/signal cache (`data/prefetch_cache.db`), durable task queue (`data/analyst_tasks.db`).
+
+### Key source files
+
+| File | Purpose |
+| --- | --- |
+| `src/cli/hedge.py` | Click-based unified CLI |
+| `src/services/portfolio_runner.py` | Rebalance orchestration and analyst preset resolution |
+| `src/agents/enhanced_portfolio_manager.py` | Portfolio management with parallel LLM coordination |
+| `src/data/borsdata_client.py` | Core API client with rate limiting |
+| `src/data/parallel_api_wrapper.py` | Parallel data fetching with caching |
+| `src/data/borsdata_metrics_mapping.py` | 108 KPI mappings (Borsdata to financial metrics) |
+| `src/data/analyst_task_queue.py` | Durable analyst x ticker task tracking |
+| `src/data/prefetch_store.py` | SQLite KPI/metrics cache |
+| `src/integrations/ibkr_client.py` | IBKR Client Portal integration |
+| `src/integrations/ibkr_execution.py` | Order preview and execution |
+| `src/integrations/ibkr_contract_mapper.py` | ISIN-based contract resolution |
 
 ## Testing
 
 ```bash
-PYTHONPATH=. pytest \
-  tests/data/test_analyst_task_queue.py \
-  tests/integrations/test_ibkr_client.py \
-  tests/test_enhanced_portfolio_manager.py
+poetry run pytest                         # All 140 tests
+poetry run pytest tests/integrations/     # IBKR tests
+poetry run pytest tests/data/             # Data layer tests
+poetry run pytest tests/backtesting/      # Backtesting tests
 ```
 
-- Add Börsdata fixtures under `tests/fixtures/` when covering new endpoints.
-- Respect the 100 calls/10 seconds rule in any new integration tests (use recorded fixtures or the cache).
-
-### Manual Smoke Test (30 random tickers)
+### Smoke test (30 random tickers)
 
 ```bash
-tickers=$(python - <<'PY'
+tickers=$(python3 -c "
 import random
 from pathlib import Path
-universe = [line.strip() for line in Path('portfolios/borsdata_universe.txt').read_text().splitlines() if line.strip() and not line.startswith('#')]
+universe = [l.strip() for l in Path('portfolios/borsdata_universe.txt').read_text().splitlines()
+            if l.strip() and not l.startswith('#')]
 print(','.join(random.sample(universe, 30)))
-PY
-)
+")
 
 poetry run hedge rebalance \
   --portfolio example_portfolio.csv \
@@ -227,23 +248,31 @@ poetry run hedge rebalance \
   --export-transcript
 ```
 
-This verifies Börsdata connectivity, the hedge CLI, transcript exports, and the analyst task queue on a smaller universe before running the full weekly job.
+## Project Structure
 
----
-
-## Documentation
-
-- `PROJECT_LOG.md` – authoritative session log + decisions; update at the end of every working session.
-- `docs/borsdata_integration_plan.md`, `docs/reference/` – endpoint mappings, KPI schemas, and migration notes.
-- `README_Borsdata_API.md` – summarized API instructions pulled from the official swagger.
-
----
+```
+ai-hedge-fund/
+  app/              Web UI (FastAPI backend + Vite/React frontend)
+  clientportal.gw/  IBKR Client Portal Gateway
+  data/             Contract mappings, SQLite caches, task queue DB
+  docs/             Borsdata endpoint mappings, KPI schemas, migration notes
+  logs/             Session logs and project summary
+  portfolios/       Universe files and portfolio CSVs
+  scripts/          Utility scripts (universe builder, etc.)
+  src/
+    agents/         18 analyst agents + portfolio managers
+    cli/            Click-based hedge CLI
+    data/           Borsdata client, caching, KPI assembly
+    integrations/   IBKR client, contract mapper, execution
+    llm/            LLM provider abstraction and caching
+    services/       Rebalance orchestration
+    tools/          Agent tool definitions
+  tests/            140 tests (data, integrations, backtesting)
+```
 
 ## Disclaimer
 
-Educational research only. No live trading. No warranties. Do your own diligence and consult professionals before investing real capital.
-
----
+This is an educational research project. No warranties. Do your own due diligence and consult professionals before investing real capital.
 
 ## License
 

@@ -1,22 +1,1192 @@
 {
   "contracts": {
-    "TK": {
-      "conid": 732027280,
-      "exchange": "NYSE",
-      "currency": "USD",
-      "description": "Teekay Corp Ltd"
+    "4C": {
+      "conid": 563279171,
+      "currency": null,
+      "description": "4C",
+      "exchange": "SMART"
     },
-    "SFL": {
-      "conid": 390603973,
-      "exchange": "NYSE",
-      "currency": "USD",
-      "description": "SFL Corp Ltd"
+    "AAPL": {
+      "conid": 265598,
+      "currency": null,
+      "description": "APPLE INC",
+      "exchange": "NASDAQ"
+    },
+    "ABNB": {
+      "conid": 459530964,
+      "currency": null,
+      "description": "ABNB",
+      "exchange": "SMART"
+    },
+    "ADVE": {
+      "conid": 167044158,
+      "currency": null,
+      "description": "ADVE",
+      "exchange": "SMART"
+    },
+    "AMD": {
+      "conid": 4391,
+      "currency": null,
+      "description": "ADVANCED MICRO DEVICES",
+      "exchange": "NASDAQ"
+    },
+    "AMR": {
+      "conid": 468056568,
+      "currency": null,
+      "description": "AMR",
+      "exchange": "SMART"
+    },
+    "ANNX": {
+      "conid": 436368245,
+      "currency": null,
+      "description": "ANNX",
+      "exchange": "SMART"
+    },
+    "APOTEA": {
+      "conid": 746112486,
+      "currency": null,
+      "description": "APOTEA",
+      "exchange": "SMART"
+    },
+    "AQ": {
+      "conid": 702290433,
+      "currency": null,
+      "description": "AQ",
+      "exchange": "SMART"
+    },
+    "ARVN": {
+      "conid": 335150864,
+      "currency": null,
+      "description": "ARVN",
+      "exchange": "SMART"
+    },
+    "ASPI": {
+      "conid": 592234878,
+      "currency": null,
+      "description": "ASP ISOTOPES INC",
+      "exchange": "NASDAQ"
+    },
+    "ATI": {
+      "conid": 1946967,
+      "currency": null,
+      "description": "ATI INC",
+      "exchange": "NYSE"
+    },
+    "AXS": {
+      "conid": 18963197,
+      "currency": null,
+      "description": "AXIS CAPITAL HOLDINGS LTD",
+      "exchange": "NYSE"
+    },
+    "BAHN B": {
+      "conid": 676759648,
+      "currency": null,
+      "description": "BAHN.B",
+      "exchange": "SMART"
+    },
+    "BEGR": {
+      "conid": 233145509,
+      "currency": null,
+      "description": "BEGR",
+      "exchange": "SMART"
+    },
+    "BEIJ B": {
+      "conid": 483631870,
+      "currency": null,
+      "description": "BEIJ.B",
+      "exchange": "SMART"
+    },
+    "BERNER B": {
+      "conid": 170681853,
+      "currency": null,
+      "description": "BERNER.B",
+      "exchange": "SMART"
+    },
+    "BEYOND": {
+      "conid": 603521083,
+      "currency": null,
+      "description": "8WP",
+      "exchange": "SMART"
+    },
+    "BIDU": {
+      "conid": 35359385,
+      "currency": null,
+      "description": "BAIDU INC - SPON ADR",
+      "exchange": "NASDAQ"
+    },
+    "BIOWKS": {
+      "conid": 299433738,
+      "currency": null,
+      "description": "BIOWKS",
+      "exchange": "VALUE"
+    },
+    "BLDP": {
+      "conid": 56935150,
+      "currency": null,
+      "description": "BALLARD POWER SYSTEMS INC",
+      "exchange": "NASDAQ"
+    },
+    "BN": {
+      "conid": 599900800,
+      "currency": null,
+      "description": "BROOKFIELD CORP",
+      "exchange": "NYSE"
+    },
+    "BOMILL": {
+      "conid": 451111451,
+      "currency": null,
+      "description": "BOMILL",
+      "exchange": "SMART"
+    },
+    "BRIGHT": {
+      "conid": 574745848,
+      "currency": null,
+      "description": "23WA",
+      "exchange": "FWB2"
+    },
+    "BRZE": {
+      "conid": 526726705,
+      "currency": null,
+      "description": "BRZE",
+      "exchange": "SMART"
+    },
+    "BT.A": {
+      "conid": 13672206,
+      "currency": null,
+      "description": "BT.A",
+      "exchange": "SMART"
+    },
+    "BUSER": {
+      "conid": 839160282,
+      "currency": null,
+      "description": "BUSER",
+      "exchange": "SMART"
+    },
+    "CAST": {
+      "conid": 855753575,
+      "currency": null,
+      "description": "FREECAST INC",
+      "exchange": "NASDAQ"
+    },
+    "CCC": {
+      "conid": 505405416,
+      "currency": null,
+      "description": "CCC INTELLIGENT SOLUTIONS HO",
+      "exchange": "NASDAQ"
+    },
+    "CCM": {
+      "conid": 716121769,
+      "currency": null,
+      "description": "CONCORD MEDICAL - SPON ADR",
+      "exchange": "NYSE"
+    },
+    "CFLT": {
+      "conid": 498854138,
+      "currency": null,
+      "description": "CONFLUENT INC-CLASS A",
+      "exchange": "NASDAQ"
+    },
+    "CINT": {
+      "conid": 525260366,
+      "currency": null,
+      "description": "CINT",
+      "exchange": "SMART"
+    },
+    "CISS": {
+      "conid": 848759361,
+      "currency": null,
+      "description": "C3IS INC",
+      "exchange": "NASDAQ"
+    },
+    "CLIME B": {
+      "conid": 756193802,
+      "currency": null,
+      "description": "CLIME.B",
+      "exchange": "SMART"
+    },
+    "CMH": {
+      "conid": 163533937,
+      "currency": null,
+      "description": "CARMANAH TECHNOLOGIES CORP",
+      "exchange": "VALUE"
+    },
+    "CRNO B": {
+      "conid": 695571642,
+      "currency": null,
+      "description": "CRNO.B",
+      "exchange": "SMART"
+    },
+    "CS": {
+      "conid": 29612141,
+      "currency": null,
+      "description": "AXA SA",
+      "exchange": "SBF"
+    },
+    "CSU": {
+      "conid": 39194759,
+      "currency": null,
+      "description": "CSU",
+      "exchange": "SMART"
+    },
+    "CTM": {
+      "conid": 589635261,
+      "currency": null,
+      "description": "CASTELLUM INC",
+      "exchange": "AMEX"
+    },
+    "CVRX": {
+      "conid": 499640666,
+      "currency": null,
+      "description": "CVRX",
+      "exchange": "SMART"
+    },
+    "DB7": {
+      "conid": 90657189,
+      "currency": null,
+      "description": "DIB",
+      "exchange": "SMART"
+    },
+    "DBG": {
+      "conid": 1321980,
+      "currency": null,
+      "description": "DBG",
+      "exchange": "SMART"
+    },
+    "DDD": {
+      "conid": 6542334,
+      "currency": null,
+      "description": "3D SYSTEMS CORP",
+      "exchange": "NYSE"
+    },
+    "DDOG": {
+      "conid": 383858515,
+      "currency": null,
+      "description": "DDOG",
+      "exchange": "SMART"
+    },
+    "DHT": {
+      "conid": 110322264,
+      "currency": null,
+      "description": "DHT",
+      "exchange": "SMART"
+    },
+    "DOMO": {
+      "conid": 324405894,
+      "currency": null,
+      "description": "DOMO",
+      "exchange": "SMART"
+    },
+    "DORO": {
+      "conid": 1329158,
+      "currency": null,
+      "description": "DORO AB",
+      "exchange": "VALUE"
+    },
+    "EA": {
+      "conid": 268995,
+      "currency": null,
+      "description": "ELECTRONIC ARTS INC",
+      "exchange": "NASDAQ"
+    },
+    "EAST": {
+      "conid": 701489097,
+      "currency": null,
+      "description": "EAST",
+      "exchange": "SMART"
+    },
+    "EBAY": {
+      "conid": 4347086,
+      "currency": null,
+      "description": "EBAY INC",
+      "exchange": "NASDAQ"
+    },
+    "EGTX": {
+      "conid": 86600875,
+      "currency": null,
+      "description": "EGTX",
+      "exchange": "SMART"
+    },
+    "EMBELL": {
+      "conid": 478483379,
+      "currency": null,
+      "description": "EMBELL",
+      "exchange": "SMART"
+    },
+    "EMBRAC B": {
+      "conid": 753729002,
+      "currency": null,
+      "description": "EMBRAC.B",
+      "exchange": "SMART"
+    },
+    "ENGCON B": {
+      "conid": 567343887,
+      "currency": null,
+      "description": "ENGCON.B",
+      "exchange": "SMART"
+    },
+    "FDEV": {
+      "conid": 131115040,
+      "currency": null,
+      "description": "FDEV",
+      "exchange": "SMART"
+    },
+    "FDY": {
+      "conid": 603515480,
+      "currency": null,
+      "description": "FDY",
+      "exchange": "FWB2"
+    },
+    "FIZZ": {
+      "conid": 2016423,
+      "currency": null,
+      "description": "NATIONAL BEVERAGE CORP",
+      "exchange": "NASDAQ"
+    },
+    "FPC": {
+      "conid": 603518025,
+      "currency": null,
+      "description": "FIRST PACIFIC CO",
+      "exchange": "FWB2"
+    },
+    "FRO": {
+      "conid": 604736961,
+      "currency": null,
+      "description": "FRONTLINE PLC",
+      "exchange": "NYSE"
+    },
+    "FSLR": {
+      "conid": 41622169,
+      "currency": null,
+      "description": "FIRST SOLAR INC",
+      "exchange": "NASDAQ"
+    },
+    "FWZ": {
+      "conid": 570601840,
+      "currency": null,
+      "description": "FWZ",
+      "exchange": "SMART"
+    },
+    "G5EN": {
+      "conid": 179160041,
+      "currency": null,
+      "description": "G5EN",
+      "exchange": "SMART"
+    },
+    "GGD": {
+      "conid": 72563331,
+      "currency": null,
+      "description": "GOGOLD RESOURCES INC",
+      "exchange": "TSE"
+    },
+    "GGEO": {
+      "conid": 603513514,
+      "currency": null,
+      "description": "GO91",
+      "exchange": "FWB2"
+    },
+    "GLNG": {
+      "conid": 16692333,
+      "currency": null,
+      "description": "GLNG",
+      "exchange": "SMART"
+    },
+    "GOFORE": {
+      "conid": 603520765,
+      "currency": null,
+      "description": "1E2",
+      "exchange": "SMART"
+    },
+    "GOOGL": {
+      "conid": 208813719,
+      "currency": null,
+      "description": "ALPHABET INC-CL A",
+      "exchange": "NASDAQ"
+    },
+    "GOT": {
+      "conid": 406461325,
+      "currency": null,
+      "description": "GOT",
+      "exchange": "SMART"
+    },
+    "GOTU": {
+      "conid": 369120395,
+      "currency": null,
+      "description": "GOTU",
+      "exchange": "SMART"
+    },
+    "GPRO": {
+      "conid": 158249582,
+      "currency": null,
+      "description": "GOPRO INC-CLASS A",
+      "exchange": "NASDAQ"
+    },
+    "GRVY": {
+      "conid": 193941819,
+      "currency": null,
+      "description": "GRVY",
+      "exchange": "SMART"
+    },
+    "HAS": {
+      "conid": 957694,
+      "currency": null,
+      "description": "HAS",
+      "exchange": "SMART"
+    },
+    "HAV": {
+      "conid": 519271023,
+      "currency": null,
+      "description": "HAV",
+      "exchange": "SMART"
+    },
+    "HEBA B": {
+      "conid": 561208248,
+      "currency": null,
+      "description": "HEBA.B",
+      "exchange": "SMART"
+    },
+    "HIVE": {
+      "conid": 641568851,
+      "currency": null,
+      "description": "HIVE DIGITAL TECHNOLOGIES LT",
+      "exchange": "NASDAQ"
+    },
+    "HM B": {
+      "conid": 917850,
+      "currency": null,
+      "description": "HM.B",
+      "exchange": "SMART"
+    },
+    "HOVE": {
+      "conid": 677564383,
+      "currency": null,
+      "description": "HOVE",
+      "exchange": "SMART"
+    },
+    "HTRO": {
+      "conid": 565113398,
+      "currency": null,
+      "description": "HTRO",
+      "exchange": "SMART"
+    },
+    "IMPC": {
+      "conid": 153048379,
+      "currency": null,
+      "description": "IMPC",
+      "exchange": "SMART"
+    },
+    "INDU A": {
+      "conid": 1329398,
+      "currency": null,
+      "description": "INDU.A",
+      "exchange": "SMART"
+    },
+    "INFREA": {
+      "conid": 314721969,
+      "currency": null,
+      "description": "INFREA",
+      "exchange": "SMART"
+    },
+    "ININ": {
+      "conid": 603512253,
+      "currency": null,
+      "description": "72G",
+      "exchange": "SMART"
+    },
+    "INISS B": {
+      "conid": 497190310,
+      "currency": null,
+      "description": "INISS.B",
+      "exchange": "SMART"
+    },
+    "IOB": {
+      "conid": 4875046,
+      "currency": null,
+      "description": "IBAB",
+      "exchange": "SMART"
+    },
+    "IPCO": {
+      "conid": 272954082,
+      "currency": null,
+      "description": "INTERNATIONAL PETROLEUM CORP",
+      "exchange": "SFB"
+    },
+    "ITECH": {
+      "conid": 319495849,
+      "currency": null,
+      "description": "ITECH",
+      "exchange": "SMART"
+    },
+    "ITT": {
+      "conid": 233010383,
+      "currency": null,
+      "description": "ITT",
+      "exchange": "SMART"
+    },
+    "JOYY": {
+      "conid": 397281388,
+      "currency": null,
+      "description": "JOYY INC-ADR",
+      "exchange": "NASDAQ"
+    },
+    "K2A B": {
+      "conid": 371586139,
+      "currency": null,
+      "description": "K2A.B",
+      "exchange": "SMART"
+    },
+    "KAMBI": {
+      "conid": 152451657,
+      "currency": null,
+      "description": "KAMBI",
+      "exchange": "SMART"
+    },
+    "KESKOB": {
+      "conid": 12539499,
+      "currency": null,
+      "description": "KESKOB",
+      "exchange": "SMART"
+    },
+    "KLARA B": {
+      "conid": 529677420,
+      "currency": null,
+      "description": "KLARA.B",
+      "exchange": "SMART"
+    },
+    "KSPI": {
+      "conid": 679110496,
+      "currency": null,
+      "description": "JSC KASPI.KZ ADR",
+      "exchange": "NASDAQ"
+    },
+    "KT": {
+      "conid": 6608089,
+      "currency": null,
+      "description": "KT CORP-SP ADR",
+      "exchange": "NYSE"
+    },
+    "LEM": {
+      "conid": 245426863,
+      "currency": null,
+      "description": "LEM",
+      "exchange": "SMART"
+    },
+    "LINC": {
+      "conid": 35046585,
+      "currency": null,
+      "description": "LINC",
+      "exchange": "SMART"
+    },
+    "LODE": {
+      "conid": 761715322,
+      "currency": null,
+      "description": "COMSTOCK INC",
+      "exchange": "AMEX"
+    },
+    "LOGI": {
+      "conid": 41475996,
+      "currency": null,
+      "description": "LOGI",
+      "exchange": "SMART"
+    },
+    "LUC": {
+      "conid": 52641828,
+      "currency": null,
+      "description": "LUCARA DIAMOND CORP",
+      "exchange": "TSE"
+    },
+    "LUG": {
+      "conid": 603525823,
+      "currency": null,
+      "description": "LUG",
+      "exchange": "FWB2"
     },
     "LUMI": {
-      "conid": 278544593,
-      "exchange": "SFB",
-      "currency": "SEK",
-      "description": "Lundin Mining Corp"
+      "conid": 603522202,
+      "currency": null,
+      "description": "8KS",
+      "exchange": "SMART"
+    },
+    "LUND B": {
+      "conid": 1329566,
+      "currency": null,
+      "description": "LUND.B",
+      "exchange": "SMART"
+    },
+    "MAU": {
+      "conid": 451447716,
+      "currency": null,
+      "description": "MONTAGE GOLD CORP",
+      "exchange": "TSE"
+    },
+    "MDB": {
+      "conid": 292833239,
+      "currency": null,
+      "description": "MONGODB INC",
+      "exchange": "NASDAQ"
+    },
+    "MER": {
+      "conid": 37099368,
+      "currency": null,
+      "description": "MER",
+      "exchange": "SMART"
+    },
+    "META": {
+      "conid": 107113386,
+      "currency": null,
+      "description": "META PLATFORMS INC-CLASS A",
+      "exchange": "NASDAQ"
+    },
+    "MKO": {
+      "conid": 618187451,
+      "currency": null,
+      "description": "MAKO MINING CORP",
+      "exchange": "VENTURE"
+    },
+    "MNTC": {
+      "conid": 371375512,
+      "currency": null,
+      "description": "MNTC",
+      "exchange": "SMART"
+    },
+    "MNY": {
+      "conid": 659517246,
+      "currency": null,
+      "description": "MONEYHERO LTD-A",
+      "exchange": "NASDAQ"
+    },
+    "MPCC": {
+      "conid": 307129507,
+      "currency": null,
+      "description": "MPCC",
+      "exchange": "SMART"
+    },
+    "MRNA": {
+      "conid": 344809106,
+      "currency": null,
+      "description": "MODERNA INC",
+      "exchange": "NASDAQ"
+    },
+    "MRVI": {
+      "conid": 456473636,
+      "currency": null,
+      "description": "MARAVAI LIFESCIENCES HLDGS-A",
+      "exchange": "NASDAQ"
+    },
+    "MSA": {
+      "conid": 527091247,
+      "currency": null,
+      "description": "MSA",
+      "exchange": "SMART"
+    },
+    "MSCI": {
+      "conid": 47101335,
+      "currency": null,
+      "description": "MSCI INC",
+      "exchange": "NYSE"
+    },
+    "MSFT": {
+      "conid": 272093,
+      "currency": null,
+      "description": "MICROSOFT CORP",
+      "exchange": "NASDAQ"
+    },
+    "MTCH": {
+      "conid": 430252818,
+      "currency": null,
+      "description": "MTCH",
+      "exchange": "SMART"
+    },
+    "MTG B": {
+      "conid": 566186437,
+      "currency": null,
+      "description": "MTG.B",
+      "exchange": "SMART"
+    },
+    "MU": {
+      "conid": 9939,
+      "currency": null,
+      "description": "MICRON TECHNOLOGY INC",
+      "exchange": "NASDAQ"
+    },
+    "NCTY": {
+      "conid": 656169170,
+      "currency": null,
+      "description": "THE9 LTD-ADR",
+      "exchange": "NASDAQ"
+    },
+    "NEON": {
+      "conid": 335611125,
+      "currency": null,
+      "description": "NEON",
+      "exchange": "SMART"
+    },
+    "NEPA": {
+      "conid": 231145349,
+      "currency": null,
+      "description": "NEPA",
+      "exchange": "SMART"
+    },
+    "NET": {
+      "conid": 466706633,
+      "currency": null,
+      "description": "NET",
+      "exchange": "SMART"
+    },
+    "NFLX": {
+      "conid": 15124833,
+      "currency": null,
+      "description": "NETFLIX INC",
+      "exchange": "NASDAQ"
+    },
+    "NGEX": {
+      "conid": 826135620,
+      "currency": null,
+      "description": "NGEX MINERALS LTD",
+      "exchange": "TSE"
+    },
+    "NGS": {
+      "conid": 16420271,
+      "currency": null,
+      "description": "NGS",
+      "exchange": "SMART"
+    },
+    "NIBE B": {
+      "conid": 492734118,
+      "currency": null,
+      "description": "NIBE.B",
+      "exchange": "SMART"
+    },
+    "NOA": {
+      "conid": 313488811,
+      "currency": null,
+      "description": "NORTH AMERICAN CONSTRUCTION",
+      "exchange": "NYSE"
+    },
+    "NORTHM": {
+      "conid": 433431728,
+      "currency": null,
+      "description": "NORTHM",
+      "exchange": "SMART"
+    },
+    "NREST": {
+      "conid": 704392180,
+      "currency": null,
+      "description": "NREST",
+      "exchange": "SMART"
+    },
+    "NTNX": {
+      "conid": 249850033,
+      "currency": null,
+      "description": "NTNX",
+      "exchange": "SMART"
+    },
+    "NVDA": {
+      "conid": 4815747,
+      "currency": null,
+      "description": "NVIDIA CORP",
+      "exchange": "NASDAQ"
+    },
+    "NVEC": {
+      "conid": 17004501,
+      "currency": null,
+      "description": "NVEC",
+      "exchange": "SMART"
+    },
+    "NVGS": {
+      "conid": 138999605,
+      "currency": null,
+      "description": "NVGS",
+      "exchange": "SMART"
+    },
+    "OBAB": {
+      "conid": 531677453,
+      "currency": null,
+      "description": "OBAB",
+      "exchange": "SMART"
+    },
+    "OET": {
+      "conid": 365305868,
+      "currency": null,
+      "description": "OET",
+      "exchange": "SMART"
+    },
+    "OLN": {
+      "conid": 10799,
+      "currency": null,
+      "description": "OLIN CORP",
+      "exchange": "NYSE"
+    },
+    "ONCOZ": {
+      "conid": 469300062,
+      "currency": null,
+      "description": "ONCOZ",
+      "exchange": "SMART"
+    },
+    "ONDS": {
+      "conid": 455415330,
+      "currency": null,
+      "description": "ONDS",
+      "exchange": "SMART"
+    },
+    "ONFO": {
+      "conid": 569570295,
+      "currency": null,
+      "description": "ONFOLIO HOLDINGS INC",
+      "exchange": "NASDAQ"
+    },
+    "PDX": {
+      "conid": 235423771,
+      "currency": null,
+      "description": "PDX",
+      "exchange": "SMART"
+    },
+    "PEN": {
+      "conid": 206663857,
+      "currency": null,
+      "description": "PENUMBRA INC",
+      "exchange": "NYSE"
+    },
+    "PINS": {
+      "conid": 360975915,
+      "currency": null,
+      "description": "PINTEREST INC- CLASS A",
+      "exchange": "NYSE"
+    },
+    "PLAZ B": {
+      "conid": 139406731,
+      "currency": null,
+      "description": "PLAZ.B",
+      "exchange": "SMART"
+    },
+    "PLTK": {
+      "conid": 465362703,
+      "currency": null,
+      "description": "PLTK",
+      "exchange": "SMART"
+    },
+    "PRM": {
+      "conid": 743353381,
+      "currency": null,
+      "description": "PERIMETER SOLUTIONS INC",
+      "exchange": "NYSE"
+    },
+    "PSIX": {
+      "conid": 93903658,
+      "currency": null,
+      "description": "POWER SOLUTIONS INTERNATIONA",
+      "exchange": "NASDAQ"
+    },
+    "PTLO": {
+      "conid": 522320577,
+      "currency": null,
+      "description": "PTLO",
+      "exchange": "SMART"
+    },
+    "PUBM": {
+      "conid": 459468268,
+      "currency": null,
+      "description": "PUBM",
+      "exchange": "SMART"
+    },
+    "QIIWI": {
+      "conid": 603524792,
+      "currency": null,
+      "description": "4UJ",
+      "exchange": "FWB2"
+    },
+    "QLYS": {
+      "conid": 114814349,
+      "currency": null,
+      "description": "QUALYS INC",
+      "exchange": "NASDAQ"
+    },
+    "QSYS": {
+      "conid": 762272201,
+      "currency": null,
+      "description": "QSYS",
+      "exchange": "SMART"
+    },
+    "RANA": {
+      "conid": 474196627,
+      "currency": null,
+      "description": "RANA",
+      "exchange": "SMART"
+    },
+    "ROP": {
+      "conid": 2585629,
+      "currency": null,
+      "description": "ROPER TECHNOLOGIES INC",
+      "exchange": "NASDAQ"
+    },
+    "RS1": {
+      "conid": 517611084,
+      "currency": null,
+      "description": "RH",
+      "exchange": "IBIS"
+    },
+    "RUG": {
+      "conid": 477139497,
+      "currency": null,
+      "description": "RUG",
+      "exchange": "SMART"
+    },
+    "SBLK": {
+      "conid": 236994457,
+      "currency": null,
+      "description": "SBLK",
+      "exchange": "SMART"
+    },
+    "SBOK": {
+      "conid": 73954427,
+      "currency": null,
+      "description": "SBOK",
+      "exchange": "SMART"
+    },
+    "SEA1": {
+      "conid": 493736906,
+      "currency": null,
+      "description": "SEA1",
+      "exchange": "SMART"
+    },
+    "SERT": {
+      "conid": 309362880,
+      "currency": null,
+      "description": "SERT",
+      "exchange": "SMART"
+    },
+    "SFL": {
+      "conid": 75095437,
+      "currency": null,
+      "description": "SFL",
+      "exchange": "SMART"
+    },
+    "SHB B": {
+      "conid": 193903636,
+      "currency": null,
+      "description": "SHB.B",
+      "exchange": "SMART"
+    },
+    "SLEEP": {
+      "conid": 495752328,
+      "currency": null,
+      "description": "SLEEP",
+      "exchange": "SMART"
+    },
+    "SNAP": {
+      "conid": 268060148,
+      "currency": null,
+      "description": "SNAP INC - A",
+      "exchange": "NYSE"
+    },
+    "SOC": {
+      "conid": 159331056,
+      "currency": null,
+      "description": "SOC",
+      "exchange": "SMART"
+    },
+    "SOHU": {
+      "conid": 320224936,
+      "currency": null,
+      "description": "SOHU",
+      "exchange": "SMART"
+    },
+    "SOLAR B": {
+      "conid": 652838459,
+      "currency": null,
+      "description": "SOLAR.B",
+      "exchange": "SMART"
+    },
+    "SPG": {
+      "conid": 733485881,
+      "currency": null,
+      "description": "SPG",
+      "exchange": "SMART"
+    },
+    "SPOTR": {
+      "conid": 789471277,
+      "currency": null,
+      "description": "6V6",
+      "exchange": "FWB2"
+    },
+    "STNG": {
+      "conid": 349869083,
+      "currency": null,
+      "description": "SCORPIO TANKERS INC",
+      "exchange": "NYSE"
+    },
+    "STOR B": {
+      "conid": 518529268,
+      "currency": null,
+      "description": "STOR.B",
+      "exchange": "SMART"
+    },
+    "STWK": {
+      "conid": 353195639,
+      "currency": null,
+      "description": "STWK",
+      "exchange": "SMART"
+    },
+    "TCC A": {
+      "conid": 448573779,
+      "currency": null,
+      "description": "TCC",
+      "exchange": "VALUE"
+    },
+    "TEAD": {
+      "conid": 504262517,
+      "currency": null,
+      "description": "TEADS HOLDING CO",
+      "exchange": "NASDAQ"
+    },
+    "TELIA": {
+      "conid": 33460181,
+      "currency": null,
+      "description": "TELIA",
+      "exchange": "SMART"
+    },
+    "TITA B": {
+      "conid": 531395145,
+      "currency": null,
+      "description": "TITA.B",
+      "exchange": "SMART"
+    },
+    "TK": {
+      "conid": 732027280,
+      "currency": null,
+      "description": "TEEKAY CORP LTD",
+      "exchange": "NYSE"
+    },
+    "TRMD A": {
+      "conid": 278826129,
+      "currency": null,
+      "description": "TRMD.A",
+      "exchange": "SMART"
+    },
+    "TRUP": {
+      "conid": 160756775,
+      "currency": null,
+      "description": "TRUPANION INC",
+      "exchange": "NASDAQ"
+    },
+    "TSLA": {
+      "conid": 76792991,
+      "currency": null,
+      "description": "TESLA INC",
+      "exchange": "NASDAQ"
+    },
+    "TTD": {
+      "conid": 248755440,
+      "currency": null,
+      "description": "TRADE DESK INC/THE -CLASS A",
+      "exchange": "NASDAQ"
+    },
+    "TTWO": {
+      "conid": 6478131,
+      "currency": null,
+      "description": "TAKE-TWO INTERACTIVE SOFTWRE",
+      "exchange": "NASDAQ"
+    },
+    "TVK": {
+      "conid": 308729729,
+      "currency": null,
+      "description": "TVK",
+      "exchange": "SMART"
+    },
+    "UBI": {
+      "conid": 2953285,
+      "currency": null,
+      "description": "UBISOFT ENTERTAINMENT",
+      "exchange": "SBF"
+    },
+    "UNIBAP": {
+      "conid": 271142015,
+      "currency": null,
+      "description": "UNIBAP",
+      "exchange": "SMART"
+    },
+    "VEND": {
+      "conid": 196012608,
+      "currency": null,
+      "description": "VEND",
+      "exchange": "SMART"
+    },
+    "VNV": {
+      "conid": 430251998,
+      "currency": null,
+      "description": "VNV",
+      "exchange": "SMART"
+    },
+    "VRT": {
+      "conid": 402783527,
+      "currency": null,
+      "description": "VERTIV HOLDINGS CO-A",
+      "exchange": "NYSE"
+    },
+    "VSSAB B": {
+      "conid": 304013731,
+      "currency": null,
+      "description": "VSSAB.B",
+      "exchange": "SMART"
+    },
+    "VWS": {
+      "conid": 481449559,
+      "currency": null,
+      "description": "VWS",
+      "exchange": "SMART"
+    },
+    "VZLA": {
+      "conid": 709025637,
+      "currency": null,
+      "description": "VIZSLA SILVER CORP",
+      "exchange": "AMEX"
+    },
+    "WB": {
+      "conid": 148782724,
+      "currency": null,
+      "description": "WEIBO CORP-SPON ADR",
+      "exchange": "NASDAQ"
+    },
+    "WDAY": {
+      "conid": 115324104,
+      "currency": null,
+      "description": "WORKDAY INC-CLASS A",
+      "exchange": "NASDAQ"
+    },
+    "XPEL": {
+      "conid": 374964157,
+      "currency": null,
+      "description": "XPEL",
+      "exchange": "SMART"
+    },
+    "XYZ": {
+      "conid": 212671971,
+      "currency": null,
+      "description": "BLOCK INC",
+      "exchange": "NYSE"
+    },
+    "YTRA": {
+      "conid": 259025789,
+      "currency": null,
+      "description": "YTRA",
+      "exchange": "SMART"
+    },
+    "YUBICO": {
+      "conid": 478483408,
+      "currency": null,
+      "description": "YUBICO",
+      "exchange": "SMART"
+    },
+    "ZAL": {
+      "conid": 168731675,
+      "currency": null,
+      "description": "ZALANDO SE",
+      "exchange": "IBIS"
+    },
+    "ZG": {
+      "conid": 184072087,
+      "currency": null,
+      "description": "ZG",
+      "exchange": "SMART"
     }
   }
 }

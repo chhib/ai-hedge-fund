@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+import logging
+import time
+
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Iterable, List, Optional
 from uuid import uuid4
+from decimal import Decimal, ROUND_HALF_UP
+
+logger = logging.getLogger(__name__)
 
 from src.integrations.ibkr_client import IBKRClient, IBKRError
 from src.integrations.ibkr_contract_mapper import ContractOverride, load_contract_overrides
@@ -49,6 +55,18 @@ class ResolvedOrder:
 
 
 @dataclass(slots=True)
+class OrderStatusResult:
+    order_id: str
+    ticker: str
+    status: str  # Filled, Cancelled, Inactive, PartialFill, Timeout, Unknown
+    filled_qty: int
+    remaining_qty: int
+    avg_fill_price: float
+    total_qty: int
+    elapsed_seconds: float
+
+
+@dataclass(slots=True)
 class ExecutionReport:
     account_id: Optional[str]
     preview_only: bool
@@ -57,6 +75,8 @@ class ExecutionReport:
     resolved: List[ResolvedOrder] = field(default_factory=list)
     previews: List[Dict[str, Any]] = field(default_factory=list)
     submissions: List[Dict[str, Any]] = field(default_factory=list)
+    final_submissions: List[Dict[str, Any]] = field(default_factory=list)
+    order_statuses: List[OrderStatusResult] = field(default_factory=list)
     skipped: List[OrderSkip] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
     aborted: bool = False
@@ -162,17 +182,56 @@ def execute_ibkr_rebalance_trades(
     snapshot = ibkr.get_marketdata_snapshot([order.conid for order in resolved_orders])
     _apply_snapshot_prices(resolved_orders, snapshot, report)
 
-    # Fetch contract rules for tick size rounding
+    # Fetch contract rules for tick size rounding + trading permissions
     tick_sizes: Dict[int, Optional[float]] = {}
+    filtered_orders: List[ResolvedOrder] = []
     for resolved in resolved_orders:
+        rules_response: Any = None
         try:
-            rules_response = ibkr.get_contract_rules(resolved.conid, is_buy=(resolved.intent.side == "BUY"))
-            tick_sizes[resolved.conid] = _get_tick_size(rules_response)
-        except IBKRError:
-            tick_sizes[resolved.conid] = None
+            rules_response = ibkr.get_contract_rules(
+                resolved.conid,
+                is_buy=(resolved.intent.side == "BUY"),
+                exchange=resolved.exchange,
+            )
+        except IBKRError as exc:
+            report.warnings.append(f"{resolved.intent.ticker}: Unable to fetch contract rules ({exc})")
+
+        rules_payload = _extract_rules_payload(rules_response)
+        if rules_payload and not _can_trade_account(rules_payload, resolved_account):
+            report.warnings.append(f"{resolved.intent.ticker}: No trading permissions for account {resolved_account}")
+            report.skipped.append(OrderSkip(ticker=resolved.intent.ticker, action=resolved.intent.action, reason="No trading permissions"))
+            continue
+
+        tick_sizes[resolved.conid] = _get_tick_size(rules_payload or rules_response, resolved.intent.limit_price)
+        filtered_orders.append(resolved)
+
+    resolved_orders = filtered_orders
+    report.resolved = resolved_orders
+
+    if not resolved_orders:
+        return report
 
     # Build all order payloads upfront
     order_payloads = [_build_order_payload(resolved, resolved_account, tick_sizes.get(resolved.conid)) for resolved in resolved_orders]
+
+    # Sequence sells before buys to ensure cash is freed up before purchases
+    sell_pairs: List[tuple[ResolvedOrder, Dict[str, Any]]] = []
+    buy_pairs: List[tuple[ResolvedOrder, Dict[str, Any]]] = []
+    for resolved, payload in zip(resolved_orders, order_payloads):
+        if resolved.intent.side == "SELL":
+            sell_pairs.append((resolved, payload))
+        else:
+            buy_pairs.append((resolved, payload))
+
+    if preview_only and not execute and sell_pairs and buy_pairs:
+        report.warnings.append("Buy previews deferred until sell orders execute; rerun after sells to fund purchases.")
+        for resolved, _ in buy_pairs:
+            report.skipped.append(OrderSkip(ticker=resolved.intent.ticker, action=resolved.intent.action, reason="Deferred until sells executed"))
+        resolved_orders = [resolved for resolved, _ in sell_pairs]
+        order_payloads = [payload for _, payload in sell_pairs]
+    else:
+        resolved_orders = [resolved for resolved, _ in sell_pairs] + [resolved for resolved, _ in buy_pairs]
+        order_payloads = [payload for _, payload in sell_pairs] + [payload for _, payload in buy_pairs]
 
     # Try batch preview first to avoid cash depletion issue
     batch_preview_results = _run_batch_preview(ibkr, resolved_account, resolved_orders, order_payloads, report)
@@ -206,16 +265,14 @@ def execute_ibkr_rebalance_trades(
             report.skipped.append(OrderSkip(ticker=resolved.intent.ticker, action=resolved.intent.action, reason="User declined"))
             continue
 
-        submit_response = ibkr.place_order(resolved_account, order_payload)
-        report.submissions.append({"intent": resolved.intent, "response": submit_response})
-
-        submit_warning = _extract_reply(submit_response)
-        if submit_warning:
-            report.warnings.append(f"{resolved.intent.ticker}: {submit_warning[1]}")
-            if confirm_callback(f"IBKR confirmation required for {resolved.intent.ticker}: {submit_warning[1]} Approve?"):
-                ibkr.reply(submit_warning[0], confirmed=True)
-            else:
-                report.skipped.append(OrderSkip(ticker=resolved.intent.ticker, action=resolved.intent.action, reason="Submission warning declined"))
+        _process_submission(
+            ibkr=ibkr,
+            account_id=resolved_account,
+            order_payload=order_payload,
+            intent=resolved.intent,
+            confirm_callback=confirm_callback,
+            report=report,
+        )
 
     return report
 
@@ -286,10 +343,6 @@ def _run_batch_preview(
                     reason=f"Preview error: {error_message}",
                 )
             )
-            if _is_permission_error(error_message):
-                report.warnings.append("IBKR trading permissions missing; aborting remaining previews.")
-                report.aborted = True
-                break
             continue
 
         results[i] = (preview_response, order_payload)
@@ -316,10 +369,6 @@ def _run_sequential_preview(
             message = str(exc)
             report.warnings.append(f"{resolved.intent.ticker}: Preview failed ({message})")
             report.skipped.append(OrderSkip(ticker=resolved.intent.ticker, action=resolved.intent.action, reason="Preview failed"))
-            if _is_permission_error(message):
-                report.warnings.append("IBKR trading permissions missing; aborting remaining previews.")
-                report.aborted = True
-                break
             continue
 
         report.previews.append({"intent": resolved.intent, "response": preview_response})
@@ -334,10 +383,6 @@ def _run_sequential_preview(
                     reason=f"Preview error: {error_message}",
                 )
             )
-            if _is_permission_error(error_message):
-                report.warnings.append("IBKR trading permissions missing; aborting remaining previews.")
-                report.aborted = True
-                break
             continue
 
         results[i] = (preview_response, order_payload)
@@ -561,10 +606,16 @@ def _format_confirm_message(intent: OrderIntent) -> str:
 
 def _extract_reply(payload: Any) -> Optional[tuple[str, str]]:
     if isinstance(payload, dict):
-        if payload.get("id") and payload.get("message"):
-            return str(payload.get("id")), str(payload.get("message"))
-        if payload.get("replyId") and payload.get("message"):
-            return str(payload.get("replyId")), str(payload.get("message"))
+        if payload.get("id") and payload.get("message") is not None:
+            message = payload.get("message")
+            if isinstance(message, list):
+                message = " ".join(str(item) for item in message if item is not None)
+            return str(payload.get("id")), str(message)
+        if payload.get("replyId") and payload.get("message") is not None:
+            message = payload.get("message")
+            if isinstance(message, list):
+                message = " ".join(str(item) for item in message if item is not None)
+            return str(payload.get("replyId")), str(message)
     if isinstance(payload, list):
         for item in payload:
             reply = _extract_reply(item)
@@ -621,21 +672,38 @@ def _to_float(value: Any) -> float:
         return 0.0
 
 
-def _get_tick_size(rules_response: Any) -> Optional[float]:
+def _get_tick_size(rules_response: Any, price: Optional[float] = None) -> Optional[float]:
     """Extract tick size (increment) from contract rules response."""
-    if not isinstance(rules_response, dict):
+    rules_payload = _extract_rules_payload(rules_response)
+    if not isinstance(rules_payload, dict):
         return None
-    rules = rules_response.get("rules")
-    if isinstance(rules, dict):
-        increment = rules.get("increment")
-        if increment and float(increment) > 0:
-            return float(increment)
-    elif isinstance(rules, list) and rules:
-        rule = rules[0]
-        if isinstance(rule, dict):
-            increment = rule.get("increment")
-            if increment and float(increment) > 0:
-                return float(increment)
+
+    increment_rules = rules_payload.get("incrementRules") or rules_payload.get("increment_rules")
+    if isinstance(increment_rules, list):
+        parsed: List[tuple[float, float]] = []
+        for rule in increment_rules:
+            if not isinstance(rule, dict):
+                continue
+            lower_edge = _to_float(rule.get("lowerEdge") or rule.get("lower_edge") or 0.0)
+            increment = _to_float(rule.get("increment"))
+            if increment > 0:
+                parsed.append((lower_edge, increment))
+        if parsed:
+            parsed.sort(key=lambda item: item[0])
+            if price is not None:
+                matched = [inc for edge, inc in parsed if edge <= float(price)]
+                if matched:
+                    return matched[-1]
+            return parsed[0][1]
+
+    increment = rules_payload.get("increment")
+    if increment and _to_float(increment) > 0:
+        return _to_float(increment)
+
+    min_tick = rules_payload.get("minTick") or rules_payload.get("min_tick")
+    if min_tick and _to_float(min_tick) > 0:
+        return _to_float(min_tick)
+
     return None
 
 
@@ -643,15 +711,202 @@ def _round_to_tick(price: float, tick_size: Optional[float]) -> float:
     """Round price to nearest valid tick."""
     if tick_size is None or tick_size <= 0:
         return round(price, 4)
-    # Round to nearest tick
-    return round(round(price / tick_size) * tick_size, 10)
+    price_decimal = Decimal(str(price))
+    tick_decimal = Decimal(str(tick_size))
+    if tick_decimal == 0:
+        return round(price, 4)
+    ticks = (price_decimal / tick_decimal).to_integral_value(rounding=ROUND_HALF_UP)
+    rounded = ticks * tick_decimal
+    return float(rounded.quantize(tick_decimal))
+
+
+def _extract_rules_payload(rules_response: Any) -> Optional[Dict[str, Any]]:
+    if not isinstance(rules_response, dict):
+        return None
+    rules = rules_response.get("rules")
+    if isinstance(rules, dict):
+        return rules
+    return rules_response
+
+
+def _can_trade_account(rules_payload: Dict[str, Any], account_id: str) -> bool:
+    if not account_id:
+        return True
+    acct_ids = rules_payload.get("canTradeAcctIds") or rules_payload.get("can_trade_acct_ids")
+    if isinstance(acct_ids, list) and acct_ids:
+        return str(account_id) in {str(acct_id) for acct_id in acct_ids}
+    return True
+
+
+def _process_submission(
+    *,
+    ibkr: IBKRClient,
+    account_id: str,
+    order_payload: Dict[str, Any],
+    intent: OrderIntent,
+    confirm_callback: Callable[[str], bool],
+    report: ExecutionReport,
+) -> None:
+    submit_response = ibkr.place_order(account_id, order_payload)
+    report.submissions.append({"intent": intent, "response": submit_response})
+
+    response = submit_response
+    for _ in range(5):
+        submit_warning = _extract_reply(response)
+        if not submit_warning:
+            error_message = _extract_error_message(response)
+            if error_message:
+                report.warnings.append(f"{intent.ticker}: Submission error ({error_message})")
+                report.skipped.append(OrderSkip(ticker=intent.ticker, action=intent.action, reason=f"Submission error: {error_message}"))
+            else:
+                report.final_submissions.append({"intent": intent, "response": response})
+                order_id = _extract_order_id(response)
+                if order_id:
+                    status_result = _poll_order_status(ibkr, order_id, intent.ticker, intent.quantity)
+                    report.order_statuses.append(status_result)
+                    if status_result.status == "PartialFill":
+                        report.warnings.append(f"{intent.ticker}: Partial fill ({status_result.filled_qty}/{status_result.total_qty})")
+                    elif status_result.status == "Timeout":
+                        report.warnings.append(f"{intent.ticker}: Order status polling timed out (last checked: order {order_id})")
+            return
+
+        report.warnings.append(f"{intent.ticker}: {submit_warning[1]}")
+        if not confirm_callback(f"IBKR confirmation required for {intent.ticker}: {submit_warning[1]} Approve?"):
+            report.skipped.append(OrderSkip(ticker=intent.ticker, action=intent.action, reason="Submission warning declined"))
+            return
+
+        response = ibkr.reply(submit_warning[0], confirmed=True)
+        report.submissions.append({"intent": intent, "response": response, "reply_to": submit_warning[0]})
+
+    report.warnings.append(f"{intent.ticker}: Exceeded reply confirmations; aborting submission")
+    report.skipped.append(OrderSkip(ticker=intent.ticker, action=intent.action, reason="Reply confirmation loop"))
+
+
+def _extract_order_id(response: Any) -> Optional[str]:
+    """Extract order_id from a submission response."""
+    if isinstance(response, dict):
+        oid = response.get("order_id") or response.get("orderId")
+        if oid:
+            return str(oid)
+        # Check nested in orders list
+        orders = response.get("orders") or response.get("order")
+        if isinstance(orders, list):
+            for item in orders:
+                if isinstance(item, dict):
+                    oid = item.get("order_id") or item.get("orderId")
+                    if oid:
+                        return str(oid)
+    if isinstance(response, list):
+        for item in response:
+            oid = _extract_order_id(item)
+            if oid:
+                return oid
+    return None
+
+
+def _poll_order_status(
+    ibkr: IBKRClient,
+    order_id: str,
+    ticker: str,
+    total_qty: int,
+    poll_interval: float = 2.0,
+    poll_timeout: float = 30.0,
+) -> OrderStatusResult:
+    """Poll order status until terminal state or timeout."""
+    terminal_states = {"Filled", "Cancelled", "Inactive"}
+    start = time.monotonic()
+    last_status = "Unknown"
+    filled_qty = 0
+    remaining_qty = total_qty
+    avg_fill_price = 0.0
+
+    while True:
+        elapsed = time.monotonic() - start
+        try:
+            status_resp = ibkr.get_order_status(order_id)
+        except IBKRError as exc:
+            logger.warning("Failed to poll order %s: %s", order_id, exc)
+            break
+
+        if isinstance(status_resp, dict):
+            last_status = status_resp.get("order_status") or status_resp.get("orderStatus") or status_resp.get("status") or last_status
+            filled_qty = int(float(status_resp.get("filled_qty") or status_resp.get("filledQuantity") or status_resp.get("cum_fill") or filled_qty))
+            remaining_qty = int(float(status_resp.get("remaining_qty") or status_resp.get("remainingQuantity") or status_resp.get("rem_fill") or remaining_qty))
+            avg_fill_price = float(status_resp.get("avg_fill_price") or status_resp.get("avgPrice") or status_resp.get("average_price") or avg_fill_price)
+
+        if last_status in terminal_states:
+            break
+
+        if elapsed >= poll_timeout:
+            last_status = "Timeout"
+            break
+
+        time.sleep(poll_interval)
+
+    elapsed = time.monotonic() - start
+    # Detect partial fill: filled some but not all
+    if last_status == "Filled" and 0 < filled_qty < total_qty:
+        last_status = "PartialFill"
+
+    return OrderStatusResult(
+        order_id=order_id,
+        ticker=ticker,
+        status=last_status,
+        filled_qty=filled_qty,
+        remaining_qty=remaining_qty,
+        avg_fill_price=avg_fill_price,
+        total_qty=total_qty,
+        elapsed_seconds=round(elapsed, 2),
+    )
+
+
+def _extract_submission_rows(payload: Any) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+    if isinstance(payload, dict):
+        if isinstance(payload.get("orders"), list):
+            rows.extend(row for row in payload["orders"] if isinstance(row, dict))
+            return rows
+        if isinstance(payload.get("order"), list):
+            rows.extend(row for row in payload["order"] if isinstance(row, dict))
+            return rows
+        rows.append(payload)
+        return rows
+    if isinstance(payload, list):
+        rows.extend(row for row in payload if isinstance(row, dict))
+    return rows
+
+
+def summarize_submissions(entries: List[Dict[str, Any]]) -> List[str]:
+    summaries: List[str] = []
+    for entry in entries:
+        intent = entry.get("intent")
+        response = entry.get("response")
+        rows = _extract_submission_rows(response)
+        for row in rows:
+            order_id = row.get("order_id") or row.get("orderId")
+            local_id = row.get("local_order_id") or row.get("localOrderId") or row.get("localOrderID")
+            status = row.get("order_status") or row.get("orderStatus") or row.get("status")
+            if not (order_id or local_id or status):
+                continue
+            parts: List[str] = []
+            if order_id:
+                parts.append(f"id {order_id}")
+            if local_id:
+                parts.append(f"local {local_id}")
+            if status:
+                parts.append(f"status {status}")
+            prefix = f"{intent.ticker}: " if intent else ""
+            summaries.append(prefix + " ".join(parts))
+    return summaries
 
 
 __all__ = [
     "OrderIntent",
     "OrderSkip",
+    "OrderStatusResult",
     "ResolvedOrder",
     "ExecutionReport",
     "build_order_intents",
     "execute_ibkr_rebalance_trades",
+    "summarize_submissions",
 ]

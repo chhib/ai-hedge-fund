@@ -29,13 +29,16 @@ This configuration supports the AI hedge fund project's development workflow, in
 ## Start Here
 At the start of every session:
 1. Read `logs/PROJECT_SUMMARY.md` for current status, goals, and architecture overview
-2. Read the latest session file (currently `logs/sessions/session_061.md`) for recent context
+2. Read the latest session file (currently `logs/sessions/session_081.md`) for recent context
 3. Check any agent-specific logs and reconcile conflicts before proceeding
+4. Cross-reference git log (`git log --oneline -10`) against any "Next Steps" lists in the session log. Strike through items already completed by prior sessions or other LLMs.
+
+**If the session log appears to have been updated since you last read it** (e.g., new entries from another LLM, renumbered sessions, or shifted next-steps), pause, reread both `PROJECT_SUMMARY.md` and the latest session file, and reconcile your understanding before proceeding. Do not assume continuity from a stale read.
 
 When wrapping up a session:
-1. Add your session entry to the current session file (e.g., `logs/sessions/session_061.md`)
+1. Add your session entry to the current session file (e.g., `logs/sessions/session_081.md`)
 2. Update `logs/PROJECT_SUMMARY.md` if there are significant status changes
-3. When a session file reaches 10 sessions, create the next file (e.g., `session_071.md`)
+3. When a session file reaches 10 sessions, create the next file (e.g., `session_091.md`)
 
 **Session file structure**: `logs/sessions/session_NNN.md` contains sessions N through N+9.
 
@@ -53,6 +56,15 @@ Run `poetry run pytest` from the repo root; backtesting suites live in `tests/ba
 
 ## Commit & Pull Request Guidelines
 Follow the existing Conventional Commit style (`fix:`, `feat:`, `chore:`) observed in `git log`. Each PR should summarize scope, link any tracked issues, and note updates to Börsdata integration or rate-limiting logic. Include screenshots or CLI output when changes affect user-visible behavior.
+
+## Verification Policy
+Always verify your work by running it before considering a task complete. This means:
+- **Scripts**: Run the script with a small `--limit` or dry-run flag to confirm it parses, imports resolve, and the happy path executes without errors.
+- **Pure functions**: Test new logic inline with `poetry run python -c "..."` to confirm expected behavior (e.g., tokenization, matching, parsing).
+- **CLI changes**: Run `--help` to verify argument parsing, then a real invocation.
+- **IBKR scripts**: If the gateway is not running, at minimum run with `--skip-isin --limit 2` to verify the script runs end-to-end (errors from missing gateway are expected and OK). For full verification, start the gateway: `cd clientportal.gw && bin/run.sh root/conf.yaml`, authenticate at `https://localhost:5001`, then run the script with `--ibkr-port 5001`.
+- **Tests**: Run `poetry run pytest` (or the relevant subset) after any code change.
+- If a script or test requires external services (IBKR gateway, APIs), note what was verified offline vs what needs live testing.
 
 ## Börsdata Integration Focus
 Every contribution must advance or respect the ongoing migration to Börsdata. Verify `.env` handling for `BORSDATA_API_KEY`, retire legacy FinancialDatasets code paths, and document new endpoint usage in the session log before concluding work.
