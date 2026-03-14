@@ -82,3 +82,11 @@ _This is the active session file. New sessions should be added here._
 - **Tests**: +4 new tests in `test_ibkr_execution.py`: `_extract_order_id` (list/nested/missing/empty), `_poll_order_status` IBKRError break, timeout via monkeypatched monotonic, `_apply_snapshot_prices` fallback to last price
 - **Tests**: 42/42 passed in `tests/integrations/test_ibkr_client.py` + `test_ibkr_execution.py`
 - **Files changed**: `src/integrations/ibkr_client.py`, `src/cli/hedge.py`, `tests/integrations/test_ibkr_client.py`, `tests/integrations/test_ibkr_execution.py`
+
+## Session 89 (README Rewrite)
+**Date**: 2026-03-14 | **Model**: Claude Opus 4.6
+
+- **Docs**: Complete README.md rewrite from scratch -- replaced 251-line organic README with 279-line structured version
+- **Structure**: Title + quick start, why this fork, installation (required keys table), full CLI reference (flags table), analyst presets table, analyst roster (13 personas + 5 core with descriptions), IBKR integration (gateway setup, preview/execute, contract overrides, trading permissions), architecture diagram, key source files table, testing (140 tests), project structure tree, disclaimer + license
+- **Data corrections**: Verified 206 tickers, 108 KPI mappings, 140 tests, 96% IBKR coverage against actual codebase (plan had stale numbers)
+- **Files changed**: `README.md`
