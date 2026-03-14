@@ -1,6 +1,6 @@
 # Börsdata Integration Project Summary
 
-_Last updated: 2026-01-28 (Session 78)_
+_Last updated: 2026-03-14 (Session 81)_
 
 ## End Goal
 Rebuild the data ingestion and processing pipeline so the application relies on Börsdata's REST API. The system accepts Börsdata-native tickers, supports both Nordic and Global markets, and maintains compatibility with the original user-facing workflows.
@@ -18,8 +18,8 @@ The AI hedge fund system is fully operational with both CLI and web interfaces:
 - ✅ **Performance Optimized**: 95% API call reduction, parallel processing, caching
 
 ## Current Focus
-- IBKR order execution workflow hardening
-- Tick size compliance and contract disambiguation
+- IBKR execution pipeline hardened (sessions 71-80 on `feat/ibkr-hardening` branch)
+- Next: broader contract override coverage, env config, live validation
 
 ## Active Session File
 **`logs/sessions/session_081.md`** - Sessions 81-90
@@ -65,7 +65,9 @@ Sessions are organized into files of 10 sessions each:
 - `logs/sessions/session_031.md` - Sessions 31-40 (Jim Simons agent, portfolio CLI)
 - `logs/sessions/session_041.md` - Sessions 41-50 (Caching, multi-currency, news sentiment)
 - `logs/sessions/session_051.md` - Sessions 51-60 (Performance profiling, IBKR planning)
-- `logs/sessions/session_061.md` - Sessions 61-70 (IBKR execution, current)
+- `logs/sessions/session_061.md` - Sessions 61-70 (IBKR execution)
+- `logs/sessions/session_071.md` - Sessions 71-80 (IBKR hardening)
+- `logs/sessions/session_081.md` - Sessions 81-90 (current)
 
 ## Quick Reference
 

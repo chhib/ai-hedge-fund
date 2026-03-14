@@ -29,7 +29,7 @@ This configuration supports the AI hedge fund project's development workflow, in
 ## Start Here
 At the start of every session:
 1. Read `logs/PROJECT_SUMMARY.md` for current status, goals, and architecture overview
-2. Read the latest session file (currently `logs/sessions/session_061.md`) for recent context
+2. Read the latest session file (currently `logs/sessions/session_081.md`) for recent context
 3. Check any agent-specific logs and reconcile conflicts before proceeding
 
 When wrapping up a session:
