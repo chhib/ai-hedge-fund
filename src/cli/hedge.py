@@ -4,6 +4,8 @@ import sys
 from pathlib import Path
 from typing import List, Optional
 
+import os
+
 import click
 from dotenv import load_dotenv
 
@@ -40,10 +42,10 @@ def cli() -> None:
 @click.option("--output-dir", type=click.Path(path_type=Path), help="Directory for the generated CSV (defaults to CWD)")
 @click.option("--portfolio-source", type=click.Choice(["csv", "ibkr"], case_sensitive=False), default="csv", show_default=True, help="Source of the current holdings")
 @click.option("--ibkr-account", help="Optional IBKR account override (defaults to first account)")
-@click.option("--ibkr-host", default="https://localhost", show_default=True, help="Client Portal host (scheme optional)")
-@click.option("--ibkr-port", default=5000, show_default=True, type=int, help="Client Portal port")
-@click.option("--ibkr-verify-ssl/--no-ibkr-verify-ssl", default=False, show_default=True, help="Verify SSL certificates for IBKR calls")
-@click.option("--ibkr-timeout", default=30.0, show_default=True, type=float, help="Timeout in seconds for IBKR API calls")
+@click.option("--ibkr-host", default=os.environ.get("IBKR_HOST", "https://localhost"), show_default=True, help="Client Portal host (scheme optional)")
+@click.option("--ibkr-port", default=int(os.environ.get("IBKR_PORT", "5001")), show_default=True, type=int, help="Client Portal port")
+@click.option("--ibkr-verify-ssl/--no-ibkr-verify-ssl", default=os.environ.get("IBKR_VERIFY_SSL", "false").lower() in ("true", "1", "yes"), show_default=True, help="Verify SSL certificates for IBKR calls")
+@click.option("--ibkr-timeout", default=float(os.environ.get("IBKR_TIMEOUT", "30")), show_default=True, type=float, help="Timeout in seconds for IBKR API calls")
 @click.option("--ibkr-whatif", is_flag=True, help="Preview IBKR orders using what-if (no trades)")
 @click.option("--ibkr-execute", is_flag=True, help="Place IBKR orders (requires confirmation)")
 @click.option("--ibkr-yes", is_flag=True, help="Skip IBKR trade confirmation prompts")
