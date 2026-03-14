@@ -33,10 +33,12 @@ At the start of every session:
 3. Check any agent-specific logs and reconcile conflicts before proceeding
 4. Cross-reference git log (`git log --oneline -10`) against any "Next Steps" lists in the session log. Strike through items already completed by prior sessions or other LLMs.
 
+**If the session log appears to have been updated since you last read it** (e.g., new entries from another LLM, renumbered sessions, or shifted next-steps), pause, reread both `PROJECT_SUMMARY.md` and the latest session file, and reconcile your understanding before proceeding. Do not assume continuity from a stale read.
+
 When wrapping up a session:
-1. Add your session entry to the current session file (e.g., `logs/sessions/session_061.md`)
+1. Add your session entry to the current session file (e.g., `logs/sessions/session_081.md`)
 2. Update `logs/PROJECT_SUMMARY.md` if there are significant status changes
-3. When a session file reaches 10 sessions, create the next file (e.g., `session_071.md`)
+3. When a session file reaches 10 sessions, create the next file (e.g., `session_091.md`)
 
 **Session file structure**: `logs/sessions/session_NNN.md` contains sessions N through N+9.
 
