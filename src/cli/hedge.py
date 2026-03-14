@@ -270,6 +270,127 @@ def _render_ibkr_report(report) -> None:
 
 
 @cli.group()
+def ibkr() -> None:
+    """Interactive Brokers gateway tools."""
+
+
+@ibkr.command()
+@click.option("--ibkr-host", default=os.environ.get("IBKR_HOST", "https://localhost"), show_default=True, help="Client Portal host")
+@click.option("--ibkr-port", default=int(os.environ.get("IBKR_PORT", "5001")), show_default=True, type=int, help="Client Portal port")
+@click.option("--ibkr-verify-ssl/--no-ibkr-verify-ssl", default=os.environ.get("IBKR_VERIFY_SSL", "false").lower() in ("true", "1", "yes"), show_default=True, help="Verify SSL certificates")
+@click.option("--ibkr-timeout", default=float(os.environ.get("IBKR_TIMEOUT", "30")), show_default=True, type=float, help="Timeout in seconds")
+def check(ibkr_host: str, ibkr_port: int, ibkr_verify_ssl: bool, ibkr_timeout: float) -> None:
+    """Validate each IBKR pipeline stage against the live gateway."""
+    from src.services.portfolio_runner import _check_ibkr_gateway
+    from src.integrations.ibkr_client import IBKRClient
+    from src.integrations.ibkr_contract_mapper import load_contract_overrides
+
+    base_url = f"{ibkr_host}:{ibkr_port}"
+    failures = 0
+
+    # Stage 1: Gateway connectivity
+    click.echo("1/5  Gateway connectivity ... ", nl=False)
+    is_running, is_authenticated = _check_ibkr_gateway(base_url, timeout=ibkr_timeout)
+    if not is_running:
+        click.secho("FAIL (not reachable)", fg="red")
+        click.secho("     Start the gateway and authenticate before running this check.", fg="yellow")
+        sys.exit(1)
+    if not is_authenticated:
+        click.secho("FAIL (not authenticated)", fg="red")
+        click.secho(f"     Open {base_url} in a browser and log in.", fg="yellow")
+        sys.exit(1)
+    click.secho("PASS", fg="green")
+
+    client = IBKRClient(base_url, verify_ssl=ibkr_verify_ssl, timeout=ibkr_timeout)
+
+    # Stage 2: Account resolution
+    click.echo("2/5  Account resolution ... ", nl=False)
+    account_id = None
+    try:
+        account_id = client.resolve_account_id()
+        if account_id:
+            click.secho(f"PASS ({account_id})", fg="green")
+        else:
+            click.secho("FAIL (no account found)", fg="red")
+            failures += 1
+    except Exception as exc:
+        click.secho(f"FAIL ({exc})", fg="red")
+        failures += 1
+
+    # Stage 3: Contract resolution
+    click.echo("3/5  Contract resolution ... ", nl=False)
+    overrides = load_contract_overrides()
+    if not overrides:
+        click.secho("SKIP (no contract mappings found)", fg="yellow")
+    else:
+        sample_tickers = list(overrides.keys())[:3]
+        sample_conids = [overrides[t].conid for t in sample_tickers]
+        resolved = 0
+        for conid in sample_conids:
+            try:
+                info = client.get_contract_info(conid)
+                if info:
+                    resolved += 1
+            except Exception:
+                pass
+        if resolved == len(sample_conids):
+            click.secho(f"PASS ({resolved}/{len(sample_conids)} - {', '.join(sample_tickers)})", fg="green")
+        else:
+            click.secho(f"FAIL ({resolved}/{len(sample_conids)} resolved)", fg="red")
+            failures += 1
+
+    # Stage 4: Market data
+    click.echo("4/5  Market data ... ", nl=False)
+    if not overrides:
+        click.secho("SKIP (no conids to query)", fg="yellow")
+    else:
+        sample_conids = [overrides[t].conid for t in list(overrides.keys())[:3]]
+        try:
+            snap = client.get_marketdata_snapshot(sample_conids)
+            if snap and isinstance(snap, list) and len(snap) > 0:
+                click.secho(f"PASS ({len(snap)} snapshot(s))", fg="green")
+            else:
+                click.secho("FAIL (empty response)", fg="red")
+                failures += 1
+        except Exception as exc:
+            click.secho(f"FAIL ({exc})", fg="red")
+            failures += 1
+
+    # Stage 5: Order preview (what-if)
+    click.echo("5/5  Order preview ... ", nl=False)
+    if not account_id or not overrides:
+        click.secho("SKIP (need account + conids)", fg="yellow")
+    else:
+        first_ticker = list(overrides.keys())[0]
+        first_conid = overrides[first_ticker].conid
+        order = {
+            "conid": first_conid,
+            "orderType": "MKT",
+            "side": "BUY",
+            "quantity": 1,
+            "tif": "DAY",
+        }
+        try:
+            result = client.preview_order(account_id, order)
+            if result:
+                click.secho(f"PASS (whatif for {first_ticker})", fg="green")
+            else:
+                click.secho("FAIL (empty response)", fg="red")
+                failures += 1
+        except Exception as exc:
+            click.secho(f"FAIL ({exc})", fg="red")
+            failures += 1
+
+    # Summary
+    click.echo()
+    if failures:
+        click.secho(f"{failures} stage(s) failed.", fg="red")
+        sys.exit(1)
+    else:
+        click.secho("All stages passed.", fg="green")
+
+
+@cli.group()
 def cache() -> None:
     """Manage the Börsdata prefetch cache."""
 

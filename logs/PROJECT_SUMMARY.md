@@ -1,6 +1,6 @@
 # Börsdata Integration Project Summary
 
-_Last updated: 2026-03-14 (Session 82)_
+_Last updated: 2026-03-14 (Session 83)_
 
 ## End Goal
 Rebuild the data ingestion and processing pipeline so the application relies on Börsdata's REST API. The system accepts Börsdata-native tickers, supports both Nordic and Global markets, and maintains compatibility with the original user-facing workflows.
@@ -18,8 +18,9 @@ The AI hedge fund system is fully operational with both CLI and web interfaces:
 - ✅ **Performance Optimized**: 95% API call reduction, parallel processing, caching
 
 ## Current Focus
-- IBKR execution pipeline hardened (sessions 71-80 on `feat/ibkr-hardening` branch)
-- Next: broader contract override coverage, env config, live validation
+- IBKR execution pipeline hardened (sessions 71-83 on `feat/ibkr-hardening` branch)
+- Live order lifecycle validated end-to-end (place, confirm, cancel)
+- Next: broader contract override coverage, error recovery, portfolio reconciliation
 
 ## Active Session File
 **`logs/sessions/session_081.md`** - Sessions 81-90
@@ -83,6 +84,11 @@ poetry run pytest tests/data/                       # Data layer tests
 poetry run hedge cache list                         # Show cached tickers
 poetry run hedge cache clear --tickers DORO,LUND.B  # Clear specific
 poetry run hedge cache clear                        # Clear all
+```
+
+### IBKR Validation
+```bash
+poetry run hedge ibkr check                        # Test all 5 pipeline stages
 ```
 
 ### IBKR Execution
