@@ -1,6 +1,6 @@
 import src.integrations.ibkr_execution as ibkr_execution
 from src.integrations.ibkr_contract_mapper import ContractOverride
-from src.integrations.ibkr_execution import build_order_intents, execute_ibkr_rebalance_trades
+from src.integrations.ibkr_execution import build_order_intents, execute_ibkr_rebalance_trades, _extract_order_id, _poll_order_status, _apply_snapshot_prices, OrderIntent, ResolvedOrder, ExecutionReport
 from src.integrations.ibkr_client import IBKRError
 
 
@@ -644,3 +644,49 @@ def test_order_status_timeout(monkeypatch):
     assert len(report.order_statuses) == 1
     assert report.order_statuses[0].status == "Timeout"
     assert any("timed out" in w for w in report.warnings)
+
+
+def test_extract_order_id_from_list_and_nested():
+    assert _extract_order_id([{"order_id": "42"}]) == "42"
+    assert _extract_order_id({"orders": [{"orderId": "99"}]}) == "99"
+    assert _extract_order_id({"status": "ok"}) is None
+    assert _extract_order_id([]) is None
+
+
+def test_poll_order_status_ibkr_error_breaks():
+    class ErrorClient(FakeIBKRClient):
+        def get_order_status(self, order_id):
+            raise IBKRError("gateway down")
+
+    result = _poll_order_status(ErrorClient(), "123", "AAA", 10, poll_interval=0, poll_timeout=5)
+    assert result.status == "Unknown"
+
+
+def test_order_status_timeout_via_monotonic(monkeypatch):
+    clock = [0.0]
+
+    def fake_monotonic():
+        clock[0] += 100
+        return clock[0]
+
+    monkeypatch.setattr("src.integrations.ibkr_execution.time.monotonic", fake_monotonic)
+    monkeypatch.setattr("src.integrations.ibkr_execution.time.sleep", lambda _: None)
+
+    class StuckClient(FakeIBKRClient):
+        def get_order_status(self, order_id):
+            return {"order_status": "PreSubmitted", "filledQuantity": 0, "remainingQuantity": 5, "avgPrice": 0.0}
+
+    result = _poll_order_status(StuckClient(), "123", "AAA", 5, poll_interval=2, poll_timeout=30)
+    assert result.status == "Timeout"
+
+
+def test_apply_snapshot_prices_fallback_to_last():
+    intent = OrderIntent(ticker="AAA", ibkr_symbol="AAA", side="BUY", quantity=5, limit_price=0.0, currency="USD", action="ADD")
+    order = ResolvedOrder(intent=intent, conid=111, exchange="SMART", currency="USD")
+    report = ExecutionReport(account_id="U123", preview_only=True, executed=False)
+    snapshot = [{"conid": "111", "31": "0", "84": "0", "86": "12.50"}]
+
+    _apply_snapshot_prices([order], snapshot, report)
+
+    assert order.intent.limit_price == 12.50
+    assert report.skipped == []

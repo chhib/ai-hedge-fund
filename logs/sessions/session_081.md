@@ -72,3 +72,13 @@ _This is the active session file. New sessions should be added here._
 - **Feature**: `hedge ibkr orders` CLI command -- shows live orders table (ID, Ticker, Side, Qty, Filled, Price, Status)
 - **Tests**: 28/28 passed (4 new client tests: retry, no-retry-on-4xx, get_orders, cancel_order; 3 new execution tests: polling filled, partial fill warning, timeout)
 - **Files changed**: `src/integrations/ibkr_client.py`, `src/integrations/ibkr_execution.py`, `src/cli/hedge.py`, `tests/integrations/test_ibkr_client.py`, `tests/integrations/test_ibkr_execution.py`
+
+## Session 88 (IBKR Bug Fixes + Test Coverage)
+**Date**: 2026-03-14 | **Model**: Claude Opus 4.6
+
+- **Fix**: `ibkr_client.py` `_ACCOUNT_ID_PATTERN` regex used `\\d` (literal backslash+d) instead of `\d` -- never matched any account ID
+- **Fix**: `hedge.py` `orders()` had dead `--ibkr-account` Click option accepted but never used -- removed
+- **Tests**: +3 new tests in `test_ibkr_client.py`: `_looks_like_account_id` positive/negative (parametrized), `get_order_status` path, retry exhaustion (all 3 attempts fail)
+- **Tests**: +4 new tests in `test_ibkr_execution.py`: `_extract_order_id` (list/nested/missing/empty), `_poll_order_status` IBKRError break, timeout via monkeypatched monotonic, `_apply_snapshot_prices` fallback to last price
+- **Tests**: 42/42 passed in `tests/integrations/test_ibkr_client.py` + `test_ibkr_execution.py`
+- **Files changed**: `src/integrations/ibkr_client.py`, `src/cli/hedge.py`, `tests/integrations/test_ibkr_client.py`, `tests/integrations/test_ibkr_execution.py`

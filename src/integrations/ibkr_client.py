@@ -314,7 +314,7 @@ def _transform_ledger_balances(ledger: Dict[str, Any]) -> Dict[str, float]:
     return balances
 
 
-_ACCOUNT_ID_PATTERN = re.compile(r"^[A-Z]{1,4}\\d+$")
+_ACCOUNT_ID_PATTERN = re.compile(r"^[A-Z]{1,4}\d+$")
 
 
 def _looks_like_account_id(value: str) -> bool:

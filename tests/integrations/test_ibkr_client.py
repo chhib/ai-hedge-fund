@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 import pytest
 import requests
 
-from src.integrations.ibkr_client import IBKRClient, IBKRError
+from src.integrations.ibkr_client import IBKRClient, IBKRError, _looks_like_account_id
 
 
 def test_fetch_portfolio_transforms_positions_and_cash(monkeypatch):
@@ -201,3 +201,51 @@ def test_cancel_order_path(monkeypatch):
     client.cancel_order("U123", "42")
     assert seen["method"] == "DELETE"
     assert "/iserver/account/U123/order/42" in seen["url"]
+
+
+@pytest.mark.parametrize("value", ["U123", "DU987", "u123", " DU5 "])
+def test_looks_like_account_id_positive(value):
+    assert _looks_like_account_id(value)
+
+
+@pytest.mark.parametrize("value", ["12345", "ABCDE1", "", "   "])
+def test_looks_like_account_id_negative(value):
+    assert not _looks_like_account_id(value)
+
+
+def test_get_order_status_path(monkeypatch):
+    client = IBKRClient(base_url="https://example.com")
+    seen = {}
+
+    class DummyResponse:
+        status_code = 200
+
+        def json(self):
+            return {}
+
+    def _fake_request(method, url, timeout=None, params=None, json=None):
+        seen["method"] = method
+        seen["url"] = url
+        return DummyResponse()
+
+    monkeypatch.setattr(client.session, "request", _fake_request)
+    client.get_order_status("12345")
+    assert seen["method"] == "GET"
+    assert "/iserver/account/order/status/12345" in seen["url"]
+
+
+def test_request_retry_exhaustion(monkeypatch):
+    client = IBKRClient(base_url="https://example.com")
+    call_count = 0
+
+    def _fake_request(method, url, timeout=None, params=None, json=None):
+        nonlocal call_count
+        call_count += 1
+        raise requests.ConnectionError("Connection refused")
+
+    monkeypatch.setattr(client.session, "request", _fake_request)
+    monkeypatch.setattr("src.integrations.ibkr_client.time.sleep", lambda _: None)
+
+    with pytest.raises(IBKRError, match="after 3 attempts"):
+        client._request("GET", "/iserver/accounts")
+    assert call_count == 3

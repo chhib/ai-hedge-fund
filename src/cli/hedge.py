@@ -279,8 +279,7 @@ def ibkr() -> None:
 @click.option("--ibkr-port", default=int(os.environ.get("IBKR_PORT", "5001")), show_default=True, type=int, help="Client Portal port")
 @click.option("--ibkr-verify-ssl/--no-ibkr-verify-ssl", default=os.environ.get("IBKR_VERIFY_SSL", "false").lower() in ("true", "1", "yes"), show_default=True, help="Verify SSL certificates")
 @click.option("--ibkr-timeout", default=float(os.environ.get("IBKR_TIMEOUT", "30")), show_default=True, type=float, help="Timeout in seconds")
-@click.option("--ibkr-account", help="Optional IBKR account override")
-def orders(ibkr_host: str, ibkr_port: int, ibkr_verify_ssl: bool, ibkr_timeout: float, ibkr_account: Optional[str]) -> None:
+def orders(ibkr_host: str, ibkr_port: int, ibkr_verify_ssl: bool, ibkr_timeout: float) -> None:
     """Show live orders from the IBKR gateway."""
     from src.services.portfolio_runner import _check_ibkr_gateway
     from src.integrations.ibkr_client import IBKRClient
