@@ -70,6 +70,34 @@ def save_analyst_analysis(session_id: str, ticker: str, analyst_name: str, signa
         db.close()
 
 
+def save_analyst_analyses_batch(analyses: list[dict]) -> None:
+    """Save multiple analyst analyses in a single DB session/commit."""
+    if not analyses:
+        return
+    from app.backend.database.models import AnalystAnalysis
+
+    db = get_db_session()
+    try:
+        objects = [
+            AnalystAnalysis(
+                session_id=a["session_id"],
+                ticker=a["ticker"],
+                analyst_name=a["analyst_name"],
+                signal=a["signal"],
+                signal_numeric=str(a["signal_numeric"]),
+                confidence=str(a["confidence"]),
+                reasoning=_normalize_reasoning(a["reasoning"]),
+                model_name=a.get("model_name"),
+                model_provider=a.get("model_provider"),
+            )
+            for a in analyses
+        ]
+        db.add_all(objects)
+        db.commit()
+    finally:
+        db.close()
+
+
 def get_session_analyses(session_id: str) -> List[dict]:
     """
     Retrieve all analyses for a given session.

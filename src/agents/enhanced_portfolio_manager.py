@@ -275,15 +275,130 @@ class EnhancedPortfolioManager:
         from src.graph.state import AgentState
         from concurrent.futures import ThreadPoolExecutor, as_completed
 
+        configured_model_name = self.model_config.get("name")
+        configured_model_provider = self.model_config.get("provider")
+
+        # Build a lookup of ticker -> acquisition date for existing positions
+        position_dates = {
+            p.ticker: p.date_acquired.strftime("%Y-%m-%d") if p.date_acquired else None
+            for p in self.portfolio.positions
+        }
+
+        # ── Fast path: resolve cache hits in bulk before touching threads ──
+        # Load all cached analyses for this date in ONE query per model variant
+        cache_batches: dict[tuple[str, str], dict[tuple[str, str], object]] = {}
+        if allow_cache:
+            seen_model_keys: set[tuple[str, str]] = set()
+            for analyst_info in self.analysts:
+                uses_llm = analyst_info.get("uses_llm", True)
+                if uses_llm:
+                    mk = (configured_model_name or "unknown", configured_model_provider or "unknown")
+                else:
+                    mk = ("deterministic", "deterministic")
+                if mk not in seen_model_keys:
+                    seen_model_keys.add(mk)
+                    cache_batches[mk] = self.analysis_cache.load_batch(
+                        analysis_date=end_date,
+                        model_name=mk[0],
+                        model_provider=mk[1],
+                    )
+
+        # Separate cached hits from uncached misses
+        uncached_combos = []  # (analyst_info, ticker_idx, ticker)
+        cached_queue_keys: list[TaskKey] = []
+        cached_session_rows: list[dict] = []
+        cached_count = 0
+
+        for ticker_idx, ticker in enumerate(self.universe):
+            for analyst_info in self.analysts:
+                analyst_name = analyst_info["name"]
+                uses_llm = analyst_info.get("uses_llm", True)
+                if uses_llm:
+                    cache_model_name = configured_model_name or "unknown"
+                    cache_model_provider = configured_model_provider or "unknown"
+                    storage_model_name = configured_model_name
+                    storage_model_provider = configured_model_provider
+                else:
+                    cache_model_name = "deterministic"
+                    cache_model_provider = "deterministic"
+                    storage_model_name = None
+                    storage_model_provider = None
+
+                if not allow_cache:
+                    uncached_combos.append((analyst_info, ticker_idx, ticker))
+                    continue
+
+                batch = cache_batches.get((cache_model_name, cache_model_provider), {})
+                cached = batch.get((ticker.upper(), analyst_name))
+
+                if not cached:
+                    uncached_combos.append((analyst_info, ticker_idx, ticker))
+                    continue
+
+                # ── Cache hit: resolve instantly ──
+                signal_str = cached.signal
+                numeric_signal = cached.signal_numeric
+                confidence = cached.confidence
+                reasoning = cached.reasoning or "Cached analysis"
+
+                signals.append(AnalystSignal(
+                    ticker=ticker,
+                    analyst=analyst_name,
+                    signal=numeric_signal,
+                    confidence=confidence,
+                    reasoning=reasoning,
+                ))
+
+                # Collect batch data for task queue
+                cached_queue_keys.append(TaskKey(
+                    analysis_date=end_date,
+                    ticker=ticker.upper(),
+                    analyst_name=analyst_name,
+                    model_name=cache_model_name,
+                    model_provider=cache_model_provider,
+                ))
+
+                # Collect batch data for session persistence
+                if self.session_id:
+                    cached_session_rows.append({
+                        "session_id": self.session_id,
+                        "ticker": ticker,
+                        "analyst_name": analyst_name,
+                        "signal": signal_str,
+                        "signal_numeric": numeric_signal,
+                        "confidence": confidence,
+                        "reasoning": reasoning,
+                        "model_name": storage_model_name if uses_llm else None,
+                        "model_provider": storage_model_provider if uses_llm else None,
+                    })
+
+                cached_count += 1
+                # Throttle progress updates: every 50th cached item
+                if cached_count % 50 == 0 or cached_count == 1:
+                    agent_id = f"{analyst_name}_agent"
+                    next_ticker = self.universe[ticker_idx + 1] if ticker_idx + 1 < len(self.universe) else None
+                    progress.update_status(agent_id, ticker, f"Done (cached, {cached_count} resolved)", next_ticker=next_ticker)
+
+        # ── Batch DB operations for all cache hits (3 calls instead of ~4,120) ──
+        if cached_queue_keys:
+            self.task_queue.ensure_tasks_batch(cached_queue_keys)
+            self.task_queue.mark_completed_batch(cached_queue_keys)
+
+        if cached_session_rows:
+            try:
+                from src.data.analysis_storage import save_analyst_analyses_batch
+                save_analyst_analyses_batch(cached_session_rows)
+            except Exception as e:
+                if self.verbose:
+                    print(f"  Warning: Failed to batch-save session analyses: {e}")
+
+        # ── Slow path: only submit cache MISSES to ThreadPoolExecutor ──
         def run_analyst(analyst_info, state, ticker, ticker_idx):
             analyst_name = analyst_info["name"]
             analyst_func = analyst_info["func"]
             display_name = analyst_info["display_name"]
             agent_id = f"{analyst_name}_agent"
             uses_llm = analyst_info.get("uses_llm", True)
-
-            configured_model_name = self.model_config.get("name")
-            configured_model_provider = self.model_config.get("provider")
 
             if uses_llm:
                 cache_model_name = configured_model_name or "unknown"
@@ -304,65 +419,14 @@ class EnhancedPortfolioManager:
 
             queue_key = None
             if allow_cache:
-                ticker_upper = ticker.upper()
                 queue_key = TaskKey(
                     analysis_date=end_date,
-                    ticker=ticker_upper,
+                    ticker=ticker.upper(),
                     analyst_name=analyst_name,
                     model_name=cache_model_name,
                     model_provider=cache_model_provider,
                 )
                 self.task_queue.ensure_task(queue_key)
-
-            def persist_session_analysis(signal_str: str, numeric_signal: float, confidence_val: float, reasoning_text: str) -> None:
-                if not self.session_id:
-                    return
-                try:
-                    from src.data.analysis_storage import save_analyst_analysis
-
-                    save_analyst_analysis(
-                        session_id=self.session_id,
-                        ticker=ticker,
-                        analyst_name=analyst_name,
-                        signal=signal_str,
-                        signal_numeric=numeric_signal,
-                        confidence=confidence_val,
-                        reasoning=reasoning_text,
-                        model_name=storage_model_name if uses_llm else None,
-                        model_provider=storage_model_provider if uses_llm else None,
-                    )
-                except Exception as e:
-                    if self.verbose:
-                        print(f"  Warning: Failed to save analysis to database: {e}")
-
-            # Attempt to reuse cached analysis when allowed
-            cached = None
-            if allow_cache:
-                cached = self.analysis_cache.get_cached_analysis(
-                    ticker=ticker,
-                    analyst_name=analyst_name,
-                    analysis_date=end_date,
-                    model_name=cache_model_name,
-                    model_provider=cache_model_provider,
-                )
-
-            if cached and allow_cache:
-                signal_str = cached.signal
-                numeric_signal = cached.signal_numeric
-                confidence = cached.confidence
-                reasoning = cached.reasoning or "Cached analysis"
-                progress.update_status(agent_id, ticker, "Using cached analysis", next_ticker=next_ticker)
-                persist_session_analysis(signal_str, numeric_signal, confidence, reasoning)
-                progress.update_status(agent_id, ticker, "Done (cached)", next_ticker=next_ticker)
-                if queue_key:
-                    self.task_queue.mark_completed(queue_key)
-                return AnalystSignal(
-                    ticker=ticker,
-                    analyst=analyst_name,
-                    signal=numeric_signal,
-                    confidence=confidence,
-                    reasoning=reasoning,
-                )
 
             try:
                 # Suppress agent print statements (like show_agent_reasoning)
@@ -372,9 +436,11 @@ class EnhancedPortfolioManager:
 
                 try:
                     # Call the function-based analyst
-                    # Use deep copy to avoid concurrent modification of nested dicts
-                    import copy
-                    result_state = analyst_func(copy.deepcopy(state), agent_id=agent_id)
+                    # Shallow-copy only the mutable data dict to avoid concurrent modification
+                    state_copy = dict(state)
+                    state_copy["data"] = dict(state["data"])
+                    state_copy["data"]["analyst_signals"] = {}
+                    result_state = analyst_func(state_copy, agent_id=agent_id)
                 finally:
                     if not self.verbose:
                         sys.stdout = old_stdout
@@ -421,8 +487,24 @@ class EnhancedPortfolioManager:
                 # Update progress: done (next_ticker is already set from before)
                 progress.update_status(agent_id, ticker, "Done", next_ticker=next_ticker)
 
-                # Persist results for this session and cache for future runs
-                persist_session_analysis(signal_str, numeric_signal, confidence, reasoning)
+                # Persist results for this session
+                if self.session_id:
+                    try:
+                        from src.data.analysis_storage import save_analyst_analysis
+                        save_analyst_analysis(
+                            session_id=self.session_id,
+                            ticker=ticker,
+                            analyst_name=analyst_name,
+                            signal=signal_str,
+                            signal_numeric=numeric_signal,
+                            confidence=confidence,
+                            reasoning=reasoning,
+                            model_name=storage_model_name if uses_llm else None,
+                            model_provider=storage_model_provider if uses_llm else None,
+                        )
+                    except Exception as e:
+                        if self.verbose:
+                            print(f"  Warning: Failed to save analysis to database: {e}")
 
                 # Cache results even when --no-cache-agents is used (for next run)
                 # Only skip caching if --no-cache is set (which bypasses everything)
@@ -457,71 +539,60 @@ class EnhancedPortfolioManager:
                     self.task_queue.mark_failed(queue_key)
                 return None
 
-        # Create all analyst×ticker combinations for maximum parallelization (same as main.py)
-        analyst_ticker_combinations = [
-            (analyst_info, ticker_idx, ticker)
-            for ticker_idx, ticker in enumerate(self.universe)
-            for analyst_info in self.analysts
-        ]
+        if uncached_combos:
+            # Scale workers to actual uncached work, up to 16
+            max_workers = min(len(uncached_combos), 16)
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                future_to_combo = {}
+                for analyst_info, ticker_idx, ticker in uncached_combos:
+                    ticker_data = prefetched_data.get(ticker, {})
 
-        # Build a lookup of ticker -> acquisition date for existing positions
-        position_dates = {
-            p.ticker: p.date_acquired.strftime("%Y-%m-%d") if p.date_acquired else None
-            for p in self.portfolio.positions
-        }
+                    # Get position's acquisition date if this ticker is in the portfolio
+                    position_date_acquired = position_dates.get(ticker)
 
-        # Process all combinations in parallel with configurable workers to avoid rate limits
-        max_workers = min(len(analyst_ticker_combinations), self.max_workers)
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            future_to_combo = {}
-            for analyst_info, ticker_idx, ticker in analyst_ticker_combinations:
-                ticker_data = prefetched_data.get(ticker, {})
-
-                # Get position's acquisition date if this ticker is in the portfolio
-                position_date_acquired = position_dates.get(ticker)
-
-                # Create AgentState with prefetched data (same pattern as main.py)
-                state: AgentState = {
-                    "messages": [],
-                    "data": {
-                        "tickers": [ticker],
-                        "ticker": ticker,
-                        "start_date": start_date,
-                        "end_date": end_date,
-                        "position_date_acquired": position_date_acquired,  # For position-aware news sentiment
-                        "api_key": api_key,
-                        "model_config": self.model_config,
-                        "prefetched_financial_data": {
-                            ticker: ticker_data
+                    # Create AgentState with prefetched data (same pattern as main.py)
+                    state: AgentState = {
+                        "messages": [],
+                        "data": {
+                            "tickers": [ticker],
+                            "ticker": ticker,
+                            "start_date": start_date,
+                            "end_date": end_date,
+                            "position_date_acquired": position_date_acquired,
+                            "api_key": api_key,
+                            "model_config": self.model_config,
+                            "prefetched_financial_data": {
+                                ticker: ticker_data
+                            },
+                            "analyst_signals": {},
                         },
-                        "analyst_signals": {},  # Required by some analysts
-                    },
-                    "metadata": {
-                        "portfolio_manager_mode": True,
-                        "show_reasoning": False,  # Never show verbose reasoning in portfolio mode
+                        "metadata": {
+                            "portfolio_manager_mode": True,
+                            "show_reasoning": False,
+                        }
                     }
-                }
 
-                future = executor.submit(run_analyst, analyst_info, state, ticker, ticker_idx)
-                future_to_combo[future] = (analyst_info, ticker)
+                    future = executor.submit(run_analyst, analyst_info, state, ticker, ticker_idx)
+                    future_to_combo[future] = (analyst_info, ticker)
 
-            for future in as_completed(future_to_combo):
-                try:
-                    result = future.result(timeout=120)  # 2 minute timeout per analyst×ticker task
-                    if result:
-                        signals.append(result)
-                except TimeoutError:
-                    analyst_info, ticker = future_to_combo[future]
-                    if self.verbose:
-                        print(f'\n  Warning: {analyst_info["display_name"]} for {ticker} timed out after 120 seconds')
-                except Exception as exc:
-                    analyst_info, ticker = future_to_combo[future]
-                    if self.verbose:
-                        print(f'\n  Warning: {analyst_info["display_name"]} for {ticker} generated an exception: {exc}')
+                for future in as_completed(future_to_combo):
+                    try:
+                        result = future.result(timeout=120)
+                        if result:
+                            signals.append(result)
+                    except TimeoutError:
+                        analyst_info, ticker = future_to_combo[future]
+                        if self.verbose:
+                            print(f'\n  Warning: {analyst_info["display_name"]} for {ticker} timed out after 120 seconds')
+                    except Exception as exc:
+                        analyst_info, ticker = future_to_combo[future]
+                        if self.verbose:
+                            print(f'\n  Warning: {analyst_info["display_name"]} for {ticker} generated an exception: {exc}')
 
         # Stop progress display and show summary
         progress.stop()
-        print(f"\n✓ Collected {len(signals)} signals from {len(self.analysts)} analysts across {len(self.universe)} tickers\n")
+        cache_msg = f" ({cached_count} cached)" if cached_count else ""
+        print(f"\n✓ Collected {len(signals)} signals from {len(self.analysts)} analysts across {len(self.universe)} tickers{cache_msg}\n")
         return signals
 
     def _fetch_exchange_rates(self, api_key: str) -> None:

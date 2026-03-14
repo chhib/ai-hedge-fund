@@ -49,6 +49,37 @@ class AnalystTaskQueue:
                 """
             )
 
+    def ensure_tasks_batch(self, keys: list[TaskKey]) -> None:
+        """Insert all task keys in a single connection using executemany."""
+        if not keys:
+            return
+        now = datetime.utcnow().isoformat()
+        with sqlite3.connect(self.db_path) as conn:
+            conn.executemany(
+                """
+                INSERT OR IGNORE INTO analyst_tasks(
+                    analysis_date, ticker, analyst_name, model_name, model_provider, status, updated_at
+                ) VALUES (?, ?, ?, ?, ?, 'pending', ?)
+                """,
+                [(k.analysis_date, k.ticker, k.analyst_name, k.model_name, k.model_provider, now) for k in keys],
+            )
+
+    def mark_completed_batch(self, keys: list[TaskKey]) -> None:
+        """Mark all task keys as completed in a single connection."""
+        if not keys:
+            return
+        now = datetime.utcnow().isoformat()
+        with sqlite3.connect(self.db_path) as conn:
+            conn.executemany(
+                """
+                UPDATE analyst_tasks
+                   SET status = 'completed', updated_at = ?
+                 WHERE analysis_date = ? AND ticker = ? AND analyst_name = ?
+                   AND model_name = ? AND model_provider = ?
+                """,
+                [(now, k.analysis_date, k.ticker, k.analyst_name, k.model_name, k.model_provider) for k in keys],
+            )
+
     def ensure_task(self, key: TaskKey) -> None:
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
