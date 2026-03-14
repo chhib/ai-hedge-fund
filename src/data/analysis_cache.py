@@ -57,6 +57,51 @@ class AnalysisCache:
                 """
             )
 
+    def load_batch(
+        self,
+        *,
+        analysis_date: str,
+        model_name: Optional[str],
+        model_provider: Optional[str],
+    ) -> dict[tuple[str, str], CachedAnalystSignal]:
+        """Load all cached analyses for a given date/model in a single query.
+
+        Returns dict keyed by (ticker_upper, analyst_name).
+        """
+        model_name_key = _normalise(model_name, "unknown")
+        model_provider_key = _normalise(model_provider, "unknown")
+
+        result: dict[tuple[str, str], CachedAnalystSignal] = {}
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                """
+                SELECT ticker, analyst_name, payload
+                FROM analysis_cache
+                WHERE analysis_date = ?
+                  AND model_name = ?
+                  AND model_provider = ?
+                """,
+                (analysis_date, model_name_key, model_provider_key),
+            ).fetchall()
+
+        for row in rows:
+            payload = json.loads(row["payload"])
+            ticker = row["ticker"]
+            analyst_name = row["analyst_name"]
+            result[(ticker.upper(), analyst_name)] = CachedAnalystSignal(
+                ticker=ticker,
+                analyst_name=analyst_name,
+                analysis_date=analysis_date,
+                model_name=model_name_key,
+                model_provider=model_provider_key,
+                signal=payload.get("signal", "neutral"),
+                signal_numeric=float(payload.get("signal_numeric", 0.0)),
+                confidence=float(payload.get("confidence", 0.0)),
+                reasoning=payload.get("reasoning", ""),
+            )
+        return result
+
     def get_cached_analysis(
         self,
         *,

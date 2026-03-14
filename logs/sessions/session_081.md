@@ -90,3 +90,17 @@ _This is the active session file. New sessions should be added here._
 - **Structure**: Title + quick start, why this fork, installation (required keys table), full CLI reference (flags table), analyst presets table, analyst roster (13 personas + 5 core with descriptions), IBKR integration (gateway setup, preview/execute, contract overrides, trading permissions), architecture diagram, key source files table, testing (140 tests), project structure tree, disclaimer + license
 - **Data corrections**: Verified 206 tickers, 108 KPI mappings, 140 tests, 96% IBKR coverage against actual codebase (plan had stale numbers)
 - **Files changed**: `README.md`
+
+## Session 90 (Batch Cache Resolution for `hedge rebalance`)
+**Date**: 2026-03-14 | **Model**: Claude Opus 4.6
+
+- **Perf**: Restructured `_collect_analyst_signals()` to resolve cache hits in bulk before touching threads
+- **Feature**: `analysis_cache.load_batch()` -- single query loads all cached analyses for a date/model combo
+- **Feature**: `analyst_task_queue.ensure_tasks_batch()` / `mark_completed_batch()` -- `executemany` in single connection
+- **Feature**: `analysis_storage.save_analyst_analyses_batch()` -- `db.add_all()` + single commit
+- **Refactor**: `enhanced_portfolio_manager.py` -- pre-loads cache batch, resolves hits instantly, batches DB writes, only submits misses to ThreadPoolExecutor (scaled up to 16 workers)
+- **Refactor**: Replaced `copy.deepcopy(state)` with targeted shallow copy (only `data` dict + fresh `analyst_signals`)
+- **Refactor**: Throttled progress display to every 50th cached item instead of every single one
+- **Impact**: When all cached: ~4 DB connections (was ~4,120), 0 thread tasks (was 1,030), ~25 display rebuilds (was ~3,090)
+- **Tests**: 142/142 passed, inline tests for `load_batch` and batch task queue methods
+- **Files changed**: `src/data/analysis_cache.py`, `src/data/analyst_task_queue.py`, `src/data/analysis_storage.py`, `src/agents/enhanced_portfolio_manager.py`
