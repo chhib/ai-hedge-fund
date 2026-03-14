@@ -6,8 +6,13 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, Iterable, List, Optional
 
+import logging
+import time
+
 import requests
 import re
+
+logger = logging.getLogger(__name__)
 
 from src.integrations.ticker_mapper import get_ticker_mapper, map_ibkr_to_borsdata
 from src.utils.portfolio_loader import Portfolio, Position
@@ -173,6 +178,18 @@ class IBKRClient:
         """Reply to an order warning/confirmation prompt."""
         return self._request("POST", f"/iserver/reply/{reply_id}", json={"confirmed": confirmed})
 
+    def get_orders(self) -> Any:
+        """Fetch live orders from the gateway."""
+        return self._request("GET", "/iserver/account/orders")
+
+    def get_order_status(self, order_id: str) -> Any:
+        """Fetch status for a specific order."""
+        return self._request("GET", f"/iserver/account/order/status/{order_id}")
+
+    def cancel_order(self, account_id: str, order_id: str) -> Any:
+        """Cancel an open order."""
+        return self._request("DELETE", f"/iserver/account/{account_id}/order/{order_id}")
+
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
@@ -189,17 +206,30 @@ class IBKRClient:
             normalized_path = f"/v1/api{path}"
 
         url = f"{self.base_url}{normalized_path}"
-        try:
-            response = self.session.request(method=method.upper(), url=url, timeout=self.timeout, params=params, json=json)
-        except requests.RequestException as exc:  # pragma: no cover - network failure path
-            raise IBKRError(f"IBKR request failed: {exc}") from exc
+        max_attempts = 3
+        last_exc: Optional[Exception] = None
+        for attempt in range(max_attempts):
+            try:
+                response = self.session.request(method=method.upper(), url=url, timeout=self.timeout, params=params, json=json)
+            except (requests.ConnectionError, requests.Timeout) as exc:
+                last_exc = exc
+                if attempt < max_attempts - 1:
+                    delay = min(2 ** attempt, 8)
+                    logger.warning("IBKR request %s %s failed (attempt %d/%d), retrying in %ds: %s", method, path, attempt + 1, max_attempts, delay, exc)
+                    time.sleep(delay)
+                    continue
+                raise IBKRError(f"IBKR request failed after {max_attempts} attempts: {exc}") from exc
+            except requests.RequestException as exc:
+                raise IBKRError(f"IBKR request failed: {exc}") from exc
 
-        if response.status_code >= 400:
-            raise IBKRError(f"IBKR API error {response.status_code}: {response.text}")
-        try:
-            return response.json()
-        except ValueError as exc:  # pragma: no cover - malformed response
-            raise IBKRError("Failed to decode IBKR response") from exc
+            if response.status_code >= 400:
+                raise IBKRError(f"IBKR API error {response.status_code}: {response.text}")
+            try:
+                return response.json()
+            except ValueError as exc:  # pragma: no cover - malformed response
+                raise IBKRError("Failed to decode IBKR response") from exc
+
+        raise IBKRError(f"IBKR request failed after {max_attempts} attempts: {last_exc}") from last_exc  # pragma: no cover
 
 
 def _load_borsdata_tickers_for_mapper() -> None:

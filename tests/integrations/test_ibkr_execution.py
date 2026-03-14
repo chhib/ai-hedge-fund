@@ -5,7 +5,7 @@ from src.integrations.ibkr_client import IBKRError
 
 
 class FakeIBKRClient:
-    def __init__(self, contracts=None, snapshot=None, batch_preview_response=None, batch_preview_error=None):
+    def __init__(self, contracts=None, snapshot=None, batch_preview_response=None, batch_preview_error=None, order_status_responses=None):
         self.preview_calls = []
         self.batch_preview_calls = []
         self.place_calls = []
@@ -14,6 +14,8 @@ class FakeIBKRClient:
         self.snapshot = snapshot or []
         self.batch_preview_response = batch_preview_response
         self.batch_preview_error = batch_preview_error
+        self.order_status_responses = order_status_responses or []
+        self._order_status_call_count = 0
 
     def resolve_account_id(self, preferred=None):
         return preferred or "U123"
@@ -47,6 +49,16 @@ class FakeIBKRClient:
     def place_order(self, account_id, order):
         self.place_calls.append(order)
         return {"order_status": "Submitted"}
+
+    def get_order_status(self, order_id):
+        if self._order_status_call_count < len(self.order_status_responses):
+            resp = self.order_status_responses[self._order_status_call_count]
+            self._order_status_call_count += 1
+            return resp
+        return {"order_status": "Filled", "filledQuantity": 0, "remainingQuantity": 0, "avgPrice": 0.0}
+
+    def get_orders(self):
+        return {"orders": []}
 
     def reply(self, reply_id, confirmed=True):
         self.reply_calls.append(reply_id)
@@ -512,3 +524,123 @@ def test_batch_preview_partial_error(monkeypatch):
     assert len(report.skipped) == 1
     assert "BBB" in report.skipped[0].ticker
     assert "Insufficient buying power" in report.skipped[0].reason
+
+
+def test_order_status_polling_filled(monkeypatch):
+    """After execution, order_statuses is populated when order_id is returned."""
+    recommendations = [
+        {"ticker": "AAA", "action": "ADD", "current_shares": 0, "target_shares": 2, "current_price": 5.0, "currency": "USD"},
+    ]
+    contracts = {
+        "AAA": [{"contracts": [{"conid": 111, "exchange": "SMART", "currency": "USD"}]}],
+    }
+    snapshot = [{"conid": "111", "84": "5.10"}]
+
+    class FilledClient(FakeIBKRClient):
+        def place_order(self, account_id, order):
+            self.place_calls.append(order)
+            return {"order_id": "777", "order_status": "Submitted"}
+
+        def get_order_status(self, order_id):
+            return {"order_status": "Filled", "filledQuantity": 2, "remainingQuantity": 0, "avgPrice": 5.10}
+
+    fake = FilledClient(contracts=contracts, snapshot=snapshot)
+    monkeypatch.setattr(ibkr_execution, "load_contract_overrides", lambda: {})
+    monkeypatch.setattr("src.integrations.ibkr_execution.time.sleep", lambda _: None)
+
+    report = execute_ibkr_rebalance_trades(
+        recommendations,
+        base_url="https://example.com",
+        account_id="U123",
+        preview_only=True,
+        execute=True,
+        confirm=lambda _: True,
+        client=fake,
+    )
+
+    assert len(report.order_statuses) == 1
+    assert report.order_statuses[0].order_id == "777"
+    assert report.order_statuses[0].status == "Filled"
+    assert report.order_statuses[0].filled_qty == 2
+
+
+def test_partial_fill_warning(monkeypatch):
+    """Partial fill generates a warning in the report."""
+    recommendations = [
+        {"ticker": "AAA", "action": "ADD", "current_shares": 0, "target_shares": 10, "current_price": 5.0, "currency": "USD"},
+    ]
+    contracts = {
+        "AAA": [{"contracts": [{"conid": 111, "exchange": "SMART", "currency": "USD"}]}],
+    }
+    snapshot = [{"conid": "111", "84": "5.10"}]
+
+    class PartialFillClient(FakeIBKRClient):
+        def place_order(self, account_id, order):
+            self.place_calls.append(order)
+            return {"order_id": "888", "order_status": "Submitted"}
+
+        def get_order_status(self, order_id):
+            return {"order_status": "Filled", "filledQuantity": 3, "remainingQuantity": 7, "avgPrice": 5.05}
+
+    fake = PartialFillClient(contracts=contracts, snapshot=snapshot)
+    monkeypatch.setattr(ibkr_execution, "load_contract_overrides", lambda: {})
+    monkeypatch.setattr("src.integrations.ibkr_execution.time.sleep", lambda _: None)
+
+    report = execute_ibkr_rebalance_trades(
+        recommendations,
+        base_url="https://example.com",
+        account_id="U123",
+        preview_only=True,
+        execute=True,
+        confirm=lambda _: True,
+        client=fake,
+    )
+
+    assert len(report.order_statuses) == 1
+    assert report.order_statuses[0].status == "PartialFill"
+    assert any("Partial fill" in w for w in report.warnings)
+
+
+def test_order_status_timeout(monkeypatch):
+    """Order polling times out when status stays non-terminal."""
+    recommendations = [
+        {"ticker": "AAA", "action": "ADD", "current_shares": 0, "target_shares": 2, "current_price": 5.0, "currency": "USD"},
+    ]
+    contracts = {
+        "AAA": [{"contracts": [{"conid": 111, "exchange": "SMART", "currency": "USD"}]}],
+    }
+    snapshot = [{"conid": "111", "84": "5.10"}]
+
+    class StuckClient(FakeIBKRClient):
+        def place_order(self, account_id, order):
+            self.place_calls.append(order)
+            return {"order_id": "999", "order_status": "Submitted"}
+
+        def get_order_status(self, order_id):
+            return {"order_status": "PreSubmitted", "filledQuantity": 0, "remainingQuantity": 2, "avgPrice": 0.0}
+
+    fake = StuckClient(contracts=contracts, snapshot=snapshot)
+    monkeypatch.setattr(ibkr_execution, "load_contract_overrides", lambda: {})
+    monkeypatch.setattr("src.integrations.ibkr_execution.time.sleep", lambda _: None)
+
+    # Use a very short timeout so the test doesn't hang
+    original_poll = ibkr_execution._poll_order_status
+
+    def fast_poll(ibkr, order_id, ticker, total_qty, poll_interval=2.0, poll_timeout=30.0):
+        return original_poll(ibkr, order_id, ticker, total_qty, poll_interval=0.0, poll_timeout=0.0)
+
+    monkeypatch.setattr(ibkr_execution, "_poll_order_status", fast_poll)
+
+    report = execute_ibkr_rebalance_trades(
+        recommendations,
+        base_url="https://example.com",
+        account_id="U123",
+        preview_only=True,
+        execute=True,
+        confirm=lambda _: True,
+        client=fake,
+    )
+
+    assert len(report.order_statuses) == 1
+    assert report.order_statuses[0].status == "Timeout"
+    assert any("timed out" in w for w in report.warnings)

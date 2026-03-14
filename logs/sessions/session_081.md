@@ -61,3 +61,14 @@ _This is the active session file. New sessions should be added here._
 - **Enhancement**: Added `description` field to `ContractOverride` dataclass, `ValidationResult` dataclass, `validate_contract()`, `validate_all_contracts()`, `save_contract_overrides()` to `ibkr_contract_mapper.py`
 - **Tests**: 9/9 passed in `tests/integrations/test_ibkr_contract_mapper.py` (valid, invalid, exchange_changed, error, no stored exchange, iteration, progress callback, mixed results)
 - **Files changed**: `src/integrations/ibkr_contract_mapper.py`, `src/cli/hedge.py`, `scripts/build_ibkr_contract_overrides.py`, `tests/integrations/test_ibkr_contract_mapper.py` (new)
+
+## Session 87 (IBKR Error Recovery & Order Status Monitoring)
+**Date**: 2026-03-14 | **Model**: Claude Opus 4.6
+
+- **Feature**: `ibkr_client.py` -- added `get_orders()`, `get_order_status()`, `cancel_order()` methods
+- **Feature**: `_request()` retry loop -- retries on `ConnectionError`/`Timeout` (max 3 attempts, exponential backoff capped at 8s), no retry on HTTP 4xx/5xx
+- **Feature**: `OrderStatusResult` dataclass + `order_statuses` field on `ExecutionReport`
+- **Feature**: Post-submission order polling in `_process_submission()` -- polls until Filled/Cancelled/Inactive or timeout, detects partial fills, adds warnings
+- **Feature**: `hedge ibkr orders` CLI command -- shows live orders table (ID, Ticker, Side, Qty, Filled, Price, Status)
+- **Tests**: 28/28 passed (4 new client tests: retry, no-retry-on-4xx, get_orders, cancel_order; 3 new execution tests: polling filled, partial fill warning, timeout)
+- **Files changed**: `src/integrations/ibkr_client.py`, `src/integrations/ibkr_execution.py`, `src/cli/hedge.py`, `tests/integrations/test_ibkr_client.py`, `tests/integrations/test_ibkr_execution.py`

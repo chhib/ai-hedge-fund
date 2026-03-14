@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import logging
+import time
+
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Iterable, List, Optional
 from uuid import uuid4
 from decimal import Decimal, ROUND_HALF_UP
+
+logger = logging.getLogger(__name__)
 
 from src.integrations.ibkr_client import IBKRClient, IBKRError
 from src.integrations.ibkr_contract_mapper import ContractOverride, load_contract_overrides
@@ -50,6 +55,18 @@ class ResolvedOrder:
 
 
 @dataclass(slots=True)
+class OrderStatusResult:
+    order_id: str
+    ticker: str
+    status: str  # Filled, Cancelled, Inactive, PartialFill, Timeout, Unknown
+    filled_qty: int
+    remaining_qty: int
+    avg_fill_price: float
+    total_qty: int
+    elapsed_seconds: float
+
+
+@dataclass(slots=True)
 class ExecutionReport:
     account_id: Optional[str]
     preview_only: bool
@@ -59,6 +76,7 @@ class ExecutionReport:
     previews: List[Dict[str, Any]] = field(default_factory=list)
     submissions: List[Dict[str, Any]] = field(default_factory=list)
     final_submissions: List[Dict[str, Any]] = field(default_factory=list)
+    order_statuses: List[OrderStatusResult] = field(default_factory=list)
     skipped: List[OrderSkip] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
     aborted: bool = False
@@ -742,6 +760,14 @@ def _process_submission(
                 report.skipped.append(OrderSkip(ticker=intent.ticker, action=intent.action, reason=f"Submission error: {error_message}"))
             else:
                 report.final_submissions.append({"intent": intent, "response": response})
+                order_id = _extract_order_id(response)
+                if order_id:
+                    status_result = _poll_order_status(ibkr, order_id, intent.ticker, intent.quantity)
+                    report.order_statuses.append(status_result)
+                    if status_result.status == "PartialFill":
+                        report.warnings.append(f"{intent.ticker}: Partial fill ({status_result.filled_qty}/{status_result.total_qty})")
+                    elif status_result.status == "Timeout":
+                        report.warnings.append(f"{intent.ticker}: Order status polling timed out (last checked: order {order_id})")
             return
 
         report.warnings.append(f"{intent.ticker}: {submit_warning[1]}")
@@ -754,6 +780,84 @@ def _process_submission(
 
     report.warnings.append(f"{intent.ticker}: Exceeded reply confirmations; aborting submission")
     report.skipped.append(OrderSkip(ticker=intent.ticker, action=intent.action, reason="Reply confirmation loop"))
+
+
+def _extract_order_id(response: Any) -> Optional[str]:
+    """Extract order_id from a submission response."""
+    if isinstance(response, dict):
+        oid = response.get("order_id") or response.get("orderId")
+        if oid:
+            return str(oid)
+        # Check nested in orders list
+        orders = response.get("orders") or response.get("order")
+        if isinstance(orders, list):
+            for item in orders:
+                if isinstance(item, dict):
+                    oid = item.get("order_id") or item.get("orderId")
+                    if oid:
+                        return str(oid)
+    if isinstance(response, list):
+        for item in response:
+            oid = _extract_order_id(item)
+            if oid:
+                return oid
+    return None
+
+
+def _poll_order_status(
+    ibkr: IBKRClient,
+    order_id: str,
+    ticker: str,
+    total_qty: int,
+    poll_interval: float = 2.0,
+    poll_timeout: float = 30.0,
+) -> OrderStatusResult:
+    """Poll order status until terminal state or timeout."""
+    terminal_states = {"Filled", "Cancelled", "Inactive"}
+    start = time.monotonic()
+    last_status = "Unknown"
+    filled_qty = 0
+    remaining_qty = total_qty
+    avg_fill_price = 0.0
+
+    while True:
+        elapsed = time.monotonic() - start
+        try:
+            status_resp = ibkr.get_order_status(order_id)
+        except IBKRError as exc:
+            logger.warning("Failed to poll order %s: %s", order_id, exc)
+            break
+
+        if isinstance(status_resp, dict):
+            last_status = status_resp.get("order_status") or status_resp.get("orderStatus") or status_resp.get("status") or last_status
+            filled_qty = int(float(status_resp.get("filled_qty") or status_resp.get("filledQuantity") or status_resp.get("cum_fill") or filled_qty))
+            remaining_qty = int(float(status_resp.get("remaining_qty") or status_resp.get("remainingQuantity") or status_resp.get("rem_fill") or remaining_qty))
+            avg_fill_price = float(status_resp.get("avg_fill_price") or status_resp.get("avgPrice") or status_resp.get("average_price") or avg_fill_price)
+
+        if last_status in terminal_states:
+            break
+
+        if elapsed >= poll_timeout:
+            last_status = "Timeout"
+            break
+
+        time.sleep(poll_interval)
+
+    elapsed = time.monotonic() - start
+    # Detect partial fill: filled some but not all
+    if last_status == "Filled" and 0 < filled_qty < total_qty:
+        last_status = "PartialFill"
+
+    return OrderStatusResult(
+        order_id=order_id,
+        ticker=ticker,
+        status=last_status,
+        filled_qty=filled_qty,
+        remaining_qty=remaining_qty,
+        avg_fill_price=avg_fill_price,
+        total_qty=total_qty,
+        elapsed_seconds=round(elapsed, 2),
+    )
 
 
 def _extract_submission_rows(payload: Any) -> List[Dict[str, Any]]:
@@ -799,6 +903,7 @@ def summarize_submissions(entries: List[Dict[str, Any]]) -> List[str]:
 __all__ = [
     "OrderIntent",
     "OrderSkip",
+    "OrderStatusResult",
     "ResolvedOrder",
     "ExecutionReport",
     "build_order_intents",

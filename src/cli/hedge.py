@@ -279,6 +279,83 @@ def ibkr() -> None:
 @click.option("--ibkr-port", default=int(os.environ.get("IBKR_PORT", "5001")), show_default=True, type=int, help="Client Portal port")
 @click.option("--ibkr-verify-ssl/--no-ibkr-verify-ssl", default=os.environ.get("IBKR_VERIFY_SSL", "false").lower() in ("true", "1", "yes"), show_default=True, help="Verify SSL certificates")
 @click.option("--ibkr-timeout", default=float(os.environ.get("IBKR_TIMEOUT", "30")), show_default=True, type=float, help="Timeout in seconds")
+@click.option("--ibkr-account", help="Optional IBKR account override")
+def orders(ibkr_host: str, ibkr_port: int, ibkr_verify_ssl: bool, ibkr_timeout: float, ibkr_account: Optional[str]) -> None:
+    """Show live orders from the IBKR gateway."""
+    from src.services.portfolio_runner import _check_ibkr_gateway
+    from src.integrations.ibkr_client import IBKRClient
+
+    base_url = f"{ibkr_host}:{ibkr_port}"
+
+    click.echo("Checking IBKR gateway ... ", nl=False)
+    is_running, is_authenticated = _check_ibkr_gateway(base_url, timeout=ibkr_timeout)
+    if not is_running:
+        click.secho("FAIL (not reachable)", fg="red")
+        sys.exit(1)
+    if not is_authenticated:
+        click.secho("FAIL (not authenticated)", fg="red")
+        sys.exit(1)
+    click.secho("OK", fg="green")
+
+    client = IBKRClient(base_url, verify_ssl=ibkr_verify_ssl, timeout=ibkr_timeout)
+
+    try:
+        response = client.get_orders()
+    except Exception as exc:
+        click.secho(f"Error fetching orders: {exc}", fg="red")
+        sys.exit(1)
+
+    rows = _parse_orders_response(response)
+    if not rows:
+        click.secho("No open orders.", fg="yellow")
+        return
+
+    # Render table
+    header = f"{'ID':<12} {'Ticker':<10} {'Side':<6} {'Qty':>6} {'Filled':>6} {'Price':>10} {'Status':<14}"
+    click.echo(header)
+    click.echo("-" * len(header))
+    for row in rows:
+        click.echo(
+            f"{row['id']:<12} {row['ticker']:<10} {row['side']:<6} {row['qty']:>6} {row['filled']:>6} {row['price']:>10} {row['status']:<14}"
+        )
+
+
+def _parse_orders_response(response) -> List[dict]:
+    """Parse IBKR orders response into a flat list of row dicts."""
+    items: list = []
+    if isinstance(response, list):
+        items = response
+    elif isinstance(response, dict):
+        items = response.get("orders") or response.get("order") or ([response] if response.get("orderId") or response.get("order_id") else [])
+
+    rows: List[dict] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        order_id = item.get("orderId") or item.get("order_id") or ""
+        ticker = item.get("ticker") or item.get("symbol") or item.get("contractDesc") or ""
+        side = item.get("side") or item.get("orderSide") or ""
+        qty = item.get("totalSize") or item.get("quantity") or item.get("totalQuantity") or ""
+        filled = item.get("filledQuantity") or item.get("filled_qty") or item.get("cumFill") or "0"
+        price = item.get("price") or item.get("auxPrice") or item.get("limitPrice") or ""
+        status = item.get("status") or item.get("orderStatus") or item.get("order_status") or ""
+        rows.append({
+            "id": str(order_id),
+            "ticker": str(ticker),
+            "side": str(side),
+            "qty": str(qty),
+            "filled": str(filled),
+            "price": str(price),
+            "status": str(status),
+        })
+    return rows
+
+
+@ibkr.command()
+@click.option("--ibkr-host", default=os.environ.get("IBKR_HOST", "https://localhost"), show_default=True, help="Client Portal host")
+@click.option("--ibkr-port", default=int(os.environ.get("IBKR_PORT", "5001")), show_default=True, type=int, help="Client Portal port")
+@click.option("--ibkr-verify-ssl/--no-ibkr-verify-ssl", default=os.environ.get("IBKR_VERIFY_SSL", "false").lower() in ("true", "1", "yes"), show_default=True, help="Verify SSL certificates")
+@click.option("--ibkr-timeout", default=float(os.environ.get("IBKR_TIMEOUT", "30")), show_default=True, type=float, help="Timeout in seconds")
 def check(ibkr_host: str, ibkr_port: int, ibkr_verify_ssl: bool, ibkr_timeout: float) -> None:
     """Validate each IBKR pipeline stage against the live gateway."""
     from src.services.portfolio_runner import _check_ibkr_gateway

@@ -1,6 +1,6 @@
 # Börsdata Integration Project Summary
 
-_Last updated: 2026-03-14 (Session 86)_
+_Last updated: 2026-03-14 (Session 87)_
 
 ## End Goal
 Rebuild the data ingestion and processing pipeline so the application relies on Börsdata's REST API. The system accepts Börsdata-native tickers, supports both Nordic and Global markets, and maintains compatibility with the original user-facing workflows.
@@ -22,7 +22,9 @@ The AI hedge fund system is fully operational with both CLI and web interfaces:
 - ISIN-based contract resolution: 198/206 tickers mapped (96% coverage)
 - Live order lifecycle validated end-to-end (place, confirm, cancel)
 - Contract override stale-checking: `hedge ibkr validate` with `--fix` auto-refresh
-- Next: error recovery, portfolio reconciliation
+- Error recovery: retry on connection failures, order status polling with partial fill detection
+- `hedge ibkr orders` command for live order monitoring
+- Next: portfolio reconciliation
 
 ## Active Session File
 **`logs/sessions/session_081.md`** - Sessions 81-90
@@ -93,6 +95,7 @@ poetry run hedge cache clear                        # Clear all
 poetry run hedge ibkr check                        # Test all 5 pipeline stages
 poetry run hedge ibkr validate                     # Check all contract overrides for staleness
 poetry run hedge ibkr validate --fix               # Auto-refresh invalid contracts
+poetry run hedge ibkr orders                       # Show live orders from the gateway
 ```
 
 ### IBKR Execution

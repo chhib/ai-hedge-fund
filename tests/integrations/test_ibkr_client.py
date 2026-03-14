@@ -1,6 +1,8 @@
 from datetime import datetime
+from unittest.mock import MagicMock
 
 import pytest
+import requests
 
 from src.integrations.ibkr_client import IBKRClient, IBKRError
 
@@ -110,3 +112,92 @@ def test_request_prefixes_iserver_paths(monkeypatch):
     client._request("GET", "/iserver/accounts")
 
     assert seen["url"] == "https://example.com/v1/api/iserver/accounts"
+
+
+def test_request_retries_on_connection_error(monkeypatch):
+    """_request retries on ConnectionError and succeeds on second attempt."""
+    client = IBKRClient(base_url="https://example.com")
+    call_count = 0
+
+    class DummyResponse:
+        status_code = 200
+
+        def json(self):
+            return {"ok": True}
+
+    def _fake_request(method, url, timeout=None, params=None, json=None):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            raise requests.ConnectionError("Connection refused")
+        return DummyResponse()
+
+    monkeypatch.setattr(client.session, "request", _fake_request)
+    monkeypatch.setattr("src.integrations.ibkr_client.time.sleep", lambda _: None)
+
+    result = client._request("GET", "/iserver/accounts")
+    assert result == {"ok": True}
+    assert call_count == 2
+
+
+def test_request_no_retry_on_http_error(monkeypatch):
+    """_request raises immediately on 4xx without retrying."""
+    client = IBKRClient(base_url="https://example.com")
+    call_count = 0
+
+    class DummyResponse:
+        status_code = 400
+        text = "Bad Request"
+
+    def _fake_request(method, url, timeout=None, params=None, json=None):
+        nonlocal call_count
+        call_count += 1
+        return DummyResponse()
+
+    monkeypatch.setattr(client.session, "request", _fake_request)
+
+    with pytest.raises(IBKRError, match="400"):
+        client._request("GET", "/iserver/accounts")
+    assert call_count == 1
+
+
+def test_get_orders_path(monkeypatch):
+    client = IBKRClient(base_url="https://example.com")
+    seen = {}
+
+    class DummyResponse:
+        status_code = 200
+
+        def json(self):
+            return {"orders": []}
+
+    def _fake_request(method, url, timeout=None, params=None, json=None):
+        seen["method"] = method
+        seen["url"] = url
+        return DummyResponse()
+
+    monkeypatch.setattr(client.session, "request", _fake_request)
+    client.get_orders()
+    assert seen["method"] == "GET"
+    assert "/iserver/account/orders" in seen["url"]
+
+
+def test_cancel_order_path(monkeypatch):
+    client = IBKRClient(base_url="https://example.com")
+    seen = {}
+
+    class DummyResponse:
+        status_code = 200
+
+        def json(self):
+            return {"msg": "cancelled"}
+
+    def _fake_request(method, url, timeout=None, params=None, json=None):
+        seen["method"] = method
+        seen["url"] = url
+        return DummyResponse()
+
+    monkeypatch.setattr(client.session, "request", _fake_request)
+    client.cancel_order("U123", "42")
+    assert seen["method"] == "DELETE"
+    assert "/iserver/account/U123/order/42" in seen["url"]
