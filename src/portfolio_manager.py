@@ -161,6 +161,8 @@ def main(portfolio, universe, universe_tickers, analysts, model, model_provider,
 
 
 def _render_ibkr_report(report) -> None:
+    from src.integrations.ibkr_execution import summarize_submissions
+
     click.echo("\n" + "-" * 40)
     title = "IBKR ORDER EXECUTION" if report.executed else "IBKR ORDER PREVIEW"
     click.echo(title)
@@ -177,6 +179,13 @@ def _render_ibkr_report(report) -> None:
         click.echo("Skipped:")
         for skip in report.skipped:
             click.echo(f"  • {skip.ticker} ({skip.action}): {skip.reason}")
+    if report.executed:
+        final_summaries = summarize_submissions(getattr(report, "final_submissions", []))
+        click.echo(f"Submitted: {len(final_summaries)}")
+        if final_summaries:
+            click.echo("Execution results:")
+            for summary in final_summaries:
+                click.echo(f"  • {summary}")
 
 
 if __name__ == "__main__":

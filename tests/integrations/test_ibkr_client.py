@@ -9,6 +9,7 @@ def test_fetch_portfolio_transforms_positions_and_cash(monkeypatch):
     client = IBKRClient(base_url="https://example.com")
 
     responses = {
+        ("GET", "/iserver/accounts"): {},
         ("GET", "/v1/api/portfolio/accounts"): [{"accountId": "U123"}],
         ("GET", "/v1/api/portfolio/U123/positions/0"): [
             {"symbol": "AAPL", "position": 10, "avgCost": 150.0, "currency": "USD"},
@@ -57,6 +58,21 @@ def test_resolve_account_id_prefers_selected(monkeypatch):
     monkeypatch.setattr(client, "_request", _fake_request)
 
     assert client.resolve_account_id() == "U222"
+
+
+def test_resolve_account_id_ignores_all_selected(monkeypatch):
+    client = IBKRClient(base_url="https://example.com")
+
+    def _fake_request(method, path, params=None, json=None):
+        if path == "/iserver/accounts":
+            return {"accounts": ["U111", "U222"], "selectedAccount": "All"}
+        if path == "/v1/api/portfolio/accounts":
+            return [{"accountId": "U123"}]
+        return []
+
+    monkeypatch.setattr(client, "_request", _fake_request)
+
+    assert client.resolve_account_id() == "U111"
 
 
 def test_resolve_account_id_falls_back_to_portfolio_accounts(monkeypatch):

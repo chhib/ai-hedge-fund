@@ -6,17 +6,71 @@
       "currency": "USD",
       "description": "Teekay Corp Ltd"
     },
+    "HOVE": {
+      "conid": 677564383,
+      "exchange": "CPH",
+      "currency": "DKK",
+      "description": "Hove A/S"
+    },
+    "RANA": {
+      "conid": 474196627,
+      "exchange": "OSE",
+      "currency": "NOK",
+      "description": "Rana Gruber ASA"
+    },
+    "SBOK": {
+      "conid": 73954427,
+      "exchange": "SFB",
+      "currency": "SEK",
+      "description": "Scandbook AB"
+    },
+    "DHT": {
+      "conid": 110322264,
+      "exchange": "NYSE",
+      "currency": "USD",
+      "description": "DHT Holdings Inc"
+    },
     "SFL": {
       "conid": 390603973,
       "exchange": "NYSE",
       "currency": "USD",
       "description": "SFL Corp Ltd"
     },
+    "STNG": {
+      "conid": 349869083,
+      "exchange": "NYSE",
+      "currency": "USD",
+      "description": "Scorpio Tankers Inc"
+    },
+    "WB": {
+      "conid": 148782724,
+      "exchange": "NASDAQ",
+      "currency": "USD",
+      "description": "Weibo Corp"
+    },
+    "NVEC": {
+      "conid": 17004501,
+      "exchange": "NASDAQ",
+      "currency": "USD",
+      "description": "NVE CORP"
+    },
+    "MPCC": {
+      "conid": 307129507,
+      "exchange": "OSE",
+      "currency": "NOK",
+      "description": "MPC CONTAINER SHIPS AS"
+    },
     "LUMI": {
       "conid": 278544593,
       "exchange": "SFB",
       "currency": "SEK",
       "description": "Lundin Mining Corp"
+    },
+    "LUND B": {
+      "conid": 1329566,
+      "exchange": "SFB",
+      "currency": "SEK",
+      "description": "Lundbergs AB-B SHS"
     }
   }
 }

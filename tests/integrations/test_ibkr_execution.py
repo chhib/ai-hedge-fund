@@ -27,7 +27,7 @@ class FakeIBKRClient:
     def get_marketdata_snapshot(self, conids, fields="31,84,86"):
         return self.snapshot
 
-    def get_contract_rules(self, conid, is_buy):
+    def get_contract_rules(self, conid, is_buy, exchange=None):
         # Return a mock response with a default tick size of 0.01
         return {"rules": {"increment": 0.01}}
 
@@ -102,6 +102,99 @@ def test_preview_only_never_places_orders(monkeypatch):
     assert report.submissions == []
 
 
+def test_tick_size_uses_increment_rules(monkeypatch):
+    class TickRulesClient(FakeIBKRClient):
+        def get_contract_rules(self, conid, is_buy, exchange=None):
+            return {
+                "rules": {
+                    "incrementRules": [
+                        {"lowerEdge": 0, "increment": 0.01},
+                        {"lowerEdge": 10, "increment": 0.005},
+                    ]
+                }
+            }
+
+    recommendations = [
+        {"ticker": "AAA", "action": "SELL", "current_shares": 5, "target_shares": 0, "current_price": 17.758, "currency": "USD"},
+    ]
+    contracts = {
+        "AAA": [{"contracts": [{"conid": 111, "exchange": "SMART", "currency": "USD"}]}],
+    }
+    fake = TickRulesClient(contracts=contracts)
+
+    monkeypatch.setattr(ibkr_execution, "load_contract_overrides", lambda: {})
+
+    report = execute_ibkr_rebalance_trades(
+        recommendations,
+        base_url="https://example.com",
+        account_id="U123",
+        preview_only=True,
+        execute=False,
+        client=fake,
+    )
+
+    assert len(fake.batch_preview_calls) == 1
+    assert fake.batch_preview_calls[0][0]["price"] == 17.76
+    assert report.skipped == []
+
+
+def test_skips_orders_without_trading_permissions(monkeypatch):
+    class NoPermissionClient(FakeIBKRClient):
+        def get_contract_rules(self, conid, is_buy, exchange=None):
+            return {"rules": {"canTradeAcctIds": ["U999"]}}
+
+    recommendations = [
+        {"ticker": "AAA", "action": "SELL", "current_shares": 2, "target_shares": 0, "current_price": 5.0, "currency": "USD"},
+    ]
+    contracts = {
+        "AAA": [{"contracts": [{"conid": 111, "exchange": "SMART", "currency": "USD"}]}],
+    }
+    fake = NoPermissionClient(contracts=contracts)
+
+    monkeypatch.setattr(ibkr_execution, "load_contract_overrides", lambda: {})
+
+    report = execute_ibkr_rebalance_trades(
+        recommendations,
+        base_url="https://example.com",
+        account_id="U123",
+        preview_only=True,
+        execute=False,
+        client=fake,
+    )
+
+    assert fake.batch_preview_calls == []
+    assert any(skip.reason == "No trading permissions" for skip in report.skipped)
+
+
+def test_preview_only_defers_buys_until_sells(monkeypatch):
+    recommendations = [
+        {"ticker": "SELL1", "action": "SELL", "current_shares": 5, "target_shares": 0, "current_price": 10.0, "currency": "USD"},
+        {"ticker": "BUY1", "action": "ADD", "current_shares": 0, "target_shares": 3, "current_price": 20.0, "currency": "USD"},
+    ]
+    contracts = {
+        "SELL1": [{"contracts": [{"conid": 111, "exchange": "SMART", "currency": "USD"}]}],
+        "BUY1": [{"contracts": [{"conid": 222, "exchange": "SMART", "currency": "USD"}]}],
+    }
+    snapshot = [{"conid": "111", "84": "10.10"}, {"conid": "222", "84": "20.20"}]
+    fake = FakeIBKRClient(contracts=contracts, snapshot=snapshot)
+
+    monkeypatch.setattr(ibkr_execution, "load_contract_overrides", lambda: {})
+
+    report = execute_ibkr_rebalance_trades(
+        recommendations,
+        base_url="https://example.com",
+        account_id="U123",
+        preview_only=True,
+        execute=False,
+        client=fake,
+    )
+
+    assert len(fake.batch_preview_calls) == 1
+    assert len(fake.batch_preview_calls[0]) == 1
+    assert fake.batch_preview_calls[0][0]["side"] == "SELL"
+    assert any(skip.ticker == "BUY1" and "Deferred" in skip.reason for skip in report.skipped)
+
+
 def test_execute_requires_confirmation(monkeypatch):
     recommendations = [
         {"ticker": "AAA", "action": "ADD", "current_shares": 0, "target_shares": 2, "current_price": 5.0, "currency": "USD"},
@@ -156,6 +249,7 @@ def test_execute_places_orders_with_confirmation(monkeypatch):
     assert len(fake.batch_preview_calls) == 1
     assert len(fake.place_calls) == 1
     assert report.submissions
+    assert report.final_submissions
 
 
 def test_skips_ambiguous_contracts(monkeypatch):
@@ -232,6 +326,50 @@ def test_selects_smart_contract_when_unique(monkeypatch):
 
     assert report.resolved
     assert report.resolved[0].conid == 111
+
+
+def test_execute_handles_multi_step_reply(monkeypatch):
+    class MultiReplyClient(FakeIBKRClient):
+        def __init__(self, contracts=None, snapshot=None):
+            super().__init__(contracts=contracts, snapshot=snapshot)
+            self.reply_count = 0
+
+        def place_order(self, account_id, order):
+            self.place_calls.append(order)
+            return {"id": "1", "message": ["First warning"]}
+
+        def reply(self, reply_id, confirmed=True):
+            self.reply_calls.append(reply_id)
+            self.reply_count += 1
+            if self.reply_count == 1:
+                return {"id": "2", "message": "Second warning"}
+            return {"order_id": "123", "order_status": "Submitted"}
+
+    recommendations = [
+        {"ticker": "AAA", "action": "ADD", "current_shares": 0, "target_shares": 2, "current_price": 5.0, "currency": "USD"},
+    ]
+    contracts = {
+        "AAA": [{"contracts": [{"conid": 111, "exchange": "SMART", "currency": "USD"}]}],
+    }
+    snapshot = [{"conid": "111", "84": "5.10"}]
+    fake = MultiReplyClient(contracts=contracts, snapshot=snapshot)
+
+    monkeypatch.setattr(ibkr_execution, "load_contract_overrides", lambda: {})
+
+    report = execute_ibkr_rebalance_trades(
+        recommendations,
+        base_url="https://example.com",
+        account_id="U123",
+        preview_only=True,
+        execute=True,
+        confirm=lambda _: True,
+        client=fake,
+    )
+
+    assert len(fake.place_calls) == 1
+    assert len(fake.reply_calls) == 2
+    assert report.final_submissions
+    assert report.final_submissions[0]["response"]["order_status"] == "Submitted"
 
 
 def test_preview_error_does_not_place_orders(monkeypatch):

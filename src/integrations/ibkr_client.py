@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Any, Dict, Iterable, List, Optional
 
 import requests
+import re
 
 from src.integrations.ticker_mapper import get_ticker_mapper, map_ibkr_to_borsdata
 from src.utils.portfolio_loader import Portfolio, Position
@@ -33,7 +34,7 @@ class IBKRClient:
         self.timeout = timeout
 
     def fetch_portfolio(self, account_id: Optional[str] = None) -> Portfolio:
-        target_account = account_id or self._default_account_id()
+        target_account = self.resolve_account_id(account_id)
         if not target_account:
             raise IBKRError("No IBKR account could be resolved")
 
@@ -62,27 +63,56 @@ class IBKRClient:
         return self._request("GET", "/iserver/accounts")
 
     def resolve_account_id(self, preferred: Optional[str] = None) -> Optional[str]:
-        """Resolve an IBKR trading account id."""
-        if preferred:
-            return preferred
+        """Resolve an IBKR trading account id, optionally by alias."""
+        accounts_payload: Any = None
+        try:
+            accounts_payload = self.get_trading_accounts()
+        except IBKRError:
+            accounts_payload = None
 
-        accounts = self.get_trading_accounts()
-        if isinstance(accounts, dict):
-            selected = accounts.get("selectedAccount")
-            if selected:
-                return selected
-            account_list = accounts.get("accounts") or accounts.get("accountIds")
+        account_index = _build_account_index(accounts_payload, [])
+
+        if preferred:
+            # Try to resolve by alias or metadata first
+            portfolio_accounts = []
+            try:
+                portfolio_accounts = self.list_accounts()
+            except IBKRError:
+                portfolio_accounts = []
+            account_index = _build_account_index(accounts_payload, portfolio_accounts)
+            match = _match_account(preferred, account_index)
+            if match:
+                return match
+            if _looks_like_account_id(preferred):
+                return preferred
+            available = _format_account_choices(account_index)
+            raise IBKRError(f"IBKR account '{preferred}' not found. Available: {available}")
+
+        if isinstance(accounts_payload, dict):
+            selected = accounts_payload.get("selectedAccount")
+            if selected and not _is_all_account_id(selected):
+                return str(selected)
+            account_list = accounts_payload.get("accounts") or accounts_payload.get("accountIds")
             if isinstance(account_list, list) and account_list:
-                return account_list[0]
-        elif isinstance(accounts, list) and accounts:
-            first = accounts[0]
+                for account_id in account_list:
+                    if account_id and not _is_all_account_id(account_id):
+                        return str(account_id)
+        elif isinstance(accounts_payload, list) and accounts_payload:
+            first = accounts_payload[0]
             if isinstance(first, dict):
-                return first.get("accountId") or first.get("acctId")
+                account_id = first.get("accountId") or first.get("acctId")
+                if account_id and not _is_all_account_id(account_id):
+                    return str(account_id)
             if isinstance(first, str):
-                return first
+                if not _is_all_account_id(first):
+                    return first
 
         # Fallback to portfolio account listing
-        accounts = self.list_accounts()
+        accounts = []
+        try:
+            accounts = self.list_accounts()
+        except IBKRError:
+            accounts = []
         if accounts:
             first = accounts[0]
             return first.get("accountId") or first.get("acctId")
@@ -104,9 +134,16 @@ class IBKRClient:
         """Fetch contract details for a conid."""
         return self._request("GET", f"/iserver/contract/{conid}/info")
 
-    def get_contract_rules(self, conid: int, is_buy: bool) -> Any:
+    def get_contract_rules(self, conid: int, is_buy: bool, exchange: Optional[str] = None) -> Any:
         """Fetch contract rules including tick size for a conid."""
-        return self._request("GET", f"/iserver/contract/{conid}/info-and-rules", params={"isBuy": str(is_buy).lower()})
+        payload: Dict[str, Any] = {"conid": conid, "isBuy": bool(is_buy)}
+        if exchange:
+            payload["exchange"] = exchange
+        try:
+            return self._request("POST", "/iserver/contract/rules", json=payload)
+        except IBKRError:
+            # Fallback to info-and-rules for environments that do not support /contract/rules
+            return self._request("GET", f"/iserver/contract/{conid}/info-and-rules", params={"isBuy": str(is_buy).lower()})
 
     def get_marketdata_snapshot(self, conids: Iterable[int], fields: str = "31,84,86") -> Any:
         """Fetch a market data snapshot for conids."""
@@ -245,6 +282,118 @@ def _transform_ledger_balances(ledger: Dict[str, Any]) -> Dict[str, float]:
         if balance != 0.0:  # Only include non-zero balances
             balances[currency] = balance
     return balances
+
+
+_ACCOUNT_ID_PATTERN = re.compile(r"^[A-Z]{1,4}\\d+$")
+
+
+def _looks_like_account_id(value: str) -> bool:
+    return bool(_ACCOUNT_ID_PATTERN.match(value.strip().upper()))
+
+
+def _build_account_index(trading_accounts: Any, portfolio_accounts: List[Dict[str, Any]]) -> Dict[str, Dict[str, Optional[str]]]:
+    index: Dict[str, Dict[str, Optional[str]]] = {}
+    alias_map: Dict[str, str] = {}
+    account_ids: List[str] = []
+
+    if isinstance(trading_accounts, dict):
+        account_ids = [str(a) for a in trading_accounts.get("accounts") or trading_accounts.get("accountIds") or []]
+        aliases_payload = trading_accounts.get("aliases")
+        if isinstance(aliases_payload, dict):
+            alias_map = {str(k): str(v) for k, v in aliases_payload.items() if v}
+    elif isinstance(trading_accounts, list):
+        for entry in trading_accounts:
+            if isinstance(entry, dict):
+                account_id = entry.get("accountId") or entry.get("acctId")
+                if account_id and not _is_all_account_id(account_id):
+                    account_ids.append(str(account_id))
+            elif isinstance(entry, str):
+                if not _is_all_account_id(entry):
+                    account_ids.append(entry)
+
+    for account_id in account_ids:
+        if _is_all_account_id(account_id):
+            continue
+        index.setdefault(account_id, {})
+        alias = alias_map.get(account_id)
+        if alias:
+            index[account_id]["alias"] = alias
+
+    for entry in portfolio_accounts or []:
+        if not isinstance(entry, dict):
+            continue
+        account_id = entry.get("accountId") or entry.get("acctId") or entry.get("id")
+        if not account_id:
+            continue
+        account_id = str(account_id)
+        info = index.setdefault(account_id, {})
+        for key, field in (
+            ("alias", "accountAlias"),
+            ("display_name", "displayName"),
+            ("title", "accountTitle"),
+            ("desc", "desc"),
+            ("type", "type"),
+            ("trading_type", "tradingType"),
+        ):
+            value = entry.get(field)
+            if value:
+                info[key] = str(value)
+
+    return index
+
+
+def _match_account(preferred: str, account_index: Dict[str, Dict[str, Optional[str]]]) -> Optional[str]:
+    preferred_norm = preferred.strip().upper()
+    if not preferred_norm:
+        return None
+
+    for account_id in account_index:
+        if account_id.upper() == preferred_norm:
+            return account_id
+
+    exact_matches: List[str] = []
+    for account_id, info in account_index.items():
+        for value in info.values():
+            if value and value.upper() == preferred_norm:
+                exact_matches.append(account_id)
+                break
+    if len(exact_matches) == 1:
+        return exact_matches[0]
+    if len(exact_matches) > 1:
+        raise IBKRError(f"Ambiguous IBKR account selector '{preferred}'. Matches: {', '.join(sorted(exact_matches))}")
+
+    partial_matches: List[str] = []
+    for account_id, info in account_index.items():
+        for value in info.values():
+            if value and preferred_norm in value.upper():
+                partial_matches.append(account_id)
+                break
+    if len(partial_matches) == 1:
+        return partial_matches[0]
+    if len(partial_matches) > 1:
+        raise IBKRError(f"Ambiguous IBKR account selector '{preferred}'. Matches: {', '.join(sorted(partial_matches))}")
+
+    return None
+
+
+def _format_account_choices(account_index: Dict[str, Dict[str, Optional[str]]]) -> str:
+    if not account_index:
+        return "none"
+    choices = []
+    for account_id, info in account_index.items():
+        label = info.get("alias") or info.get("display_name") or info.get("title") or info.get("desc")
+        if label and label.upper() != account_id.upper():
+            choices.append(f"{account_id} ({label})")
+        else:
+            choices.append(account_id)
+    return ", ".join(sorted(choices))
+
+
+def _is_all_account_id(value: Optional[str]) -> bool:
+    if not value:
+        return False
+    normalized = str(value).strip().upper()
+    return normalized in {"ALL", "ALL ACCOUNTS"}
 
 
 __all__ = ["IBKRClient", "IBKRConnectionConfig", "IBKRError"]
