@@ -390,6 +390,105 @@ def check(ibkr_host: str, ibkr_port: int, ibkr_verify_ssl: bool, ibkr_timeout: f
         click.secho("All stages passed.", fg="green")
 
 
+@ibkr.command()
+@click.option("--ibkr-host", default=os.environ.get("IBKR_HOST", "https://localhost"), show_default=True, help="Client Portal host")
+@click.option("--ibkr-port", default=int(os.environ.get("IBKR_PORT", "5001")), show_default=True, type=int, help="Client Portal port")
+@click.option("--ibkr-verify-ssl/--no-ibkr-verify-ssl", default=os.environ.get("IBKR_VERIFY_SSL", "false").lower() in ("true", "1", "yes"), show_default=True, help="Verify SSL certificates")
+@click.option("--ibkr-timeout", default=float(os.environ.get("IBKR_TIMEOUT", "30")), show_default=True, type=float, help="Timeout in seconds")
+@click.option("--fix", is_flag=True, help="Auto-refresh invalid contracts via 3-tier resolution")
+@click.option("--delay", default=0.15, show_default=True, type=float, help="Delay between IBKR API calls (seconds)")
+def validate(ibkr_host: str, ibkr_port: int, ibkr_verify_ssl: bool, ibkr_timeout: float, fix: bool, delay: float) -> None:
+    """Validate contract overrides against the live IBKR gateway."""
+    from src.services.portfolio_runner import _check_ibkr_gateway
+    from src.integrations.ibkr_client import IBKRClient
+    from src.integrations.ibkr_contract_mapper import (
+        load_contract_overrides,
+        save_contract_overrides,
+        validate_all_contracts,
+    )
+
+    base_url = f"{ibkr_host}:{ibkr_port}"
+
+    # Check gateway
+    click.echo("Checking IBKR gateway ... ", nl=False)
+    is_running, is_authenticated = _check_ibkr_gateway(base_url, timeout=ibkr_timeout)
+    if not is_running:
+        click.secho("FAIL (not reachable)", fg="red")
+        sys.exit(1)
+    if not is_authenticated:
+        click.secho("FAIL (not authenticated)", fg="red")
+        sys.exit(1)
+    click.secho("OK", fg="green")
+
+    overrides = load_contract_overrides()
+    if not overrides:
+        click.secho("No contract mappings found.", fg="yellow")
+        return
+
+    client = IBKRClient(base_url, verify_ssl=ibkr_verify_ssl, timeout=ibkr_timeout)
+    total = len(overrides)
+    click.echo(f"Validating {total} contracts (delay={delay}s) ...")
+
+    def _progress(ticker: str, result) -> None:
+        status_colors = {"valid": "green", "invalid": "red", "exchange_changed": "yellow", "error": "red"}
+        color = status_colors.get(result.status, "white")
+        label = result.status.upper()
+        extra = ""
+        if result.status == "exchange_changed":
+            extra = f" ({result.stored_exchange} -> {result.live_exchange})"
+        elif result.status == "invalid":
+            extra = f" ({result.error})"
+        elif result.status == "error":
+            extra = f" ({result.error})"
+        click.echo(f"  {ticker:<12} {result.conid:>12}  ", nl=False)
+        click.secho(f"{label}{extra}", fg=color)
+
+    results = validate_all_contracts(client, overrides, delay=delay, progress_cb=_progress)
+
+    # Summary
+    valid = sum(1 for r in results if r.status == "valid")
+    invalid = sum(1 for r in results if r.status == "invalid")
+    exchange_changed = sum(1 for r in results if r.status == "exchange_changed")
+    errors = sum(1 for r in results if r.status == "error")
+
+    click.echo()
+    click.echo(f"Valid:            {valid}")
+    click.echo(f"Invalid:          {invalid}")
+    click.echo(f"Exchange changed: {exchange_changed}")
+    click.echo(f"Errors:           {errors}")
+
+    if fix and invalid:
+        click.echo()
+        click.echo(f"Attempting to fix {invalid} invalid contract(s) ...")
+        from scripts.build_ibkr_contract_overrides import resolve_single_ticker
+
+        fixed = 0
+        for r in results:
+            if r.status != "invalid":
+                continue
+            resolved = resolve_single_ticker(client, r.ticker, delay=delay)
+            if resolved:
+                from src.integrations.ibkr_contract_mapper import ContractOverride
+
+                overrides[r.ticker] = ContractOverride(
+                    conid=int(resolved["conid"]),
+                    exchange=resolved.get("exchange"),
+                    currency=resolved.get("currency"),
+                    description=resolved.get("description"),
+                )
+                fixed += 1
+                click.secho(f"  Fixed {r.ticker} -> conid {resolved['conid']}", fg="green")
+            else:
+                click.secho(f"  Could not resolve {r.ticker}", fg="red")
+
+        if fixed:
+            save_contract_overrides(overrides)
+            click.secho(f"Saved {fixed} updated mapping(s).", fg="green")
+
+    if invalid or errors:
+        sys.exit(1)
+
+
 @cli.group()
 def cache() -> None:
     """Manage the Börsdata prefetch cache."""

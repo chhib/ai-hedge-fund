@@ -51,3 +51,13 @@ _This is the active session file. New sessions should be added here._
 - **Issue**: Undocumented Session 82 (ISIN commit `4605244`) discovered via git log; AGENTS.md and GEMINI.md stale (referenced session_061.md, missing Verification Policy); session_071.md still labeled "Current"
 - **Fix**: Inserted missing Session 82, renumbered 82->83, 83->84; synced AGENTS.md and GEMINI.md to match CLAUDE.md; fixed session_071.md header; added "pause and reread" instruction to all three config files
 - **Files changed**: `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `logs/sessions/session_081.md`, `logs/sessions/session_071.md`, `logs/PROJECT_SUMMARY.md`
+
+## Session 86 (`hedge ibkr validate` -- Contract Override Stale-Checking)
+**Date**: 2026-03-14 | **Model**: Claude Opus 4.6
+
+- **Feature**: Added `hedge ibkr validate` command -- validates all stored conids against the live IBKR gateway, reports staleness categories (valid/invalid/exchange_changed/error)
+- **Feature**: `--fix` flag auto-refreshes invalid contracts using 3-tier resolution (reuses extracted `resolve_single_ticker()` from build script)
+- **Refactor**: Extracted `resolve_single_ticker()` from `build_ibkr_contract_overrides.py` main loop for reuse
+- **Enhancement**: Added `description` field to `ContractOverride` dataclass, `ValidationResult` dataclass, `validate_contract()`, `validate_all_contracts()`, `save_contract_overrides()` to `ibkr_contract_mapper.py`
+- **Tests**: 9/9 passed in `tests/integrations/test_ibkr_contract_mapper.py` (valid, invalid, exchange_changed, error, no stored exchange, iteration, progress callback, mixed results)
+- **Files changed**: `src/integrations/ibkr_contract_mapper.py`, `src/cli/hedge.py`, `scripts/build_ibkr_contract_overrides.py`, `tests/integrations/test_ibkr_contract_mapper.py` (new)

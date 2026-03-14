@@ -317,6 +317,69 @@ def _build_borsdata_lookup() -> Dict[str, Dict[str, str]]:
     return lookup
 
 
+def resolve_single_ticker(
+    client: IBKRClient,
+    ticker: str,
+    isin: str = "",
+    borsdata_name: str = "",
+    delay: float = IBKR_CALL_DELAY,
+) -> Optional[Dict[str, Any]]:
+    """Resolve a single ticker to a contract payload using the 3-tier strategy.
+
+    Returns a dict with conid/exchange/currency/description/symbol on success,
+    or None if resolution fails.
+    """
+    from src.integrations.ticker_mapper import map_borsdata_to_ibkr
+
+    ibkr_symbol = map_borsdata_to_ibkr(ticker)
+    selected = None
+    candidates: List[Candidate] = []
+
+    # Tier 1: ISIN
+    if isin:
+        try:
+            time.sleep(delay)
+            response = client.search_contracts(isin, sec_type="STK")
+            candidates = _extract_secdef_candidates(response)
+            if len(candidates) == 1:
+                selected = candidates[0]
+            elif candidates:
+                prefer_nordic = " " in ticker or "." in ibkr_symbol
+                selected = _pick_candidate(candidates, ibkr_symbol, prefer_nordic)
+        except IBKRError:
+            pass
+
+    # Tier 2: Ticker
+    if not selected:
+        try:
+            time.sleep(delay)
+            response = client.get_stock_contracts(ibkr_symbol)
+            candidates = _extract_trsrv_candidates(response)
+        except IBKRError:
+            candidates = []
+
+        if not candidates:
+            try:
+                time.sleep(delay)
+                response = client.search_contracts(ibkr_symbol, sec_type="STK")
+                candidates = _extract_secdef_candidates(response)
+            except IBKRError:
+                pass
+
+        if candidates:
+            prefer_nordic = " " in ticker or "." in ibkr_symbol
+            selected = _pick_candidate(candidates, ibkr_symbol, prefer_nordic)
+
+    # Tier 3: Name
+    if not selected and borsdata_name and candidates:
+        selected = _pick_by_name(candidates, borsdata_name)
+
+    if not selected:
+        return None
+
+    return _candidate_payload(selected)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Build IBKR contract overrides for a Borsdata universe.")
     parser.add_argument("--input", default="portfolios/borsdata_universe.txt", help="Borsdata universe file")
