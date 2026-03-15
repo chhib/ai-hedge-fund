@@ -206,6 +206,60 @@ def backtest(
     execute_backtest(backtester)
 
 
+@cli.command()
+@click.option("--horizon", default=7, show_default=True, type=int, help="Forward return window in trading days")
+@click.option("--analyst", help="Filter to a single analyst")
+@click.option("--verbose", is_flag=True, help="Show per-signal outcomes")
+def scorecard(horizon: int, analyst: Optional[str], verbose: bool) -> None:
+    """Evaluate analyst prediction accuracy against actual price outcomes."""
+    from src.analytics.scorecard import run_scorecard
+
+    click.echo("Running analyst scorecard ...")
+    result = run_scorecard(horizon=horizon, analyst_filter=analyst)
+
+    if not result.analyst_scores:
+        click.secho("No evaluable signals found.", fg="yellow")
+        return
+
+    click.echo()
+    click.echo("ANALYST SCORECARD")
+    click.echo(f"Forward window: {result.horizon} trading days")
+    click.echo(f"Signal dates: {result.date_range} ({result.evaluable_dates} evaluable)")
+    click.echo()
+
+    header = f"{'Analyst':<22} {'Signals':>8} {'Eval':>6} {'Hit%':>6} {'Cred.':>6} {'Avg Alpha':>10} {'Conviction':>10}"
+    click.echo(header)
+    click.echo("-" * len(header))
+
+    for s in result.analyst_scores:
+        cred_color = "green" if s.credibility > 1.1 else ("red" if s.credibility < 0.9 else None)
+        line = (
+            f"{s.display_name:<22} {s.total_signals:>8} {s.evaluated:>6} "
+            f"{s.hit_rate:>5.1%} {s.credibility:>6.2f} "
+            f"{s.avg_alpha:>+9.2%} {s.conviction_rate:>9.1%}"
+        )
+        click.secho(line, fg=cred_color)
+
+    click.echo()
+    click.echo(f"Total outcomes evaluated: {result.total_outcomes}")
+
+    if verbose:
+        click.echo()
+        _render_verbose_scorecard(result, horizon)
+
+
+def _render_verbose_scorecard(result, horizon: int) -> None:
+    """Print per-date breakdown for verbose mode."""
+    from src.analytics.scorecard import load_all_signals, build_price_index, forward_return
+
+    click.echo("PER-DATE BREAKDOWN")
+    click.echo("-" * 40)
+
+    for score in result.analyst_scores:
+        click.echo(f"\n{score.display_name}:")
+        click.echo(f"  Hit rate: {score.hit_rate:.1%} | Credibility: {score.credibility:.2f} | Alpha: {score.avg_alpha:+.2%}")
+
+
 def _parse_ticker_list(raw: str) -> List[str]:
     return [ticker.strip() for ticker in raw.split(",") if ticker.strip()]
 

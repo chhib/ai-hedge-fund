@@ -29,14 +29,14 @@ This configuration supports the AI hedge fund project's development workflow, in
 ## Start Here
 At the start of every session:
 1. Read `logs/PROJECT_SUMMARY.md` for current status, goals, and architecture overview
-2. Read the latest session file (currently `logs/sessions/session_081.md`) for recent context
+2. Read the latest session file (currently `logs/sessions/session_091.md`) for recent context
 3. Check any agent-specific logs and reconcile conflicts before proceeding
 4. Cross-reference git log (`git log --oneline -10`) against any "Next Steps" lists in the session log. Strike through items already completed by prior sessions or other LLMs.
 
 **If the session log appears to have been updated since you last read it** (e.g., new entries from another LLM, renumbered sessions, or shifted next-steps), pause, reread both `PROJECT_SUMMARY.md` and the latest session file, and reconcile your understanding before proceeding. Do not assume continuity from a stale read.
 
 When wrapping up a session:
-1. Add your session entry to the current session file (e.g., `logs/sessions/session_081.md`)
+1. Add your session entry to the current session file (e.g., `logs/sessions/session_091.md`)
 2. Update `logs/PROJECT_SUMMARY.md` if there are significant status changes
 3. When a session file reaches 10 sessions, create the next file (e.g., `session_091.md`)
 
