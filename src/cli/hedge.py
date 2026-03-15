@@ -565,6 +565,113 @@ def validate(ibkr_host: str, ibkr_port: int, ibkr_verify_ssl: bool, ibkr_timeout
         sys.exit(1)
 
 
+@ibkr.command()
+@click.option("--ibkr-host", default=os.environ.get("IBKR_HOST", "https://localhost"), show_default=True, help="Client Portal host")
+@click.option("--ibkr-port", default=int(os.environ.get("IBKR_PORT", "5001")), show_default=True, type=int, help="Client Portal port")
+@click.option("--ibkr-verify-ssl/--no-ibkr-verify-ssl", default=os.environ.get("IBKR_VERIFY_SSL", "false").lower() in ("true", "1", "yes"), show_default=True, help="Verify SSL certificates")
+@click.option("--ibkr-timeout", default=float(os.environ.get("IBKR_TIMEOUT", "30")), show_default=True, type=float, help="Timeout in seconds")
+@click.option("--ibkr-account", help="IBKR account override")
+@click.option("--target-csv", type=click.Path(path_type=Path, exists=True), help="Target portfolio CSV (defaults to most recent)")
+@click.option("--tolerance", default=1, show_default=True, type=int, help="Share tolerance for match classification")
+def reconcile(
+    ibkr_host: str,
+    ibkr_port: int,
+    ibkr_verify_ssl: bool,
+    ibkr_timeout: float,
+    ibkr_account: Optional[str],
+    target_csv: Optional[Path],
+    tolerance: int,
+) -> None:
+    """Compare live IBKR positions against the most recent target portfolio CSV."""
+    from src.services.portfolio_runner import _check_ibkr_gateway
+    from src.integrations.ibkr_client import IBKRClient
+    from src.integrations.ibkr_reconcile import (
+        build_result,
+        find_latest_target_csv,
+    )
+    from src.utils.portfolio_loader import load_portfolio
+
+    base_url = f"{ibkr_host}:{ibkr_port}"
+
+    # 1. Check gateway
+    click.echo("Checking IBKR gateway ... ", nl=False)
+    is_running, is_authenticated = _check_ibkr_gateway(base_url, timeout=ibkr_timeout)
+    if not is_running:
+        click.secho("FAIL (not reachable)", fg="red")
+        sys.exit(1)
+    if not is_authenticated:
+        click.secho("FAIL (not authenticated)", fg="red")
+        sys.exit(1)
+    click.secho("OK", fg="green")
+
+    client = IBKRClient(base_url, verify_ssl=ibkr_verify_ssl, timeout=ibkr_timeout)
+
+    # 2. Fetch live positions
+    click.echo("Fetching live portfolio ... ", nl=False)
+    try:
+        live = client.fetch_portfolio(ibkr_account)
+        account_id = client.resolve_account_id(ibkr_account)
+    except Exception as exc:
+        click.secho(f"FAIL ({exc})", fg="red")
+        sys.exit(1)
+    click.secho(f"OK ({len(live.positions)} positions)", fg="green")
+
+    # 3. Resolve target CSV
+    if target_csv is None:
+        target_csv = find_latest_target_csv(Path.cwd())
+        if target_csv is None:
+            click.secho("Error: No portfolio_YYYYMMDD.csv found in current directory. Use --target-csv to specify.", fg="red")
+            sys.exit(1)
+
+    click.echo(f"Loading target: {target_csv.name} ... ", nl=False)
+    try:
+        target = load_portfolio(str(target_csv))
+    except Exception as exc:
+        click.secho(f"FAIL ({exc})", fg="red")
+        sys.exit(1)
+    click.secho(f"OK ({len(target.positions)} positions)", fg="green")
+
+    # 4. Reconcile
+    result = build_result(live, target, target_csv, account_id, tolerance=tolerance)
+
+    # 5. Render output
+    click.echo()
+    click.echo("PORTFOLIO RECONCILIATION")
+    click.echo(f"Target: {target_csv.name} ({result.target_csv_date})")
+    click.echo(f"Live:   IBKR account {account_id or 'n/a'}")
+    click.echo()
+
+    header = f"{'Ticker':<10} {'Live':>6} {'Target':>6} {'Delta':>6} {'Live%':>7} {'Target%':>8} {'Wt Delta':>9}  {'Status':<12}"
+    click.echo(header)
+    click.echo("-" * len(header))
+
+    status_colors = {"match": "green", "drift": "yellow", "missing_live": "red", "extra_live": "red"}
+
+    for d in sorted(result.drifts, key=lambda x: x.ticker):
+        delta_str = f"{d.shares_delta:+.0f}" if d.shares_delta != 0 else "0"
+        line = (
+            f"{d.ticker:<10} {d.live_shares:>6.0f} {d.target_shares:>6.0f} {delta_str:>6} "
+            f"{d.live_weight:>6.1f}% {d.target_weight:>7.1f}% {d.weight_delta:>+8.1f}%  "
+            f"{d.status}"
+        )
+        click.secho(line, fg=status_colors.get(d.status, "white"))
+
+    # Cash summary
+    all_currencies = sorted(set(live.cash_holdings) | set(target.cash_holdings))
+    if all_currencies:
+        cash_parts = [f"{cur} {live.cash_holdings.get(cur, 0):.2f}" for cur in all_currencies]
+        click.echo(f"\nCash: {', '.join(cash_parts)}")
+
+    # Summary counts
+    matched = sum(1 for d in result.drifts if d.status == "match")
+    drifted = sum(1 for d in result.drifts if d.status == "drift")
+    missing = sum(1 for d in result.drifts if d.status == "missing_live")
+    extra = sum(1 for d in result.drifts if d.status == "extra_live")
+
+    click.echo(f"\nSummary: {matched} matched, {drifted} drifted, {missing} missing, {extra} extra")
+    click.echo(f"Drift score: {result.drift_score:.2f}%")
+
+
 @cli.group()
 def cache() -> None:
     """Manage the Börsdata prefetch cache."""
