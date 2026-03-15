@@ -2,9 +2,11 @@
 
 from src.analytics.scorecard import (
     SignalOutcome,
+    build_regime_map,
     forward_return,
     evaluate_signals,
     score_analysts,
+    score_analysts_by_regime,
 )
 from src.data.analysis_cache import CachedAnalystSignal
 
@@ -231,3 +233,48 @@ def test_latest_date_excluded():
     assert "2025-10-16" not in dates_in_outcomes
     assert "2025-10-02" in dates_in_outcomes
     assert "2025-10-09" in dates_in_outcomes
+
+
+def test_build_regime_map_detects_high_vol(monkeypatch):
+    benchmark_prices = []
+    close = 100.0
+    for day in range(1, 31):
+        if day < 21:
+            close += 0.2
+        else:
+            close += 5.0 if day % 2 == 0 else -4.5
+        benchmark_prices.append((f"2025-10-{day:02d}", close))
+
+    monkeypatch.setattr(
+        "src.analytics.scorecard.build_price_index",
+        lambda tickers, start, end: {"OMXS30": benchmark_prices},
+    )
+
+    regime_by_date = build_regime_map(benchmark_ticker="OMXS30", start="2025-10-01", end="2025-10-30")
+
+    assert regime_by_date["2025-10-30"] == "high_vol"
+
+
+def test_score_analysts_by_regime_groups_outcomes():
+    outcomes = [
+        _make_outcome(analyst="technical_analyst", signal_numeric=0.5, forward_ret=0.05, direction_correct=True),
+        SignalOutcome(
+            ticker="AAPL",
+            analyst_name="technical_analyst",
+            analysis_date="2025-10-03",
+            signal_numeric=-0.5,
+            confidence=0.8,
+            forward_return=-0.04,
+            direction_correct=True,
+        ),
+    ]
+    regime_scores = score_analysts_by_regime(
+        outcomes,
+        {
+            "2025-10-02": "trend_up",
+            "2025-10-03": "high_vol",
+        },
+    )
+
+    assert regime_scores["trend_up"][0].analyst_name == "technical_analyst"
+    assert regime_scores["high_vol"][0].hit_rate == 1.0

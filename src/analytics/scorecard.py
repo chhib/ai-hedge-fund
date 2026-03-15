@@ -11,14 +11,17 @@ import json
 import logging
 import sqlite3
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Optional
+from statistics import median
+from typing import Literal, Optional
 
 from src.data.analysis_cache import CachedAnalystSignal
 
 logger = logging.getLogger(__name__)
 
 _DEFAULT_DB_PATH = Path(__file__).resolve().parents[2] / "data" / "prefetch_cache.db"
+RegimeLabel = Literal["trend_up", "trend_down", "high_vol", "low_vol"]
 
 
 @dataclass
@@ -48,6 +51,18 @@ class AnalystScore:
 @dataclass
 class ScorecardResult:
     analyst_scores: list[AnalystScore]
+    date_range: str
+    evaluable_dates: int
+    horizon: int
+    total_outcomes: int
+
+
+@dataclass
+class RegimeScorecardResult:
+    analyst_scores: list[AnalystScore]
+    regime_scores: dict[RegimeLabel, list[AnalystScore]]
+    benchmark_ticker: str
+    regime_by_date: dict[str, RegimeLabel]
     date_range: str
     evaluable_dates: int
     horizon: int
@@ -240,46 +255,188 @@ def score_analysts(outcomes: list[SignalOutcome]) -> list[AnalystScore]:
     return scores
 
 
+def resolve_benchmark_ticker(ticker_markets: Optional[dict[str, str]] = None) -> str:
+    """Select a benchmark ticker aligned with the current universe mix."""
+    if not ticker_markets:
+        return "OMXS30"
+
+    nordic_count = 0
+    global_count = 0
+    for market in ticker_markets.values():
+        normalized = (market or "").lower()
+        if normalized == "nordic":
+            nordic_count += 1
+        elif normalized == "global":
+            global_count += 1
+
+    return "OMXS30" if nordic_count >= global_count else "SPY"
+
+
+def build_regime_map(
+    *,
+    benchmark_ticker: str,
+    start: str,
+    end: str,
+) -> dict[str, RegimeLabel]:
+    """Classify each benchmark trading day into a simple market regime."""
+    price_index = build_price_index([benchmark_ticker], start, end)
+    entries = price_index.get(benchmark_ticker, [])
+    if len(entries) < 3:
+        return {}
+
+    dates = [date_str for date_str, _ in entries]
+    closes = [close for _, close in entries]
+
+    daily_returns: list[float] = [0.0]
+    for idx in range(1, len(closes)):
+        prev_close = closes[idx - 1]
+        curr_close = closes[idx]
+        if prev_close == 0:
+            daily_returns.append(0.0)
+        else:
+            daily_returns.append((curr_close - prev_close) / prev_close)
+
+    rolling_vols: list[float] = []
+    for idx in range(len(closes)):
+        window_returns = daily_returns[max(1, idx - 9): idx + 1]
+        if len(window_returns) < 2:
+            rolling_vols.append(0.0)
+            continue
+        mean_ret = sum(window_returns) / len(window_returns)
+        variance = sum((ret - mean_ret) ** 2 for ret in window_returns) / len(window_returns)
+        rolling_vols.append(variance ** 0.5)
+
+    regime_by_date: dict[str, RegimeLabel] = {}
+    for idx, date_str in enumerate(dates):
+        start_idx = max(0, idx - 19)
+        start_close = closes[start_idx]
+        trailing_return = 0.0 if start_close == 0 else (closes[idx] - start_close) / start_close
+
+        history_window = rolling_vols[max(0, idx - 59): idx + 1]
+        baseline = median(history_window) if history_window else 0.0
+        current_vol = rolling_vols[idx]
+        vol_ratio = current_vol / baseline if baseline > 1e-9 else 1.0
+
+        if vol_ratio >= 1.25:
+            regime_by_date[date_str] = "high_vol"
+        elif vol_ratio <= 0.75:
+            regime_by_date[date_str] = "low_vol"
+        elif trailing_return >= 0:
+            regime_by_date[date_str] = "trend_up"
+        else:
+            regime_by_date[date_str] = "trend_down"
+
+    return regime_by_date
+
+
+def score_analysts_by_regime(
+    outcomes: list[SignalOutcome],
+    regime_by_date: dict[str, RegimeLabel],
+) -> dict[RegimeLabel, list[AnalystScore]]:
+    """Compute separate analyst score tables for each market regime."""
+    grouped: dict[RegimeLabel, list[SignalOutcome]] = {
+        "trend_up": [],
+        "trend_down": [],
+        "high_vol": [],
+        "low_vol": [],
+    }
+
+    for outcome in outcomes:
+        regime = regime_by_date.get(outcome.analysis_date)
+        if regime:
+            grouped[regime].append(outcome)
+
+    return {
+        regime: score_analysts(regime_outcomes)
+        for regime, regime_outcomes in grouped.items()
+        if regime_outcomes
+    }
+
+
+def build_regime_scorecard(
+    *,
+    horizon: int = 7,
+    analyst_names: Optional[list[str]] = None,
+    benchmark_ticker: Optional[str] = None,
+    ticker_markets: Optional[dict[str, str]] = None,
+    db_path: Path = _DEFAULT_DB_PATH,
+) -> RegimeScorecardResult:
+    """Build overall and regime-specific analyst score lookups for the governor."""
+    signals = load_all_signals(db_path)
+    if analyst_names:
+        selected = {name.lower() for name in analyst_names}
+        signals = [signal for signal in signals if signal.analyst_name.lower() in selected]
+
+    if not signals:
+        resolved_benchmark = benchmark_ticker or resolve_benchmark_ticker(ticker_markets)
+        return RegimeScorecardResult(
+            analyst_scores=[],
+            regime_scores={},
+            benchmark_ticker=resolved_benchmark,
+            regime_by_date={},
+            date_range="n/a",
+            evaluable_dates=0,
+            horizon=horizon,
+            total_outcomes=0,
+        )
+
+    analysis_dates = sorted(set(signal.analysis_date for signal in signals))
+    date_range = f"{analysis_dates[0]} to {analysis_dates[-1]}"
+    evaluable_dates = max(0, len(analysis_dates) - 1)
+
+    tickers = sorted(set(signal.ticker for signal in signals))
+    earliest = analysis_dates[0]
+    latest_dt = datetime.strptime(analysis_dates[-1], "%Y-%m-%d")
+    end_dt = latest_dt + timedelta(days=horizon * 2)
+    end = end_dt.strftime("%Y-%m-%d")
+
+    price_index = build_price_index(tickers, earliest, end)
+    outcomes = evaluate_signals(signals, price_index, horizon)
+    analyst_scores = score_analysts(outcomes)
+
+    resolved_benchmark = benchmark_ticker or resolve_benchmark_ticker(ticker_markets)
+    regime_by_date = build_regime_map(
+        benchmark_ticker=resolved_benchmark,
+        start=earliest,
+        end=end,
+    )
+    if not regime_by_date and resolved_benchmark != "OMXS30":
+        resolved_benchmark = "OMXS30"
+        regime_by_date = build_regime_map(
+            benchmark_ticker=resolved_benchmark,
+            start=earliest,
+            end=end,
+        )
+    regime_scores = score_analysts_by_regime(outcomes, regime_by_date)
+
+    return RegimeScorecardResult(
+        analyst_scores=analyst_scores,
+        regime_scores=regime_scores,
+        benchmark_ticker=resolved_benchmark,
+        regime_by_date=regime_by_date,
+        date_range=date_range,
+        evaluable_dates=evaluable_dates,
+        horizon=horizon,
+        total_outcomes=len(outcomes),
+    )
+
+
 def run_scorecard(
     horizon: int = 7,
     analyst_filter: Optional[str] = None,
     db_path: Path = _DEFAULT_DB_PATH,
 ) -> ScorecardResult:
     """Run the full scorecard pipeline: load signals, fetch prices, evaluate, score."""
-    signals = load_all_signals(db_path)
-    if not signals:
-        return ScorecardResult(
-            analyst_scores=[], date_range="n/a", evaluable_dates=0, horizon=horizon, total_outcomes=0
-        )
-
-    if analyst_filter:
-        signals = [s for s in signals if s.analyst_name == analyst_filter]
-        if not signals:
-            return ScorecardResult(
-                analyst_scores=[], date_range="n/a", evaluable_dates=0, horizon=horizon, total_outcomes=0
-            )
-
-    analysis_dates = sorted(set(s.analysis_date for s in signals))
-    date_range = f"{analysis_dates[0]} to {analysis_dates[-1]}"
-    evaluable_dates = max(0, len(analysis_dates) - 1)
-
-    tickers = sorted(set(s.ticker for s in signals))
-    earliest = analysis_dates[0]
-    from datetime import datetime, timedelta
-
-    latest_dt = datetime.strptime(analysis_dates[-1], "%Y-%m-%d")
-    end_dt = latest_dt + timedelta(days=horizon * 2)
-    end = end_dt.strftime("%Y-%m-%d")
-
-    price_index = build_price_index(tickers, earliest, end)
-
-    outcomes = evaluate_signals(signals, price_index, horizon)
-    analyst_scores = score_analysts(outcomes)
-
-    return ScorecardResult(
-        analyst_scores=analyst_scores,
-        date_range=date_range,
-        evaluable_dates=evaluable_dates,
+    analyst_names = [analyst_filter] if analyst_filter else None
+    regime_result = build_regime_scorecard(
         horizon=horizon,
-        total_outcomes=len(outcomes),
+        analyst_names=analyst_names,
+        db_path=db_path,
+    )
+    return ScorecardResult(
+        analyst_scores=regime_result.analyst_scores,
+        date_range=regime_result.date_range,
+        evaluable_dates=regime_result.evaluable_dates,
+        horizon=regime_result.horizon,
+        total_outcomes=regime_result.total_outcomes,
     )

@@ -27,6 +27,9 @@ from src.data.models import CompanyEvent, InsiderTrade
 
 from src.data.borsdata_client import BorsdataClient
 from src.data.exchange_rate_service import ExchangeRateService
+from src.data.borsdata_ticker_mapping import get_ticker_market
+from src.analytics.scorecard import build_regime_scorecard
+from src.services.portfolio_governor import PortfolioGovernor, snapshot_to_dict, GovernorSnapshot
 
 
 class BacktestEngine:
@@ -50,6 +53,8 @@ class BacktestEngine:
         model_provider: str,
         selected_analysts: list[str] | None,
         initial_margin_requirement: float,
+        use_governor: bool = False,
+        governor_profile: str = "preservation",
     ) -> None:
         self._agent = agent
         self._tickers = tickers
@@ -62,6 +67,10 @@ class BacktestEngine:
         self._selected_analysts = selected_analysts
         self._start_date_obj = datetime.strptime(self._start_date, "%Y-%m-%d").date()
         self._benchmark_ticker = "OMXS30"  # Default benchmark
+        self._ticker_markets = {
+            ticker: (get_ticker_market(ticker) or "global").lower()
+            for ticker in tickers
+        }
 
         # Initialize services
         import os
@@ -98,6 +107,17 @@ class BacktestEngine:
         self._prefetched_company_events: dict[str, list[Any]] = {}
         self._prefetched_insider_trades: dict[str, list[Any]] = {}
         self._daily_context: list[dict[str, Any]] = []
+        self._governor = PortfolioGovernor(profile=governor_profile) if use_governor else None
+        self._governor_scorecard = (
+            build_regime_scorecard(
+                analyst_names=selected_analysts or None,
+                ticker_markets=self._ticker_markets,
+            )
+            if use_governor
+            else None
+        )
+        if self._governor_scorecard and self._governor_scorecard.benchmark_ticker:
+            self._benchmark_ticker = self._governor_scorecard.benchmark_ticker
 
     def _prefetch_data(self) -> None:
         end_date_dt = datetime.strptime(self._end_date, "%Y-%m-%d")
@@ -227,6 +247,18 @@ class BacktestEngine:
                 target_currency=self._initial_currency,
             )
             decisions = agent_output["decisions"]
+            governor_snapshot = None
+            if self._governor:
+                governor_decision = self._governor.evaluate(
+                    selected_analysts=self._selected_analysts or [],
+                    ticker_markets=self._ticker_markets,
+                    scorecard_result=self._governor_scorecard,
+                    persist=False,
+                )
+                decisions = self._governor.apply_to_backtest_decisions(decisions, governor_decision)
+                agent_output = dict(agent_output)
+                agent_output["decisions"] = decisions
+                governor_snapshot = snapshot_to_dict(GovernorSnapshot.from_decision(governor_decision, created_at=current_date_str))
 
             executed_trades: Dict[str, int] = {}
             for ticker in self._tickers:
@@ -265,6 +297,8 @@ class BacktestEngine:
             # Prepend today's rows to historical rows so latest day is on top
             self._table_rows = rows + self._table_rows
             latest_context = self._build_context_for_date(current_date=current_date.date())
+            if governor_snapshot:
+                latest_context["governor"] = governor_snapshot
             self._daily_context.append(latest_context)
             # Print full history with latest day first (matches backtester.py behavior)
             self._results.print_rows(self._table_rows, context=latest_context)

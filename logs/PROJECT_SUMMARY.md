@@ -1,6 +1,6 @@
 # Börsdata Integration Project Summary
 
-_Last updated: 2026-03-15 (Session 91)_
+_Last updated: 2026-03-15 (Session 92)_
 
 ## End Goal
 Rebuild the data ingestion and processing pipeline so the application relies on Börsdata's REST API. The system accepts Börsdata-native tickers, supports both Nordic and Global markets, and maintains compatibility with the original user-facing workflows.
@@ -18,13 +18,16 @@ The AI hedge fund system is fully operational with both CLI and web interfaces:
 - ✅ **Performance Optimized**: 95% API call reduction, parallel processing, caching
 
 ## Current Focus
+- Adaptive portfolio governor added: preservation-first analyst weighting, deployment throttling, and trade gating
+- `hedge governor status` command added for live/readable governor state inspection
+- `hedge rebalance --use-governor` and `hedge backtest --use-governor` now support closed-loop capital control
 - IBKR execution pipeline hardened (sessions 71-85 on `feat/ibkr-hardening` branch)
 - ISIN-based contract resolution: 198/206 tickers mapped (96% coverage)
 - Live order lifecycle validated end-to-end (place, confirm, cancel)
 - Contract override stale-checking: `hedge ibkr validate` with `--fix` auto-refresh
 - Error recovery: retry on connection failures, order status polling with partial fill detection
 - `hedge ibkr orders` command for live order monitoring
-- Next: portfolio reconciliation
+- Next: governor threshold tuning against live history and portfolio reconciliation
 
 ## Active Session File
 **`logs/sessions/session_091.md`** - Sessions 91-100
@@ -43,15 +46,16 @@ The AI hedge fund system is fully operational with both CLI and web interfaces:
 
 ### Data Flow
 ```
-Börsdata API → Parallel Fetcher → SQLite Cache → Analysts → Portfolio Manager
-                                                            ↓
-                                              IBKR Client Portal → Orders
+Börsdata API → Parallel Fetcher → SQLite Cache → Analysts → Portfolio Manager → Portfolio Governor
+                                                                                  ↓
+                                                                    IBKR Client Portal → Orders
 ```
 
 ### Key Components
 - `src/data/borsdata_client.py` - Core API client with rate limiting
 - `src/data/parallel_api_wrapper.py` - Parallel data fetching with caching
 - `src/agents/*.py` - 19 analyst agents (13 famous + 4 core + 2 sentiment)
+- `src/services/portfolio_governor.py` - Preservation-first capital governor and snapshot store
 - `src/integrations/ibkr_client.py` - IBKR Client Portal integration
 - `src/integrations/ibkr_execution.py` - Order preview and execution
 

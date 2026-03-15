@@ -47,6 +47,17 @@ def display_results(results: Dict, verbose: bool):
     print(f"\nCurrent Portfolio Value: {total_value:,.2f} {home_currency}")
     print(f"Number of Positions: {current.get('num_positions', 0)}")
 
+    governor = results.get("governor")
+    if governor:
+        from src.services.portfolio_governor import format_governor_summary
+
+        print("\nGovernor Summary:")
+        for line in format_governor_summary(governor):
+            if line.startswith("- "):
+                print(f"  {line}")
+            else:
+                print(f"  {line}")
+
     # Show exchange rates if available
     exchange_rates = current.get("exchange_rates", {})
     if exchange_rates and len(exchange_rates) > 1:

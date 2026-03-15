@@ -172,6 +172,8 @@ class RebalanceConfig:
     ibkr_port: int = 5001
     ibkr_verify_ssl: bool = False
     ibkr_timeout: float = 10.0
+    use_governor: bool = False
+    governor_profile: str = "preservation"
 
 
 @dataclass(slots=True)
@@ -233,6 +235,8 @@ def run_rebalance(config: RebalanceConfig) -> RebalanceOutcome:
         verbose=config.verbose,
         session_id=session_id,
         max_workers=config.max_workers,
+        use_governor=config.use_governor,
+        governor_profile=config.governor_profile,
     )
 
     results = manager.generate_rebalancing_recommendations(

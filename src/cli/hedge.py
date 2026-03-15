@@ -49,6 +49,8 @@ def cli() -> None:
 @click.option("--ibkr-whatif", is_flag=True, help="Preview IBKR orders using what-if (no trades)")
 @click.option("--ibkr-execute", is_flag=True, help="Place IBKR orders (requires confirmation)")
 @click.option("--ibkr-yes", is_flag=True, help="Skip IBKR trade confirmation prompts")
+@click.option("--use-governor", is_flag=True, help="Apply the preservation-first portfolio governor")
+@click.option("--governor-profile", default="preservation", show_default=True, help="Governor profile name")
 def rebalance(
     portfolio: Optional[Path],
     universe: Optional[Path],
@@ -78,6 +80,8 @@ def rebalance(
     ibkr_whatif: bool,
     ibkr_execute: bool,
     ibkr_yes: bool,
+    use_governor: bool,
+    governor_profile: str,
 ) -> None:
     """Run the weekly long-only rebalance flow."""
 
@@ -111,6 +115,8 @@ def rebalance(
         ibkr_port=ibkr_port,
         ibkr_verify_ssl=ibkr_verify_ssl,
         ibkr_timeout=ibkr_timeout,
+        use_governor=use_governor,
+        governor_profile=governor_profile,
     )
 
     try:
@@ -164,6 +170,8 @@ def rebalance(
 @click.option("--analysts", help="Comma-separated analysts for the run")
 @click.option("--model-name", default="gpt-4.1", show_default=True, help="LLM model name")
 @click.option("--model-provider", default="OpenAI", show_default=True, help="LLM provider")
+@click.option("--use-governor", is_flag=True, help="Apply the preservation-first portfolio governor to backtest execution")
+@click.option("--governor-profile", default="preservation", show_default=True, help="Governor profile name")
 def backtest(
     tickers: str,
     start_date: str,
@@ -174,6 +182,8 @@ def backtest(
     analysts: Optional[str],
     model_name: str,
     model_provider: str,
+    use_governor: bool,
+    governor_profile: str,
 ) -> None:
     """Backtest the hedge-fund agent pipeline without interactive prompts."""
 
@@ -201,6 +211,8 @@ def backtest(
         model_provider=model_provider,
         selected_analysts=selected_analysts,
         initial_margin_requirement=margin_requirement,
+        use_governor=use_governor,
+        governor_profile=governor_profile,
     )
 
     execute_backtest(backtester)
@@ -321,6 +333,64 @@ def _render_ibkr_report(report) -> None:
             click.echo("Execution results:")
             for summary in final_summaries:
                 click.echo(f"  • {summary}")
+
+
+@cli.group()
+def governor() -> None:
+    """Portfolio governor tools."""
+
+
+@governor.command()
+@click.option("--analysts", default="all", show_default=True, help="Analyst preset or comma-separated list")
+@click.option("--benchmark", help="Optional benchmark override (e.g. OMXS30 or SPY)")
+@click.option("--governor-profile", default="preservation", show_default=True, help="Governor profile name")
+@click.option("--latest", is_flag=True, help="Show the most recently persisted governor snapshot instead of recomputing")
+def status(analysts: str, benchmark: Optional[str], governor_profile: str, latest: bool) -> None:
+    """Show governor state and analyst weights."""
+    from src.services.portfolio_governor import (
+        GovernorStore,
+        PortfolioGovernor,
+        format_governor_summary,
+    )
+    from src.services.portfolio_runner import _resolve_analyst_list
+
+    if latest:
+        snapshot = GovernorStore().latest_snapshot()
+        if snapshot is None:
+            click.secho("No persisted governor snapshots found.", fg="yellow")
+            return
+        click.echo(f"Governor snapshot: {snapshot.created_at}")
+        click.echo(f"Profile: {snapshot.profile}")
+        click.echo(f"State: {snapshot.risk_state} | Regime: {snapshot.regime} | Benchmark: {snapshot.benchmark_ticker}")
+        click.echo(
+            f"Trading: {'enabled' if snapshot.trading_enabled else 'blocked'} | "
+            f"Deployment: {snapshot.deployment_ratio:.0%} | Cash buffer: {snapshot.min_cash_buffer:.0%}"
+        )
+        click.echo("Reasons:")
+        for reason in snapshot.reasons:
+            click.echo(f"  - {reason}")
+        if snapshot.analyst_weights:
+            click.echo("Analyst weights:")
+            for name, weight in sorted(snapshot.analyst_weights.items(), key=lambda item: item[1], reverse=True):
+                click.echo(f"  {name:<28} {weight:.2f}")
+        return
+
+    analyst_list = _resolve_analyst_list(analysts, False)
+    decision = PortfolioGovernor(profile=governor_profile).evaluate(
+        selected_analysts=analyst_list,
+        benchmark_ticker=benchmark,
+        persist=False,
+    )
+    click.echo("GOVERNOR STATUS")
+    for line in format_governor_summary(decision):
+        click.echo(line)
+    if decision.analyst_scores:
+        click.echo("Analyst weights:")
+        for score in sorted(decision.analyst_scores, key=lambda item: item.weight, reverse=True):
+            click.echo(
+                f"  {score.display_name:<22} {score.weight:.2f} "
+                f"(cred {score.credibility:.2f}, alpha {score.avg_alpha:+.2%}, hit {score.hit_rate:.1%})"
+            )
 
 
 @cli.group()
