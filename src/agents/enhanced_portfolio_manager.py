@@ -1,7 +1,7 @@
 import math
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from src.utils.portfolio_loader import Portfolio, Position
 from src.utils.currency import (
@@ -11,6 +11,7 @@ from src.utils.currency import (
 )
 from src.data.analysis_cache import get_analysis_cache
 from src.data.analyst_task_queue import get_task_queue, TaskKey
+from src.services.portfolio_governor import GovernorDecision, PortfolioGovernor
 
 
 @dataclass
@@ -44,7 +45,22 @@ class EnhancedPortfolioManager:
     Maintains concentrated portfolio of 5-10 positions
     """
 
-    def __init__(self, portfolio: Portfolio, universe: List[str], analysts: List[str], model_config: Dict[str, Any], ticker_markets: Dict[str, str] = None, home_currency: str = "SEK", no_cache: bool = False, no_cache_agents: bool = False, verbose: bool = False, session_id: str = None, max_workers: int = 4):
+    def __init__(
+        self,
+        portfolio: Portfolio,
+        universe: List[str],
+        analysts: List[str],
+        model_config: Dict[str, Any],
+        ticker_markets: Dict[str, str] = None,
+        home_currency: str = "SEK",
+        no_cache: bool = False,
+        no_cache_agents: bool = False,
+        verbose: bool = False,
+        session_id: str = None,
+        max_workers: int = 4,
+        use_governor: bool = False,
+        governor_profile: str = "preservation",
+    ):
         self.portfolio = portfolio
         self.universe = universe
         self.analyst_names = analysts
@@ -64,6 +80,9 @@ class EnhancedPortfolioManager:
         self.price_context_cache: Dict[str, PriceContext] = {}
         self._current_position_values: Dict[str, Dict[str, float]] = {}
         self._analysis_date: str | None = None
+        self.use_governor = use_governor
+        self.governor_profile = governor_profile
+        self.governor = PortfolioGovernor(profile=governor_profile) if use_governor else None
 
     def _initialize_analysts(self, analyst_names: List[str], model_config: Dict[str, Any]) -> List[Any]:
         """
@@ -150,22 +169,40 @@ class EnhancedPortfolioManager:
         # Step 1: Collect signals from all analysts
         all_signals = self._collect_analyst_signals()
 
-        # Step 2: Aggregate signals per ticker (handle conflicts)
-        aggregated_scores = self._aggregate_signals(all_signals)
+        # Step 2: Compute baseline scores for governor diagnostics
+        baseline_scores = self._aggregate_signals(all_signals)
 
-        # Step 3: Apply LONG-ONLY constraint
+        governor_decision = self._evaluate_governor(
+            aggregated_scores=baseline_scores,
+            max_position=max_position,
+        )
+
+        # Step 3: Aggregate signals with adaptive analyst weights
+        aggregated_scores = self._aggregate_signals(
+            all_signals,
+            analyst_weights=governor_decision.analyst_weights if governor_decision else None,
+        )
+
+        # Step 4: Apply LONG-ONLY constraint
         long_only_scores = self._apply_long_only_constraint(aggregated_scores)
+        if governor_decision:
+            long_only_scores = self._apply_ticker_penalties(long_only_scores, governor_decision)
 
-        # Step 4: Select top positions (concentration constraint)
+        # Step 5: Select top positions (concentration constraint)
         selected_tickers = self._select_top_positions(long_only_scores, max_holdings)
 
-        # Step 5: Calculate target positions for selected tickers
-        target_positions = self._calculate_target_positions(selected_tickers, long_only_scores, max_position, min_position)
+        # Step 6: Calculate target positions for selected tickers
+        effective_max_position = governor_decision.max_position_override if governor_decision and governor_decision.max_position_override is not None else max_position
+        target_positions = self._calculate_target_positions(selected_tickers, long_only_scores, effective_max_position, min_position)
+        if governor_decision:
+            target_positions = self.governor.apply_to_target_weights(target_positions, governor_decision)
 
-        # Step 6: Generate recommendations
+        # Step 7: Generate recommendations
         recommendations = self._generate_recommendations(target_positions, min_trade_size)
+        if governor_decision:
+            recommendations = self.governor.apply_to_recommendations(recommendations, governor_decision)
 
-        # Step 7: Calculate updated portfolio
+        # Step 8: Calculate updated portfolio
         updated_portfolio = self._calculate_updated_portfolio(recommendations)
 
         return {
@@ -174,6 +211,7 @@ class EnhancedPortfolioManager:
             "recommendations": recommendations,
             "updated_portfolio": updated_portfolio,
             "analyst_signals": all_signals if self.verbose else None,
+            "governor": governor_decision,
         }
 
     def _collect_analyst_signals(self) -> List[AnalystSignal]:
@@ -683,7 +721,11 @@ class EnhancedPortfolioManager:
         if self.verbose:
             print()
 
-    def _aggregate_signals(self, signals: List[AnalystSignal]) -> Dict[str, float]:
+    def _aggregate_signals(
+        self,
+        signals: List[AnalystSignal],
+        analyst_weights: Optional[Dict[str, float]] = None,
+    ) -> Dict[str, float]:
         """
         Aggregate multiple analyst signals per ticker
         Handles SHORT signals by reducing the score, not going negative
@@ -697,10 +739,13 @@ class EnhancedPortfolioManager:
 
         aggregated = {}
         for ticker, ticker_sigs in ticker_signals.items():
-            # Weighted average by confidence
-            total_weight = sum(s.confidence for s in ticker_sigs)
+            # Weighted average by confidence plus governor-supplied analyst trust.
+            total_weight = sum(s.confidence * (analyst_weights.get(s.analyst, 1.0) if analyst_weights else 1.0) for s in ticker_sigs)
             if total_weight > 0:
-                weighted_sum = sum(s.signal * s.confidence for s in ticker_sigs)
+                weighted_sum = sum(
+                    s.signal * s.confidence * (analyst_weights.get(s.analyst, 1.0) if analyst_weights else 1.0)
+                    for s in ticker_sigs
+                )
                 aggregated[ticker] = weighted_sum / total_weight
             else:
                 aggregated[ticker] = 0
@@ -711,6 +756,28 @@ class EnhancedPortfolioManager:
                 aggregated[ticker] = 0.5  # Neutral score
 
         return aggregated
+
+    def _apply_ticker_penalties(self, scores: Dict[str, float], decision: GovernorDecision) -> Dict[str, float]:
+        adjusted: Dict[str, float] = {}
+        for ticker, score in scores.items():
+            adjusted[ticker] = score * decision.ticker_penalties.get(ticker, 1.0)
+        return adjusted
+
+    def _evaluate_governor(
+        self,
+        *,
+        aggregated_scores: Dict[str, float],
+        max_position: float,
+    ) -> Optional[GovernorDecision]:
+        if not self.governor:
+            return None
+        return self.governor.evaluate(
+            selected_analysts=self.analyst_names,
+            aggregated_scores=aggregated_scores,
+            ticker_markets=self.ticker_markets,
+            max_position=max_position,
+            persist=True,
+        )
 
     def _apply_long_only_constraint(self, scores: Dict[str, float]) -> Dict[str, float]:
         """

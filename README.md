@@ -9,7 +9,8 @@ poetry run hedge rebalance \
   --portfolio portfolio_20251220_actual.csv \
   --universe portfolios/borsdata_universe.txt \
   --model gpt-5-nano \
-  --analysts favorites
+  --analysts favorites \
+  --use-governor
 ```
 
 That's the weekly command: load current holdings CSV, score every ticker in the 206-ticker universe with the selected analysts, and output `portfolio_YYYYMMDD.csv` for next week.
@@ -20,6 +21,7 @@ That's the weekly command: load current holdings CSV, score every ticker in the 
 - **Concentrated long-only**: 5-10 holdings, multi-currency cost basis (SEK default), ATR-derived slippage bands, deterministic analysts mixed with LLM personas.
 - **18 analysts**: 13 legendary investor personas + 5 core deterministic analysts (including position-aware news sentiment that analyzes events since each holding's acquisition date).
 - **IBKR execution**: Live positions, order preview (`--ibkr-whatif`), execution (`--ibkr-execute`), ISIN-based contract resolution with 96% universe coverage.
+- **Adaptive governor**: Preservation-first capital governor that reweights analysts from scorecard credibility, throttles deployment in hostile regimes, and can block fresh buying.
 - **Crash recovery**: Analyst x ticker tasks recorded in SQLite so same-day reruns reuse cached signals even after crashes or network loss.
 
 ## Installation
@@ -51,6 +53,7 @@ IBKR credentials aren't stored in `.env`; run the Client Portal Gateway locally 
 | --- | --- |
 | `hedge rebalance` | Weekly rebalance (CSV or live IBKR positions) |
 | `hedge backtest` | Headless backtesting with the same analyst pipeline |
+| `hedge governor status` | Show the current or most recent preservation governor state |
 | `hedge ibkr check` | Validate all 5 IBKR pipeline stages against the live gateway |
 | `hedge ibkr validate` | Check contract overrides for staleness (`--fix` to auto-refresh) |
 | `hedge ibkr orders` | Show live orders from the IBKR gateway |
@@ -77,6 +80,8 @@ IBKR credentials aren't stored in `.env`; run the Client Portal Gateway locally 
 | `--ibkr-execute` | | Submit orders after preview |
 | `--ibkr-yes` | | Auto-confirm orders (skip per-order prompt) |
 | `--dry-run` | | Disables execution even if `--ibkr-execute` is set |
+| `--use-governor` | | Enable the preservation-first portfolio governor |
+| `--governor-profile` | `preservation` | Governor profile name |
 
 ### Legacy entry points
 
@@ -155,6 +160,7 @@ poetry run hedge rebalance \
   --portfolio-source ibkr \
   --universe portfolios/borsdata_universe.txt \
   --analysts favorites \
+  --use-governor \
   --ibkr-whatif
 
 # Execute with per-order confirmation
@@ -194,11 +200,11 @@ If preview responses show `No trading permissions`, the preview loop aborts. Upd
 ## Architecture
 
 ```
-Borsdata API --> Parallel Fetcher --> 3-Layer Cache --> 18 Analysts --> Portfolio Manager
-                                                                             |
-                                                                    IBKR Client Portal
-                                                                             |
-                                                                     Order Execution
+Borsdata API --> Parallel Fetcher --> 3-Layer Cache --> 18 Analysts --> Portfolio Manager --> Portfolio Governor
+                                                                                                  |
+                                                                                         IBKR Client Portal
+                                                                                                  |
+                                                                                          Order Execution
 ```
 
 **Cache layers**: In-memory LLM cache, SQLite KPI/signal cache (`data/prefetch_cache.db`), durable task queue (`data/analyst_tasks.db`).
@@ -210,6 +216,7 @@ Borsdata API --> Parallel Fetcher --> 3-Layer Cache --> 18 Analysts --> Portfoli
 | `src/cli/hedge.py` | Click-based unified CLI |
 | `src/services/portfolio_runner.py` | Rebalance orchestration and analyst preset resolution |
 | `src/agents/enhanced_portfolio_manager.py` | Portfolio management with parallel LLM coordination |
+| `src/services/portfolio_governor.py` | Preservation-first governor, analyst weighting, and snapshot history |
 | `src/data/borsdata_client.py` | Core API client with rate limiting |
 | `src/data/parallel_api_wrapper.py` | Parallel data fetching with caching |
 | `src/data/borsdata_metrics_mapping.py` | 108 KPI mappings (Borsdata to financial metrics) |
@@ -222,7 +229,7 @@ Borsdata API --> Parallel Fetcher --> 3-Layer Cache --> 18 Analysts --> Portfoli
 ## Testing
 
 ```bash
-poetry run pytest                         # All 140 tests
+poetry run pytest                         # All 178 tests
 poetry run pytest tests/integrations/     # IBKR tests
 poetry run pytest tests/data/             # Data layer tests
 poetry run pytest tests/backtesting/      # Backtesting tests

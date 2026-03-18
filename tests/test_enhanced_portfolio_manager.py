@@ -18,7 +18,8 @@ if "pandas" not in sys.modules:
     pandas_stub.read_csv = _stub_read_csv
     sys.modules["pandas"] = pandas_stub
 
-from src.agents.enhanced_portfolio_manager import EnhancedPortfolioManager, PriceContext
+from src.agents.enhanced_portfolio_manager import AnalystSignal, EnhancedPortfolioManager, PriceContext
+from src.services.portfolio_governor import GovernorDecision
 from src.utils.portfolio_loader import Portfolio, Position
 
 
@@ -250,3 +251,72 @@ def test_rebalance_slippage_within_three_percent():
 
     assert final_total == pytest.approx(initial_total, rel=0, abs=1e-6)
     assert updated["cash"]["SEK"] <= initial_total * 0.03 + 1e-6
+
+
+def test_governor_blocks_fresh_buys(monkeypatch):
+    portfolio = Portfolio(
+        positions=[],
+        cash_holdings={"SEK": 10_000.0},
+        last_updated=datetime.utcnow(),
+    )
+
+    manager = EnhancedPortfolioManager(
+        portfolio=portfolio,
+        universe=["AAA"],
+        analysts=["fundamentals"],
+        model_config={},
+        ticker_markets={"AAA": "global"},
+        home_currency="SEK",
+        no_cache=True,
+        no_cache_agents=True,
+        verbose=False,
+        session_id=None,
+        use_governor=True,
+    )
+
+    manager.exchange_rates = {"SEK": 1.0, "USD": 10.0}
+    manager.price_context_cache["AAA"] = PriceContext(
+        ticker="AAA",
+        currency="USD",
+        latest_close=100.0,
+        entry_price=100.0,
+        buy_price=100.0,
+        sell_price=100.0,
+        atr=0.0,
+        band_low=100.0,
+        band_high=100.0,
+        sample_size=3,
+        source="unit_test",
+    )
+
+    monkeypatch.setattr(
+        manager,
+        "_collect_analyst_signals",
+        lambda: [AnalystSignal("AAA", "fundamentals", 1.0, 1.0, "bullish")],
+    )
+
+    halted = GovernorDecision(
+        profile="preservation",
+        benchmark_ticker="OMXS30",
+        regime="high_vol",
+        risk_state="halted",
+        trading_enabled=False,
+        deployment_ratio=0.80,
+        analyst_weights={"fundamentals": 1.0},
+        ticker_penalties={"AAA": 1.0},
+        max_position_override=0.25,
+        min_cash_buffer=0.10,
+        reasons=["halt"],
+        average_credibility=1.0,
+        average_conviction=0.5,
+        bullish_breadth=1.0,
+        benchmark_drawdown_pct=-13.0,
+        analyst_scores=[],
+    )
+    monkeypatch.setattr(manager, "_evaluate_governor", lambda aggregated_scores, max_position: halted)
+
+    results = manager.generate_rebalancing_recommendations(max_holdings=1, max_position=0.25, min_position=0.05, min_trade_size=0.0)
+
+    assert results["governor"] == halted
+    assert results["recommendations"][0]["action"] == "HOLD"
+    assert results["updated_portfolio"]["positions"] == []
