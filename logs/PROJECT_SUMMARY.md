@@ -1,6 +1,6 @@
 # Börsdata Integration Project Summary
 
-_Last updated: 2026-03-15 (Session 92)_
+_Last updated: 2026-03-18 (Session 93)_
 
 ## End Goal
 Rebuild the data ingestion and processing pipeline so the application relies on Börsdata's REST API. The system accepts Börsdata-native tickers, supports both Nordic and Global markets, and maintains compatibility with the original user-facing workflows.
@@ -18,7 +18,7 @@ The AI hedge fund system is fully operational with both CLI and web interfaces:
 - ✅ **Performance Optimized**: 95% API call reduction, parallel processing, caching
 
 ## Current Focus
-- Adaptive portfolio governor added: preservation-first analyst weighting, deployment throttling, and trade gating
+- Adaptive portfolio governor merged to `main`: preservation-first analyst weighting, deployment throttling, and trade gating
 - `hedge governor status` command added for live/readable governor state inspection
 - `hedge rebalance --use-governor` and `hedge backtest --use-governor` now support closed-loop capital control
 - IBKR execution pipeline hardened (sessions 71-85 on `feat/ibkr-hardening` branch)

@@ -36,3 +36,11 @@ _This is the active session file. New sessions should be added here._
   - `poetry run pytest`
 - **Live verification notes**: The dry-run rebalance completed and printed governor state. Existing non-Börsdata holdings in `example_portfolio.csv` still emit the pre-existing AAPL/FDEV lookup warnings; the new governor path remained functional.
 - **Files changed**: `src/services/portfolio_governor.py` (new), `src/analytics/scorecard.py`, `src/agents/enhanced_portfolio_manager.py`, `src/services/portfolio_runner.py`, `src/cli/hedge.py`, `src/backtesting/engine.py`, `src/utils/output_formatter.py`, `src/services/__init__.py`, `tests/services/test_portfolio_governor.py` (new), `tests/backtesting/test_engine_governor.py` (new), `tests/analytics/test_scorecard.py`, `tests/test_enhanced_portfolio_manager.py`
+
+## Session 93 (`merge adaptive governor to main`)
+**Date**: 2026-03-18 | **Model**: GPT-5 Codex
+
+- **Action**: Merged PR #5 (`feat: add preservation-first adaptive portfolio governor`) into `main`
+- **Merge commit**: `97b2f6f8f3d776e1f792f63255d1a99725173ba6`
+- **Branch status**: `origin/main` now contains the governor service, rebalance/backtest integration, CLI surfaces, and tests from session 92
+- **Notes**: Merge was performed without touching unrelated local worktree changes (`AGENTS.md` and existing untracked files remained outside the merge flow)
