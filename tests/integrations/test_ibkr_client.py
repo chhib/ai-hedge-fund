@@ -36,6 +36,7 @@ def test_fetch_portfolio_transforms_positions_and_cash(monkeypatch):
     tickers = {pos.ticker for pos in portfolio.positions}
     assert tickers == {"AAPL", "ERIC B", "999"}
     assert portfolio.cash_holdings == {"USD": 1250.0, "SEK": 900.0}
+    assert portfolio.resolved_account_id == "U123"
     assert isinstance(portfolio.last_updated, datetime)
 
 

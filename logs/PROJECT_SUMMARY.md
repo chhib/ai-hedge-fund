@@ -1,6 +1,6 @@
 # Börsdata Integration Project Summary
 
-_Last updated: 2026-03-18 (Session 93)_
+_Last updated: 2026-03-18 (Session 100)_
 
 ## End Goal
 Rebuild the data ingestion and processing pipeline so the application relies on Börsdata's REST API. The system accepts Börsdata-native tickers, supports both Nordic and Global markets, and maintains compatibility with the original user-facing workflows.
@@ -30,7 +30,7 @@ The AI hedge fund system is fully operational with both CLI and web interfaces:
 - Next: governor threshold tuning against live history and portfolio reconciliation
 
 ## Active Session File
-**`logs/sessions/session_091.md`** - Sessions 91-100
+**`logs/sessions/session_101.md`** - Sessions 101-110
 
 ## Decision Log (Key Decisions)
 
@@ -77,7 +77,8 @@ Sessions are organized into files of 10 sessions each:
 - `logs/sessions/session_061.md` - Sessions 61-70 (IBKR execution)
 - `logs/sessions/session_071.md` - Sessions 71-80 (IBKR hardening)
 - `logs/sessions/session_081.md` - Sessions 81-90
-- `logs/sessions/session_091.md` - Sessions 91-100 (current)
+- `logs/sessions/session_091.md` - Sessions 91-100
+- `logs/sessions/session_101.md` - Sessions 101-110 (current)
 
 ## Quick Reference
 

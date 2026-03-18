@@ -31,6 +31,7 @@ class Portfolio:
     positions: List[Position]
     cash_holdings: Dict[str, float]  # {'USD': 10000, 'SEK': 75000}
     last_updated: datetime
+    resolved_account_id: Optional[str] = None
 
 
 def validate_portfolio_data(

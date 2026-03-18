@@ -52,7 +52,12 @@ class IBKRClient:
         position_models = _transform_positions(positions)
         cash_balances = _transform_ledger_balances(ledger)
 
-        return Portfolio(positions=position_models, cash_holdings=cash_balances, last_updated=datetime.utcnow())
+        return Portfolio(
+            positions=position_models,
+            cash_holdings=cash_balances,
+            last_updated=datetime.utcnow(),
+            resolved_account_id=target_account,
+        )
 
     def list_accounts(self) -> List[Dict[str, Any]]:
         return self._request("GET", "/v1/api/portfolio/accounts") or []

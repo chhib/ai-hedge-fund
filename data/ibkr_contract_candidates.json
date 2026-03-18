@@ -1,0 +1,87 @@
+{
+  "ADVT": {
+    "borsdata_name": "Adverty",
+    "candidates": [
+      {
+        "conid": 213613462,
+        "currency": null,
+        "description": "ADVANTIS CORP",
+        "exchange": "PINK",
+        "symbol": "ADVT"
+      },
+      {
+        "conid": 804727475,
+        "currency": null,
+        "description": "ADVANCEDADVT LTD",
+        "exchange": "LSE",
+        "symbol": "ADVT"
+      }
+    ],
+    "ibkr_symbol": "ADVT",
+    "isin": "SE0011724889"
+  },
+  "AMH2 B": {
+    "borsdata_name": "Amhult 2",
+    "candidates": [],
+    "ibkr_symbol": "AMH2.B",
+    "isin": "SE0001356932"
+  },
+  "BRK.B": {
+    "borsdata_name": "Berkshire Hathaway Inc",
+    "candidates": [],
+    "ibkr_symbol": "BRK.B",
+    "isin": "US0846707026"
+  },
+  "CLA": {
+    "borsdata_name": "",
+    "candidates": [
+      {
+        "conid": 115280255,
+        "currency": null,
+        "description": "CELSIUS RESOURCES LTD",
+        "exchange": "ASX",
+        "symbol": "CLA"
+      },
+      {
+        "conid": 611426824,
+        "currency": null,
+        "description": "CELSIUS RESOURCES LTD",
+        "exchange": "LSE",
+        "symbol": "CLA"
+      },
+      {
+        "conid": 371715242,
+        "currency": null,
+        "description": "CLARANOVA SE",
+        "exchange": "SBF",
+        "symbol": "CLA"
+      }
+    ],
+    "ibkr_symbol": "CLA",
+    "isin": ""
+  },
+  "NOVU": {
+    "borsdata_name": "Novus",
+    "candidates": [],
+    "ibkr_symbol": "NOVU",
+    "isin": "SE0001989260"
+  },
+  "RECY B": {
+    "borsdata_name": "Recyctec",
+    "candidates": [],
+    "ibkr_symbol": "RECY.B",
+    "isin": "SE0014808978"
+  },
+  "SPLTN": {
+    "borsdata_name": "Spiltan Invest",
+    "candidates": [],
+    "ibkr_symbol": "SPLTN",
+    "isin": "SE0013382546"
+  },
+  "VIAFIN": {
+    "borsdata_name": "Viafin Service",
+    "candidates": [],
+    "ibkr_symbol": "VIAFIN",
+    "isin": "FI4000349212"
+  }
+}

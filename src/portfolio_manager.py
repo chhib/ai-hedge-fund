@@ -58,7 +58,8 @@ load_dotenv()
 @click.option("--ibkr-whatif", is_flag=True, help="Preview IBKR orders using what-if (no trades)")
 @click.option("--ibkr-execute", is_flag=True, help="Place IBKR orders (requires confirmation)")
 @click.option("--ibkr-yes", is_flag=True, help="Skip IBKR trade confirmation prompts")
-def main(portfolio, universe, universe_tickers, analysts, model, model_provider, max_workers, max_holdings, max_position, min_position, min_trade, home_currency, no_cache, no_cache_agents, verbose, dry_run, test, portfolio_source, ibkr_account, ibkr_host, ibkr_port, ibkr_verify_ssl, ibkr_timeout, ibkr_whatif, ibkr_execute, ibkr_yes):
+@click.option("--ibkr-skip-swedish-stocks/--no-ibkr-skip-swedish-stocks", default=True, show_default=True, help="Skip Swedish stock buy orders in IBKR flows")
+def main(portfolio, universe, universe_tickers, analysts, model, model_provider, max_workers, max_holdings, max_position, min_position, min_trade, home_currency, no_cache, no_cache_agents, verbose, dry_run, test, portfolio_source, ibkr_account, ibkr_host, ibkr_port, ibkr_verify_ssl, ibkr_timeout, ibkr_whatif, ibkr_execute, ibkr_yes, ibkr_skip_swedish_stocks):
     """
     AI Hedge Fund Portfolio Manager - Long-only portfolio rebalancing
 
@@ -129,25 +130,30 @@ def main(portfolio, universe, universe_tickers, analysts, model, model_provider,
         from src.integrations.ibkr_execution import execute_ibkr_rebalance_trades
         from src.services.portfolio_runner import _ensure_ibkr_gateway
 
-        base_url = _ensure_ibkr_gateway(config)
-        confirm = None
-        if ibkr_execute:
-            if ibkr_yes:
-                confirm = lambda _: True
-            else:
-                confirm = lambda msg: click.confirm(msg, default=False)
+        try:
+            base_url = _ensure_ibkr_gateway(config)
+            confirm = None
+            if ibkr_execute:
+                if ibkr_yes:
+                    confirm = lambda _: True
+                else:
+                    confirm = lambda msg: click.confirm(msg, default=False)
 
-        report = execute_ibkr_rebalance_trades(
-            outcome.results.get("recommendations", []),
-            base_url=base_url,
-            account_id=ibkr_account,
-            verify_ssl=ibkr_verify_ssl,
-            timeout=ibkr_timeout,
-            preview_only=True,
-            execute=ibkr_execute,
-            confirm=confirm,
-        )
-        _render_ibkr_report(report)
+            report = execute_ibkr_rebalance_trades(
+                outcome.results.get("recommendations", []),
+                base_url=base_url,
+                account_id=ibkr_account,
+                verify_ssl=ibkr_verify_ssl,
+                timeout=ibkr_timeout,
+                preview_only=True,
+                execute=ibkr_execute,
+                confirm=confirm,
+                skip_swedish_stocks=ibkr_skip_swedish_stocks,
+            )
+            _render_ibkr_report(report, outcome.results)
+        except Exception as exc:
+            click.echo(f"Error: {exc}", err=True)
+            raise click.Abort()
 
     print("\n" + "=" * 60)
     response = click.prompt("Export full analyst transcript to markdown? (y/N)", default="N", show_default=False)
@@ -161,8 +167,8 @@ def main(portfolio, universe, universe_tickers, analysts, model, model_provider,
             click.echo(f"\n⚠️  Error exporting transcript: {e}", err=True)
 
 
-def _render_ibkr_report(report) -> None:
-    from src.integrations.ibkr_execution import summarize_submissions
+def _render_ibkr_report(report, results=None) -> None:
+    from src.integrations.ibkr_execution import format_execution_cash_summary, summarize_submissions
 
     click.echo("\n" + "-" * 40)
     title = "IBKR ORDER EXECUTION" if report.executed else "IBKR ORDER PREVIEW"
@@ -187,6 +193,17 @@ def _render_ibkr_report(report) -> None:
             click.echo("Execution results:")
             for summary in final_summaries:
                 click.echo(f"  • {summary}")
+    if results:
+        cash_lines = format_execution_cash_summary(
+            report,
+            results.get("recommendations", []),
+            results.get("current_portfolio", {}),
+            results.get("governor"),
+        )
+        if cash_lines:
+            click.echo("Cash summary:")
+            for line in cash_lines:
+                click.echo(f"  • {line}")
 
 
 if __name__ == "__main__":

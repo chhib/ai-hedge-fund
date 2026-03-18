@@ -49,6 +49,7 @@ def cli() -> None:
 @click.option("--ibkr-whatif", is_flag=True, help="Preview IBKR orders using what-if (no trades)")
 @click.option("--ibkr-execute", is_flag=True, help="Place IBKR orders (requires confirmation)")
 @click.option("--ibkr-yes", is_flag=True, help="Skip IBKR trade confirmation prompts")
+@click.option("--ibkr-skip-swedish-stocks/--no-ibkr-skip-swedish-stocks", default=True, show_default=True, help="Skip Swedish stock buy orders in IBKR flows")
 @click.option("--use-governor", is_flag=True, help="Apply the preservation-first portfolio governor")
 @click.option("--governor-profile", default="preservation", show_default=True, help="Governor profile name")
 def rebalance(
@@ -80,6 +81,7 @@ def rebalance(
     ibkr_whatif: bool,
     ibkr_execute: bool,
     ibkr_yes: bool,
+    ibkr_skip_swedish_stocks: bool,
     use_governor: bool,
     governor_profile: str,
 ) -> None:
@@ -136,25 +138,30 @@ def rebalance(
         from src.integrations.ibkr_execution import execute_ibkr_rebalance_trades
         from src.services.portfolio_runner import _ensure_ibkr_gateway
 
-        base_url = _ensure_ibkr_gateway(config)
-        confirm = None
-        if ibkr_execute:
-            if ibkr_yes:
-                confirm = lambda _: True
-            else:
-                confirm = lambda msg: click.confirm(msg, default=False)
+        try:
+            base_url = _ensure_ibkr_gateway(config)
+            confirm = None
+            if ibkr_execute:
+                if ibkr_yes:
+                    confirm = lambda _: True
+                else:
+                    confirm = lambda msg: click.confirm(msg, default=False)
 
-        report = execute_ibkr_rebalance_trades(
-            outcome.results.get("recommendations", []),
-            base_url=base_url,
-            account_id=ibkr_account,
-            verify_ssl=ibkr_verify_ssl,
-            timeout=ibkr_timeout,
-            preview_only=True,
-            execute=ibkr_execute,
-            confirm=confirm,
-        )
-        _render_ibkr_report(report)
+            report = execute_ibkr_rebalance_trades(
+                outcome.results.get("recommendations", []),
+                base_url=base_url,
+                account_id=ibkr_account,
+                verify_ssl=ibkr_verify_ssl,
+                timeout=ibkr_timeout,
+                preview_only=True,
+                execute=ibkr_execute,
+                confirm=confirm,
+                skip_swedish_stocks=ibkr_skip_swedish_stocks,
+            )
+            _render_ibkr_report(report, outcome.results)
+        except Exception as exc:  # pragma: no cover - CLI level guardrail
+            click.secho(f"Error: {exc}", fg="red")
+            raise click.Abort()
 
     if export_transcript:
         _export_transcript(outcome.session_id)
@@ -307,8 +314,8 @@ def _export_transcript(session_id: str) -> None:
     click.secho(f"Transcript saved to {output}", fg="green")
 
 
-def _render_ibkr_report(report) -> None:
-    from src.integrations.ibkr_execution import summarize_submissions
+def _render_ibkr_report(report, results: Optional[dict] = None) -> None:
+    from src.integrations.ibkr_execution import format_execution_cash_summary, summarize_submissions
 
     click.echo("\n" + "-" * 40)
     title = "IBKR ORDER EXECUTION" if report.executed else "IBKR ORDER PREVIEW"
@@ -333,6 +340,17 @@ def _render_ibkr_report(report) -> None:
             click.echo("Execution results:")
             for summary in final_summaries:
                 click.echo(f"  • {summary}")
+    if results:
+        cash_lines = format_execution_cash_summary(
+            report,
+            results.get("recommendations", []),
+            results.get("current_portfolio", {}),
+            results.get("governor"),
+        )
+        if cash_lines:
+            click.echo("Cash summary:")
+            for line in cash_lines:
+                click.echo(f"  • {line}")
 
 
 @cli.group()

@@ -1,0 +1,105 @@
+
+✓ Loaded portfolio with 7 positions
+ℹ️  Skipping 2 delisted ticker(s): EMX, SOZAP
+✓ Loaded universe with 206 tickers
+✓ Market routing: 123 global, 83 Nordic
+
+
+⚠️  Warning: The following tickers are not in the Borsdata mapping:
+   • DORO
+
+💡 Tip: Run this command to refresh the ticker mapping:
+   poetry run python scripts/refresh_borsdata_mapping.py
+
+✓ Using 5 analysts
+
+
+✓ Collected 1028 signals from 5 analysts across 206 tickers
+
+
+================================================================================
+PORTFOLIO REBALANCING ANALYSIS
+================================================================================
+Date: 2026-01-28T10:37:15.942231
+
+Current Portfolio Value: 9,844.84 SEK
+Number of Positions: 7
+
+Exchange Rates (to SEK):
+   1 CAD = 6.4616 SEK
+   1 DKK = 1.4145 SEK
+   1 EUR = 10.5633 SEK
+   1 GBP = 12.1487 SEK
+   1 NOK = 0.9156 SEK
+   1 PLN = 2.5156 SEK
+   1 USD = 8.7723 SEK
+
+----------------------------------------
+RECOMMENDATIONS
+----------------------------------------
+
++----------------------+----------------------+----------------------+----------------------+----------------------+
+|         SELL         |       DECREASE       |         HOLD         |       INCREASE       |         ADD          |
++----------------------+----------------------+----------------------+----------------------+----------------------+
+| NVEC                 | DHT                  | STNG                 |                      | TK                   |
+| Sell all 1 @ 73.21   | Sell 1 @ 13.69       | Hold 2               |                      | Buy 11 @ 9.83        |
+| -73 USD              | -14 USD              | +0 USD               |                      | +108 USD             |
++----------------------+----------------------+----------------------+----------------------+----------------------+
+| LUMI                 | HOVE                 |                      |                      | SBOK                 |
+| Sell all 11 @ 220.77 | Sell 56 @ 6.37       |                      |                      | Buy 21 @ 51.60       |
+| -2,428 SEK           | -357 DKK             |                      |                      | +1,084 SEK           |
++----------------------+----------------------+----------------------+----------------------+----------------------+
+| MPCC                 |                      |                      |                      | RANA                 |
+| Sell all 103 @ 17.56 |                      |                      |                      | Buy 16 @ 77.78       |
+| -1,809 NOK           |                      |                      |                      | +1,245 NOK           |
++----------------------+----------------------+----------------------+----------------------+----------------------+
+| LUND B               |                      |                      |                      | WB                   |
+| Sell all 2 @ 515.25  |                      |                      |                      | Buy 18 @ 10.96       |
+| -1,030 SEK           |                      |                      |                      | +197 USD             |
++----------------------+----------------------+----------------------+----------------------+----------------------+
+|                      |                      |                      |                      | SFL                  |
+|                      |                      |                      |                      | Buy 16 @ 8.44        |
+|                      |                      |                      |                      | +135 USD             |
++----------------------+----------------------+----------------------+----------------------+----------------------+
+
+**Summary:**
+  🔴 4 position(s) to sell
+  ⬇️ 2 position(s) to decrease
+  ⏸️ 1 position(s) to hold
+  🟢 5 position(s) to add
+
+✅ Rebalanced portfolio saved to: /Users/ksu541/Code/ai-hedge-fund/portfolio_20260128.csv
+   Next run: python src/portfolio_manager.py --portfolio portfolio_20260128.csv --universe ...
+
+📄 Portfolio snapshot:
+ticker  shares cost_basis currency date_acquired
+  HOVE  124.00       4.84      DKK              
+  RANA   16.00      77.78      NOK    2026-01-28
+  CASH  295.27                 SEK              
+  SBOK   21.00       51.6      SEK    2026-01-28
+   DHT   10.00      11.91      USD              
+   SFL   16.00       8.44      USD    2026-01-28
+  STNG    2.00       57.5      USD              
+    TK   11.00       9.83      USD    2026-01-28
+    WB   18.00      10.96      USD    2026-01-28
+
+----------------------------------------
+IBKR ORDER PREVIEW
+----------------------------------------
+Account: U22372535
+Intents: 11 | Resolved: 11 | Skipped: 9
+Warnings:
+  • Buy previews deferred until sell orders execute; rerun after sells to fund purchases.
+  • LUMI: Preview failed (IBKR API error 500: {"error":"No trading permissions.","action":"order_cannot_be_created"})
+  • MPCC: Preview failed (IBKR API error 500: {"error":"The price 17.758 does not conform to the minimum price variation of 0.005 for this instrument."})
+  • LUND B: Preview failed (IBKR API error 500: {"error":"No trading permissions.","action":"order_cannot_be_created"})
+Skipped:
+  • STNG (HOLD): Hold action
+  • TK (ADD): Deferred until sells executed
+  • SBOK (ADD): Deferred until sells executed
+  • RANA (ADD): Deferred until sells executed
+  • WB (ADD): Deferred until sells executed
+  • SFL (ADD): Deferred until sells executed
+  • LUMI (SELL): Preview failed
+  • MPCC (SELL): Preview failed
+  • LUND B (SELL): Preview failed

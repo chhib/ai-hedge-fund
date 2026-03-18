@@ -6,7 +6,7 @@ import logging
 import time
 
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, Iterable, List, Optional
+from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Sequence
 from uuid import uuid4
 from decimal import Decimal, ROUND_HALF_UP
 
@@ -52,6 +52,7 @@ class ResolvedOrder:
     conid: int
     exchange: Optional[str]
     currency: Optional[str]
+    listing_exchange: Optional[str] = None
 
 
 @dataclass(slots=True)
@@ -149,6 +150,7 @@ def execute_ibkr_rebalance_trades(
     execute: bool = False,
     confirm: Optional[Callable[[str], bool]] = None,
     client: Optional[IBKRClient] = None,
+    skip_swedish_stocks: bool = True,
 ) -> ExecutionReport:
     """Preview and optionally execute IBKR orders based on rebalance recommendations."""
 
@@ -173,8 +175,11 @@ def execute_ibkr_rebalance_trades(
         raise IBKRError("No IBKR trading account resolved for execution")
 
     resolved_orders, resolution_skips = _resolve_contracts(ibkr, intents, load_contract_overrides())
-    report.resolved = resolved_orders
     report.skipped.extend(resolution_skips)
+    if skip_swedish_stocks:
+        resolved_orders, swedish_skips = _skip_swedish_buy_orders(resolved_orders)
+        report.skipped.extend(swedish_skips)
+    report.resolved = resolved_orders
 
     if not resolved_orders:
         return report
@@ -368,7 +373,13 @@ def _run_sequential_preview(
         except IBKRError as exc:
             message = str(exc)
             report.warnings.append(f"{resolved.intent.ticker}: Preview failed ({message})")
-            report.skipped.append(OrderSkip(ticker=resolved.intent.ticker, action=resolved.intent.action, reason="Preview failed"))
+            report.skipped.append(
+                OrderSkip(
+                    ticker=resolved.intent.ticker,
+                    action=resolved.intent.action,
+                    reason=f"Preview failed: {message}",
+                )
+            )
             continue
 
         report.previews.append({"intent": resolved.intent, "response": preview_response})
@@ -431,6 +442,7 @@ def _resolve_contracts(
                         conid=candidate.conid,
                         exchange=override.exchange or candidate.exchange,
                         currency=override.currency or candidate.currency or intent.currency,
+                        listing_exchange=candidate.exchange,
                     )
                 )
                 continue
@@ -460,10 +472,31 @@ def _resolve_contracts(
                 conid=candidate.conid,
                 exchange=candidate.exchange,
                 currency=candidate.currency or intent.currency,
+                listing_exchange=candidate.exchange,
             )
         )
 
     return resolved, skipped
+
+
+def _skip_swedish_buy_orders(resolved_orders: Iterable[ResolvedOrder]) -> tuple[List[ResolvedOrder], List[OrderSkip]]:
+    filtered: List[ResolvedOrder] = []
+    skipped: List[OrderSkip] = []
+
+    for resolved in resolved_orders:
+        listing_exchange = (resolved.listing_exchange or resolved.exchange or "").upper()
+        if resolved.intent.side == "BUY" and _is_swedish_listing_exchange(listing_exchange):
+            skipped.append(
+                OrderSkip(
+                    ticker=resolved.intent.ticker,
+                    action=resolved.intent.action,
+                    reason="Swedish stock buy skipped: IBKR SFB trading permissions unavailable",
+                )
+            )
+            continue
+        filtered.append(resolved)
+
+    return filtered, skipped
 
 
 def _extract_contract_candidates(payload: Any) -> List[ContractCandidate]:
@@ -583,6 +616,11 @@ def _apply_snapshot_prices(orders: List[ResolvedOrder], snapshot: Any, report: E
             continue
 
         order.intent.limit_price = new_price
+
+
+def _is_swedish_listing_exchange(exchange: str) -> bool:
+    exchange_upper = exchange.upper()
+    return exchange_upper == "SFB" or exchange_upper.startswith("SFB.")
 
 
 def _build_order_payload(order: ResolvedOrder, account_id: str, tick_size: Optional[float] = None) -> Dict[str, Any]:
@@ -900,6 +938,132 @@ def summarize_submissions(entries: List[Dict[str, Any]]) -> List[str]:
     return summaries
 
 
+def format_execution_cash_summary(
+    report: ExecutionReport,
+    recommendations: Sequence[Mapping[str, Any]],
+    current_portfolio: Mapping[str, Any],
+    governor: Any = None,
+) -> List[str]:
+    """Render post-trade cash buckets in the portfolio home currency."""
+    home_currency = str(current_portfolio.get("home_currency") or "USD")
+    total_value = _to_float(current_portfolio.get("total_value"))
+    exchange_rates = current_portfolio.get("exchange_rates") or {}
+
+    recommendation_index = {
+        (str(rec.get("ticker", "")), str(rec.get("action", "")).upper()): rec
+        for rec in recommendations
+    }
+    intent_index = {
+        (intent.ticker, intent.action.upper()): intent
+        for intent in report.intents
+    }
+    buy_intents_by_ticker = {intent.ticker: intent for intent in report.intents if intent.side == "BUY"}
+
+    governor_reserved = 0.0
+    if governor is not None and total_value > 0:
+        deployment_ratio = _to_float(getattr(governor, "deployment_ratio", 0.0))
+        min_cash_buffer = _to_float(getattr(governor, "min_cash_buffer", 0.0))
+        investable_ratio = min(deployment_ratio, max(0.0, 1.0 - min_cash_buffer))
+        governor_reserved = max(total_value * (1.0 - investable_ratio), 0.0)
+
+    non_failure_reasons = {
+        "Hold action",
+        "Zero quantity",
+        "Unknown action",
+        "Missing limit price",
+        "Deferred until sells executed",
+    }
+
+    failed_buy_cash = 0.0
+    for skip in report.skipped:
+        action = str(skip.action).upper()
+        if action not in {"ADD", "INCREASE"}:
+            continue
+        if skip.reason in non_failure_reasons:
+            continue
+        failed_buy_cash += _estimate_order_value_home(
+            ticker=skip.ticker,
+            action=action,
+            quantity=None,
+            intent_index=intent_index,
+            recommendation_index=recommendation_index,
+            exchange_rates=exchange_rates,
+        )
+
+    pending_buy_cash = 0.0
+    for status in report.order_statuses:
+        if status.remaining_qty <= 0:
+            continue
+        intent = buy_intents_by_ticker.get(status.ticker)
+        if intent is None:
+            continue
+        if status.status in {"Cancelled", "Inactive"}:
+            continue
+        pending_buy_cash += _estimate_order_value_home(
+            ticker=status.ticker,
+            action=intent.action.upper(),
+            quantity=status.remaining_qty,
+            intent_index=intent_index,
+            recommendation_index=recommendation_index,
+            exchange_rates=exchange_rates,
+        )
+
+    lines: List[str] = []
+    if governor_reserved > 0.01:
+        lines.append(f"Cash intentionally reserved by governor: {governor_reserved:,.2f} {home_currency}")
+    if failed_buy_cash > 0.01:
+        lines.append(f"Cash not deployed because buy orders failed: {failed_buy_cash:,.2f} {home_currency}")
+    if pending_buy_cash > 0.01:
+        lines.append(f"Cash still pending in open buy orders: {pending_buy_cash:,.2f} {home_currency}")
+    return lines
+
+
+def _estimate_order_value_home(
+    *,
+    ticker: str,
+    action: str,
+    quantity: Optional[int],
+    intent_index: Mapping[tuple[str, str], OrderIntent],
+    recommendation_index: Mapping[tuple[str, str], Mapping[str, Any]],
+    exchange_rates: Mapping[str, Any],
+) -> float:
+    key = (ticker, action.upper())
+    intent = intent_index.get(key)
+    recommendation = recommendation_index.get(key)
+
+    estimated_qty = quantity
+    if estimated_qty is None:
+        if intent is not None:
+            estimated_qty = intent.quantity
+        elif recommendation is not None:
+            current_shares = _to_int(recommendation.get("current_shares", 0))
+            target_shares = _to_int(recommendation.get("target_shares", 0))
+            if action.upper() == "ADD":
+                estimated_qty = target_shares
+            elif action.upper() == "INCREASE":
+                estimated_qty = max(0, target_shares - current_shares)
+            else:
+                estimated_qty = 0
+
+    if not estimated_qty or estimated_qty <= 0:
+        return 0.0
+
+    price = float(intent.limit_price) if intent is not None else 0.0
+    if price <= 0 and recommendation is not None:
+        price = _to_float(recommendation.get("current_price"))
+    if price <= 0:
+        return 0.0
+
+    currency = intent.currency if intent is not None else None
+    if not currency and recommendation is not None:
+        currency = str(recommendation.get("currency") or "")
+    fx_rate = _to_float(exchange_rates.get(currency)) if currency else 0.0
+    if fx_rate <= 0:
+        fx_rate = 1.0
+
+    return float(estimated_qty) * price * fx_rate
+
+
 __all__ = [
     "OrderIntent",
     "OrderSkip",
@@ -908,5 +1072,6 @@ __all__ = [
     "ExecutionReport",
     "build_order_intents",
     "execute_ibkr_rebalance_trades",
+    "format_execution_cash_summary",
     "summarize_submissions",
 ]

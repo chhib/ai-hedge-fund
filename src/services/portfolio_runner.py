@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import shutil
+import socket
 import subprocess
 import time
 import uuid
@@ -20,10 +22,79 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 from src.agents.enhanced_portfolio_manager import EnhancedPortfolioManager
 from src.data.borsdata_ticker_mapping import get_ticker_market
 from src.utils.output_formatter import display_results, format_as_portfolio_csv
-from src.utils.portfolio_loader import Portfolio, load_portfolio, load_universe
+from src.utils.portfolio_loader import Portfolio, Position as PortfolioPosition, load_portfolio, load_universe
 
 # Path to IBKR Client Portal Gateway (relative to repo root)
 IBKR_GATEWAY_DIR = Path(__file__).parent.parent.parent / "clientportal.gw"
+
+
+def _ibkr_gateway_start_command() -> str:
+    """Build the shell command used to start the local IBKR gateway."""
+    try:
+        gateway_dir = IBKR_GATEWAY_DIR.relative_to(Path.cwd())
+    except ValueError:
+        gateway_dir = IBKR_GATEWAY_DIR
+    return f"cd {gateway_dir} && bin/run.sh root/conf.yaml"
+
+
+def _format_ibkr_gateway_start_instructions(base_url: str) -> str:
+    """Return a concise operator hint for bringing the gateway online."""
+    lines = ["Suggestion: start the IBKR Client Portal Gateway:"]
+    if not IBKR_GATEWAY_DIR.exists():
+        lines.append(f"  Install clientportal.gw under {IBKR_GATEWAY_DIR}")
+        lines.append("  Download: https://www.interactivebrokers.com/campus/ibkr-api-page/cpapi-v1/")
+    lines.append(f"  {_ibkr_gateway_start_command()}")
+    lines.append(f"  Authenticate at {base_url}")
+    lines.append("  Then re-run this command.")
+    return "\n".join(lines)
+
+
+def _extract_hostname(host: str) -> str:
+    """Extract the hostname portion from a configured IBKR host."""
+    parsed = urlparse(host if "://" in host else f"https://{host}")
+    return parsed.hostname or "localhost"
+
+
+def _is_localhost(host: str) -> bool:
+    """Return True when the host points at the current machine."""
+    return _extract_hostname(host) in {"localhost", "127.0.0.1", "::1"}
+
+
+def _is_local_port_in_use(port: int, timeout: float = 1.0) -> bool:
+    """Check whether a TCP port is already accepting local connections."""
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def _describe_local_listener(port: int) -> str | None:
+    """Return a short process description for a local listening TCP port."""
+    lsof_path = shutil.which("lsof")
+    if not lsof_path:
+        return None
+
+    try:
+        result = subprocess.run(
+            [lsof_path, "-nP", f"-iTCP:{port}", "-sTCP:LISTEN"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError:
+        return None
+
+    lines = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+    if len(lines) <= 1:
+        return None
+
+    listeners: List[str] = []
+    for line in lines[1:4]:
+        parts = line.split()
+        if len(parts) >= 2:
+            listeners.append(f"{parts[0]} (PID {parts[1]})")
+    return ", ".join(listeners) if listeners else None
 
 
 def _check_ibkr_gateway(base_url: str, timeout: float = 2.0) -> tuple[bool, bool]:
@@ -99,6 +170,25 @@ def _ensure_ibkr_gateway(config: "RebalanceConfig") -> str:
     Returns the base_url to use.
     Raises RuntimeError if gateway cannot be reached or user needs to authenticate.
     """
+    preferred_gateway_url = _build_ibkr_base_url(config.ibkr_host, config.ibkr_port)
+    manual_start_instructions = _format_ibkr_gateway_start_instructions(preferred_gateway_url)
+
+    # Honor an explicit --ibkr-port first before falling back to defaults.
+    is_running, is_authenticated = _check_ibkr_gateway(preferred_gateway_url, timeout=config.ibkr_timeout)
+    if is_running:
+        if is_authenticated:
+            return preferred_gateway_url
+        for _ in range(5):
+            time.sleep(2)
+            _, is_authenticated = _check_ibkr_gateway(preferred_gateway_url, timeout=config.ibkr_timeout)
+            if is_authenticated:
+                return preferred_gateway_url
+        raise RuntimeError(
+            f"IBKR Gateway running but not authenticated.\n"
+            f"Please log in at: {preferred_gateway_url}\n"
+            f"Then re-run this command."
+        )
+
     # First check if there's already a running gateway on either port
     found_url, is_authenticated = _find_running_gateway(timeout=config.ibkr_timeout)
 
@@ -118,17 +208,34 @@ def _ensure_ibkr_gateway(config: "RebalanceConfig") -> str:
             f"Then re-run this command."
         )
 
+    if _is_localhost(config.ibkr_host) and _is_local_port_in_use(config.ibkr_port, timeout=min(config.ibkr_timeout, 1.0)):
+        listener = _describe_local_listener(config.ibkr_port)
+        listener_suffix = f" Listener: {listener}." if listener else ""
+        raise RuntimeError(
+            f"IBKR Gateway port {config.ibkr_port} is already in use by another local process.{listener_suffix}\n"
+            f"Stop that process or choose another --ibkr-port, then start the gateway.\n"
+            f"{manual_start_instructions}"
+        )
+
     # No gateway running, try to start one
-    print("⚠️  IBKR Gateway not responding on ports 5000 or 5001, attempting to start...")
+    print("⚠️  IBKR Gateway on localhost is not responding on ports 5000 or 5001.")
+    print(manual_start_instructions)
+    print("Attempting to start it automatically...")
     if not _start_ibkr_gateway(config.ibkr_port):
         raise RuntimeError(
-            "Could not start IBKR Gateway. "
-            "Please start it manually or install clientportal.gw/"
+            "Could not start IBKR Gateway automatically.\n"
+            f"{manual_start_instructions}"
         )
 
     # Check if it's now running and needs auth
-    gateway_url = f"https://localhost:{config.ibkr_port}"
+    gateway_url = preferred_gateway_url
     running, is_authenticated = _check_ibkr_gateway(gateway_url, timeout=config.ibkr_timeout)
+
+    if not running:
+        raise RuntimeError(
+            "IBKR Gateway is still not responding after the auto-start attempt.\n"
+            f"{manual_start_instructions}"
+        )
 
     if running and not is_authenticated:
         raise RuntimeError(
@@ -201,7 +308,12 @@ def run_rebalance(config: RebalanceConfig) -> RebalanceOutcome:
         print("🔄 Reusing cached KPI data, generating fresh analyst recommendations")
 
     portfolio = _load_portfolio_from_source(config)
-    print(f"\n✓ Loaded portfolio with {len(portfolio.positions)} positions")
+    if config.portfolio_source == "ibkr":
+        account_label = portfolio.resolved_account_id or (config.ibkr_account or "unknown account")
+        print(f"\n✓ Loaded portfolio from IBKR account {account_label} with {len(portfolio.positions)} positions")
+        print(f"  Positions: {_format_position_summary(portfolio.positions)}")
+    else:
+        print(f"\n✓ Loaded portfolio with {len(portfolio.positions)} positions")
 
     universe_list = load_universe(
         str(config.universe_path) if config.universe_path else None,
@@ -282,6 +394,13 @@ def _build_ticker_market_map(universe: List[str]) -> tuple[Dict[str, str], List[
     nordic_count = sum(1 for v in ticker_markets.values() if v == "Nordic")
     print(f"✓ Market routing: {global_count} global, {nordic_count} Nordic\n")
     return ticker_markets, unknown
+
+
+def _format_position_summary(positions: List[PortfolioPosition]) -> str:
+    """Render a compact, human-readable list of loaded positions."""
+    if not positions:
+        return "none"
+    return ", ".join(f"{position.ticker} ({position.shares:g})" for position in positions)
 
 
 def _warn_unknown_tickers(unknown: List[str]) -> None:

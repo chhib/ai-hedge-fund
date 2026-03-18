@@ -1,6 +1,6 @@
 import src.integrations.ibkr_execution as ibkr_execution
 from src.integrations.ibkr_contract_mapper import ContractOverride
-from src.integrations.ibkr_execution import build_order_intents, execute_ibkr_rebalance_trades, _extract_order_id, _poll_order_status, _apply_snapshot_prices, OrderIntent, ResolvedOrder, ExecutionReport
+from src.integrations.ibkr_execution import build_order_intents, execute_ibkr_rebalance_trades, format_execution_cash_summary, _extract_order_id, _poll_order_status, _apply_snapshot_prices, OrderIntent, OrderSkip, OrderStatusResult, ResolvedOrder, ExecutionReport
 from src.integrations.ibkr_client import IBKRError
 
 
@@ -112,6 +112,143 @@ def test_preview_only_never_places_orders(monkeypatch):
     assert len(fake.batch_preview_calls) == 1
     assert fake.place_calls == []
     assert report.submissions == []
+
+
+def test_sequential_preview_failure_keeps_exact_error_reason(monkeypatch):
+    class PreviewFailClient(FakeIBKRClient):
+        def preview_order(self, account_id, order):
+            raise IBKRError("IBKR API error 500: {\"error\":\"No trading permissions.\",\"action\":\"order_cannot_be_created\"}")
+
+    recommendations = [
+        {"ticker": "EMBRAC B", "action": "ADD", "current_shares": 0, "target_shares": 1, "current_price": 49.07, "currency": "SEK"},
+    ]
+    contracts = {
+        "EMBRAC.B": [{"contracts": [{"conid": 753729002, "exchange": "SFB", "currency": "SEK"}]}],
+    }
+    fake = PreviewFailClient(
+        contracts=contracts,
+        snapshot=[{"conid": "753729002", "84": "49.07"}],
+        batch_preview_error="force sequential fallback",
+    )
+
+    monkeypatch.setattr(ibkr_execution, "load_contract_overrides", lambda: {})
+
+    report = execute_ibkr_rebalance_trades(
+        recommendations,
+        base_url="https://example.com",
+        account_id="U123",
+        preview_only=False,
+        execute=False,
+        client=fake,
+        skip_swedish_stocks=False,
+    )
+
+    assert any("No trading permissions." in warning for warning in report.warnings)
+    assert any(skip.ticker == "EMBRAC B" and "No trading permissions." in skip.reason for skip in report.skipped)
+
+
+def test_skip_swedish_buy_orders_catches_smart_override_before_preview(monkeypatch):
+    recommendations = [
+        {"ticker": "EMBRAC B", "action": "ADD", "current_shares": 0, "target_shares": 1, "current_price": 49.07, "currency": "SEK"},
+    ]
+    contracts = {
+        "EMBRAC.B": [{"contracts": [{"conid": 753729002, "exchange": "SFB"}]}],
+    }
+    fake = FakeIBKRClient(contracts=contracts)
+
+    monkeypatch.setattr(
+        ibkr_execution,
+        "load_contract_overrides",
+        lambda: {"EMBRAC B": ContractOverride(conid=753729002, exchange="SMART", currency="SEK")},
+    )
+
+    report = execute_ibkr_rebalance_trades(
+        recommendations,
+        base_url="https://example.com",
+        account_id="U123",
+        preview_only=True,
+        execute=False,
+        client=fake,
+    )
+
+    assert report.resolved == []
+    assert fake.batch_preview_calls == []
+    assert any(skip.ticker == "EMBRAC B" and "Swedish stock buy skipped" in skip.reason for skip in report.skipped)
+
+
+def test_swedish_sell_orders_are_not_auto_skipped(monkeypatch):
+    recommendations = [
+        {"ticker": "EMBRAC B", "action": "SELL", "current_shares": 2, "target_shares": 0, "current_price": 49.07, "currency": "SEK"},
+    ]
+    contracts = {
+        "EMBRAC.B": [{"contracts": [{"conid": 753729002, "exchange": "SFB"}]}],
+    }
+    fake = FakeIBKRClient(contracts=contracts)
+
+    monkeypatch.setattr(ibkr_execution, "load_contract_overrides", lambda: {})
+
+    report = execute_ibkr_rebalance_trades(
+        recommendations,
+        base_url="https://example.com",
+        account_id="U123",
+        preview_only=True,
+        execute=False,
+        client=fake,
+    )
+
+    assert len(fake.batch_preview_calls) == 1
+    assert len(report.resolved) == 1
+    assert report.resolved[0].listing_exchange == "SFB"
+    assert all("Swedish stock buy skipped" not in skip.reason for skip in report.skipped)
+
+
+def test_format_execution_cash_summary_includes_governor_failed_and_pending_buys():
+    report = ExecutionReport(
+        account_id="U123",
+        preview_only=False,
+        executed=True,
+        intents=[
+            OrderIntent(ticker="AAA", ibkr_symbol="AAA", side="BUY", quantity=10, limit_price=10.5, currency="USD", action="ADD"),
+            OrderIntent(ticker="BBB", ibkr_symbol="BBB", side="BUY", quantity=3, limit_price=20.0, currency="USD", action="INCREASE"),
+        ],
+        skipped=[
+            OrderSkip(ticker="AAA", action="ADD", reason="Submission error: Limit price too far outside of NBBO"),
+        ],
+        order_statuses=[
+            OrderStatusResult(
+                order_id="1",
+                ticker="BBB",
+                status="Submitted",
+                filled_qty=0,
+                remaining_qty=2,
+                avg_fill_price=0.0,
+                total_qty=3,
+                elapsed_seconds=5.0,
+            )
+        ],
+    )
+
+    recommendations = [
+        {"ticker": "AAA", "action": "ADD", "current_shares": 0, "target_shares": 10, "current_price": 10.0, "currency": "USD"},
+        {"ticker": "BBB", "action": "INCREASE", "current_shares": 1, "target_shares": 4, "current_price": 20.0, "currency": "USD"},
+    ]
+    current_portfolio = {
+        "total_value": 1000.0,
+        "home_currency": "USD",
+        "exchange_rates": {"USD": 1.0},
+    }
+
+    class Governor:
+        deployment_ratio = 0.45
+        min_cash_buffer = 0.35
+
+    lines = format_execution_cash_summary(report, recommendations, current_portfolio, Governor())
+
+    assert lines == [
+        "Cash intentionally reserved by governor: 550.00 USD",
+        "Cash not deployed because buy orders failed: 105.00 USD",
+        "Cash still pending in open buy orders: 40.00 USD",
+    ]
 
 
 def test_tick_size_uses_increment_rules(monkeypatch):

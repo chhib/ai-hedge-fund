@@ -1,0 +1,3 @@
+Error: IBKR Gateway running but not authenticated.
+Please log in at: https://localhost:5001
+Then re-run this command.
