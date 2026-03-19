@@ -12,11 +12,12 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from dotenv import load_dotenv
 
@@ -55,32 +56,81 @@ class Candidate:
     description: Optional[str]
 
 
-def _parse_universe_lines(lines: Iterable[str]) -> List[str]:
-    tickers: List[str] = []
+@dataclass(slots=True, frozen=True)
+class UniverseEntry:
+    ticker: str
+    market: Optional[str] = None
+    company_name: Optional[str] = None
+
+
+def _normalize_market_label(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    normalized = value.strip().lower()
+    if normalized.startswith("nordic"):
+        return "Nordic"
+    if normalized.startswith("global"):
+        return "Global"
+    return None
+
+
+def _parse_market_comment(comment: str) -> Tuple[Optional[str], Optional[str]]:
+    cleaned = comment.strip()
+    if cleaned.startswith("#"):
+        cleaned = cleaned[1:].strip()
+    if not cleaned:
+        return None, None
+
+    match = re.match(r"^(Nordic|Global)\b[\s:.,-]*(.*)$", cleaned, flags=re.IGNORECASE)
+    if not match:
+        return None, cleaned or None
+
+    market = _normalize_market_label(match.group(1))
+    company_name = match.group(2).strip() or None
+    return market, company_name
+
+
+def _parse_universe_lines(lines: Iterable[str]) -> List[UniverseEntry]:
+    entries: List[UniverseEntry] = []
     for line in lines:
         stripped = line.strip()
         if not stripped:
             continue
         if stripped.startswith("#") or stripped.startswith("--"):
             continue
+        market = None
+        company_name = None
         if "#" in line:
-            line = line.split("#", 1)[0]
+            line, comment = line.split("#", 1)
+            market, company_name = _parse_market_comment(comment)
         line = line.strip()
         if not line:
             continue
         if "," in line:
             parts = [part.strip().strip('"').strip("'") for part in line.split(",")]
-            tickers.extend([part for part in parts if part])
+            entries.extend(UniverseEntry(ticker=part, market=market, company_name=company_name) for part in parts if part)
         else:
-            tickers.append(line.strip().strip('"').strip("'"))
+            ticker = line.strip().strip('"').strip("'")
+            if ticker:
+                entries.append(UniverseEntry(ticker=ticker, market=market, company_name=company_name))
 
-    seen = set()
-    ordered: List[str] = []
-    for ticker in tickers:
-        if ticker and ticker not in seen:
-            seen.add(ticker)
-            ordered.append(ticker)
-    return ordered
+    return entries
+
+
+def _dedupe_universe_entries(entries: Iterable[UniverseEntry]) -> tuple[List[UniverseEntry], Dict[str, List[UniverseEntry]]]:
+    seen: Dict[str, UniverseEntry] = {}
+    ordered: List[UniverseEntry] = []
+    duplicates: Dict[str, List[UniverseEntry]] = {}
+
+    for entry in entries:
+        ticker_key = entry.ticker.upper()
+        if ticker_key not in seen:
+            seen[ticker_key] = entry
+            ordered.append(entry)
+            continue
+        duplicates.setdefault(ticker_key, [seen[ticker_key]]).append(entry)
+
+    return ordered, duplicates
 
 
 def _load_existing(path: Path) -> Dict[str, Any]:
@@ -247,6 +297,15 @@ def _candidate_payload(candidate: Candidate) -> Dict[str, Any]:
     }
 
 
+def _candidate_matches_reference(candidate: Candidate, ibkr_symbol: str, borsdata_name: str) -> bool:
+    symbol = (candidate.symbol or "").upper()
+    if symbol and symbol == ibkr_symbol.upper():
+        return True
+    if borsdata_name and _pick_by_name([candidate], borsdata_name):
+        return True
+    return False
+
+
 def _tokenize_name(name: str) -> set[str]:
     """Tokenize a company name, stripping common suffixes."""
     words = set()
@@ -286,8 +345,51 @@ def _pick_by_name(candidates: List[Candidate], borsdata_name: str) -> Optional[C
     return None
 
 
-def _build_borsdata_lookup() -> Dict[str, Dict[str, str]]:
-    """Build ticker -> {isin, name} map from all Borsdata instruments.
+def _choose_borsdata_instrument(
+    instruments: List[Dict[str, Any]],
+    preferred_market: Optional[str] = None,
+    preferred_name: str = "",
+) -> Optional[Dict[str, Any]]:
+    if not instruments:
+        return None
+    if len(instruments) == 1:
+        return instruments[0]
+
+    pool = instruments
+
+    normalized_market = _normalize_market_label(preferred_market)
+    if normalized_market:
+        market_matches = [instrument for instrument in pool if instrument.get("market") == normalized_market]
+        if len(market_matches) == 1:
+            return market_matches[0]
+        if market_matches:
+            pool = market_matches
+
+    preferred_name = preferred_name.strip()
+    if preferred_name:
+        exact_matches = [instrument for instrument in pool if (instrument.get("name") or "").strip().upper() == preferred_name.upper()]
+        if len(exact_matches) == 1:
+            return exact_matches[0]
+        if exact_matches:
+            pool = exact_matches
+
+        preferred_tokens = _tokenize_name(preferred_name)
+        best_match = None
+        best_overlap = 0
+        for instrument in pool:
+            overlap = len(preferred_tokens & _tokenize_name(instrument.get("name") or ""))
+            if overlap > best_overlap:
+                best_overlap = overlap
+                best_match = instrument
+
+        if best_match and best_overlap >= max(1, len(preferred_tokens) // 2):
+            return best_match
+
+    return pool[0]
+
+
+def _build_borsdata_lookup() -> Dict[str, List[Dict[str, Any]]]:
+    """Build ticker -> instrument list map from all Borsdata instruments.
 
     Returns empty dict if no BORSDATA_API_KEY is set.
     """
@@ -299,22 +401,40 @@ def _build_borsdata_lookup() -> Dict[str, Dict[str, str]]:
     try:
         from src.data.borsdata_client import BorsdataClient
         client = BorsdataClient(api_key=api_key)
+        nordic_instruments = client.get_instruments(api_key=api_key)
         instruments = client.get_all_instruments(api_key=api_key)
     except Exception as exc:
         print(f"  [borsdata] Failed to load instruments: {exc}")
         return {}
 
-    lookup: Dict[str, Dict[str, str]] = {}
+    nordic_ids = {inst.get("insId") for inst in nordic_instruments}
+    lookup: Dict[str, List[Dict[str, Any]]] = {}
     for inst in instruments:
         ticker = inst.get("ticker")
         if not ticker:
             continue
-        isin = inst.get("isin") or ""
-        name = inst.get("name") or ""
-        lookup[ticker.upper()] = {"isin": isin, "name": name}
+        ins_id = inst.get("insId")
+        lookup.setdefault(ticker.upper(), []).append(
+            {
+                "countryId": inst.get("countryId"),
+                "insId": ins_id,
+                "isin": inst.get("isin") or "",
+                "market": "Nordic" if ins_id in nordic_ids else "Global",
+                "marketId": inst.get("marketId"),
+                "name": inst.get("name") or "",
+                "reportCurrency": inst.get("reportCurrency"),
+                "stockPriceCurrency": inst.get("stockPriceCurrency"),
+                "yahoo": inst.get("yahoo"),
+            }
+        )
 
-    print(f"  [borsdata] Loaded {len(lookup)} instruments for ISIN lookup")
+    total_instruments = sum(len(entries) for entries in lookup.values())
+    print(f"  [borsdata] Loaded {total_instruments} instruments across {len(lookup)} tickers for ISIN lookup")
     return lookup
+
+
+def _should_prefer_nordic(ticker: str, ibkr_symbol: str, preferred_market: Optional[str]) -> bool:
+    return _normalize_market_label(preferred_market) == "Nordic" or " " in ticker or "." in ibkr_symbol
 
 
 def resolve_single_ticker(
@@ -322,6 +442,7 @@ def resolve_single_ticker(
     ticker: str,
     isin: str = "",
     borsdata_name: str = "",
+    preferred_market: Optional[str] = None,
     delay: float = IBKR_CALL_DELAY,
 ) -> Optional[Dict[str, Any]]:
     """Resolve a single ticker to a contract payload using the 3-tier strategy.
@@ -342,9 +463,11 @@ def resolve_single_ticker(
             response = client.search_contracts(isin, sec_type="STK")
             candidates = _extract_secdef_candidates(response)
             if len(candidates) == 1:
-                selected = candidates[0]
+                single_candidate = candidates[0]
+                if _candidate_matches_reference(single_candidate, ibkr_symbol, borsdata_name):
+                    selected = single_candidate
             elif candidates:
-                prefer_nordic = " " in ticker or "." in ibkr_symbol
+                prefer_nordic = _should_prefer_nordic(ticker, ibkr_symbol, preferred_market)
                 selected = _pick_candidate(candidates, ibkr_symbol, prefer_nordic)
         except IBKRError:
             pass
@@ -367,7 +490,7 @@ def resolve_single_ticker(
                 pass
 
         if candidates:
-            prefer_nordic = " " in ticker or "." in ibkr_symbol
+            prefer_nordic = _should_prefer_nordic(ticker, ibkr_symbol, preferred_market)
             selected = _pick_candidate(candidates, ibkr_symbol, prefer_nordic)
 
     # Tier 3: Name
@@ -390,6 +513,7 @@ def main() -> None:
     parser.add_argument("--ibkr-port", type=int, default=int(os.environ.get("IBKR_PORT", "5001")), help="IBKR port")
     parser.add_argument("--ibkr-verify-ssl", action="store_true", help="Verify IBKR SSL certs")
     parser.add_argument("--skip-isin", action="store_true", help="Skip ISIN lookup, ticker-only mode")
+    parser.add_argument("--refresh-existing", action="store_true", help="Re-resolve tickers that already have stored overrides")
     args = parser.parse_args()
 
     input_path = Path(args.input)
@@ -399,9 +523,9 @@ def main() -> None:
     output_path = Path(args.output)
     report_path = Path(args.report)
 
-    tickers = _parse_universe_lines(input_path.read_text().splitlines())
+    universe_entries, duplicate_entries = _dedupe_universe_entries(_parse_universe_lines(input_path.read_text().splitlines()))
     if args.limit:
-        tickers = tickers[: args.limit]
+        universe_entries = universe_entries[: args.limit]
 
     payload = _load_existing(output_path)
     contracts = payload.setdefault("contracts", {})
@@ -410,7 +534,7 @@ def main() -> None:
     # Build Borsdata ISIN/name lookup
     if args.skip_isin:
         print("ISIN lookup skipped (--skip-isin)")
-        bd_lookup: Dict[str, Dict[str, str]] = {}
+        bd_lookup: Dict[str, List[Dict[str, Any]]] = {}
     else:
         bd_lookup = _build_borsdata_lookup()
 
@@ -426,19 +550,40 @@ def main() -> None:
 
     # Counters for summary
     already_mapped = 0
+    removed_stale = 0
     resolved_isin = 0
     resolved_ticker = 0
     resolved_name = 0
 
-    for ticker in tickers:
-        if ticker.upper() in contracts:
+    for ticker_key, duplicate_group in sorted(duplicate_entries.items()):
+        ambiguous.setdefault(
+            ticker_key,
+            {
+                "error": "Ticker appears multiple times in the universe; using the first entry because overrides are keyed by bare ticker.",
+                "universe_entries": [
+                    {"ticker": entry.ticker, "market": entry.market, "company_name": entry.company_name}
+                    for entry in duplicate_group
+                ],
+            },
+        )
+
+    for entry in universe_entries:
+        ticker = entry.ticker
+        ticker_key = ticker.upper()
+        if ticker.upper() in contracts and not args.refresh_existing:
             already_mapped += 1
             continue
 
         ibkr_symbol = map_borsdata_to_ibkr(ticker)
-        bd_info = bd_lookup.get(ticker.upper(), {})
+        bd_candidates = bd_lookup.get(ticker.upper(), [])
+        bd_info = _choose_borsdata_instrument(
+            bd_candidates,
+            preferred_market=entry.market,
+            preferred_name=entry.company_name or "",
+        ) or {}
         isin = bd_info.get("isin", "")
-        borsdata_name = bd_info.get("name", "")
+        borsdata_name = bd_info.get("name", "") or (entry.company_name or "")
+        preferred_market = entry.market or bd_info.get("market")
         selected = None
         resolution = None
         candidates: List[Candidate] = []
@@ -450,10 +595,12 @@ def main() -> None:
                 response = client.search_contracts(isin, sec_type="STK")
                 candidates = _extract_secdef_candidates(response)
                 if len(candidates) == 1:
-                    selected = candidates[0]
-                    resolution = "isin"
+                    single_candidate = candidates[0]
+                    if _candidate_matches_reference(single_candidate, ibkr_symbol, borsdata_name):
+                        selected = single_candidate
+                        resolution = "isin"
                 elif candidates:
-                    prefer_nordic = " " in ticker or "." in ibkr_symbol
+                    prefer_nordic = _should_prefer_nordic(ticker, ibkr_symbol, preferred_market)
                     selected = _pick_candidate(candidates, ibkr_symbol, prefer_nordic)
                     if selected:
                         resolution = "isin"
@@ -468,11 +615,16 @@ def main() -> None:
                 response = client.get_stock_contracts(ibkr_symbol)
                 candidates = _extract_trsrv_candidates(response)
             except IBKRError as exc:
+                if args.refresh_existing and ticker_key in contracts:
+                    del contracts[ticker_key]
+                    removed_stale += 1
                 ambiguous[ticker] = {
+                    "borsdata_candidates": bd_candidates,
                     "error": str(exc),
                     "ibkr_symbol": ibkr_symbol,
                     "isin": isin,
                     "borsdata_name": borsdata_name,
+                    "preferred_market": preferred_market,
                 }
                 continue
 
@@ -483,15 +635,20 @@ def main() -> None:
                     response = client.search_contracts(ibkr_symbol, sec_type="STK")
                     candidates = _extract_secdef_candidates(response)
                 except IBKRError as exc:
+                    if args.refresh_existing and ticker_key in contracts:
+                        del contracts[ticker_key]
+                        removed_stale += 1
                     ambiguous[ticker] = {
+                        "borsdata_candidates": bd_candidates,
                         "error": str(exc),
                         "ibkr_symbol": ibkr_symbol,
                         "isin": isin,
                         "borsdata_name": borsdata_name,
+                        "preferred_market": preferred_market,
                     }
                     continue
 
-            prefer_nordic = " " in ticker or "." in ibkr_symbol
+            prefer_nordic = _should_prefer_nordic(ticker, ibkr_symbol, preferred_market)
             selected = _pick_candidate(candidates, ibkr_symbol, prefer_nordic)
             if selected:
                 resolution = "ticker"
@@ -503,15 +660,21 @@ def main() -> None:
                 resolution = "name"
 
         if not selected:
+            if args.refresh_existing and ticker_key in contracts:
+                del contracts[ticker_key]
+                removed_stale += 1
             ambiguous[ticker] = {
+                "borsdata_candidates": bd_candidates,
                 "ibkr_symbol": ibkr_symbol,
                 "isin": isin,
                 "borsdata_name": borsdata_name,
                 "candidates": [_candidate_payload(c) for c in candidates],
+                "preferred_market": preferred_market,
+                "universe_company_name": entry.company_name,
             }
             continue
 
-        contracts[ticker.upper()] = {
+        contracts[ticker_key] = {
             "conid": selected.conid,
             "exchange": selected.exchange,
             "currency": selected.currency,
@@ -536,6 +699,7 @@ def main() -> None:
     total_resolved = resolved_isin + resolved_ticker + resolved_name
     print(f"\n--- Summary ---")
     print(f"Already mapped:    {already_mapped}")
+    print(f"Removed stale:     {removed_stale}")
     print(f"Resolved (ISIN):   {resolved_isin}")
     print(f"Resolved (ticker): {resolved_ticker}")
     print(f"Resolved (name):   {resolved_name}")

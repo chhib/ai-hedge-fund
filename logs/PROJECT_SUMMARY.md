@@ -1,6 +1,6 @@
 # Börsdata Integration Project Summary
 
-_Last updated: 2026-03-18 (Session 100)_
+_Last updated: 2026-03-19 (Session 104)_
 
 ## End Goal
 Rebuild the data ingestion and processing pipeline so the application relies on Börsdata's REST API. The system accepts Börsdata-native tickers, supports both Nordic and Global markets, and maintains compatibility with the original user-facing workflows.
@@ -22,7 +22,7 @@ The AI hedge fund system is fully operational with both CLI and web interfaces:
 - `hedge governor status` command added for live/readable governor state inspection
 - `hedge rebalance --use-governor` and `hedge backtest --use-governor` now support closed-loop capital control
 - IBKR execution pipeline hardened (sessions 71-85 on `feat/ibkr-hardening` branch)
-- ISIN-based contract resolution: 198/206 tickers mapped (96% coverage)
+- IBKR contract overrides refreshed against the live gateway: 190/206 tickers mapped cleanly, 17 ambiguous tickers now explicit, stale false-positive overrides removed
 - Live order lifecycle validated end-to-end (place, confirm, cancel)
 - Contract override stale-checking: `hedge ibkr validate` with `--fix` auto-refresh
 - Error recovery: retry on connection failures, order status polling with partial fill detection

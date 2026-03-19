@@ -75,8 +75,8 @@
     "AXS": {
       "conid": 18963197,
       "currency": null,
-      "description": "AXIS CAPITAL HOLDINGS LTD",
-      "exchange": "NYSE"
+      "description": "AXS",
+      "exchange": "SMART"
     },
     "BAHN B": {
       "conid": 676759648,
@@ -102,12 +102,6 @@
       "description": "BERNER.B",
       "exchange": "SMART"
     },
-    "BEYOND": {
-      "conid": 603521083,
-      "currency": null,
-      "description": "8WP",
-      "exchange": "SMART"
-    },
     "BIDU": {
       "conid": 35359385,
       "currency": null,
@@ -127,22 +121,16 @@
       "exchange": "NASDAQ"
     },
     "BN": {
-      "conid": 599900800,
+      "conid": 29612111,
       "currency": null,
-      "description": "BROOKFIELD CORP",
-      "exchange": "NYSE"
+      "description": "BN",
+      "exchange": "SMART"
     },
     "BOMILL": {
       "conid": 451111451,
       "currency": null,
       "description": "BOMILL",
       "exchange": "SMART"
-    },
-    "BRIGHT": {
-      "conid": 574745848,
-      "currency": null,
-      "description": "23WA",
-      "exchange": "FWB2"
     },
     "BRZE": {
       "conid": 526726705,
@@ -163,10 +151,10 @@
       "exchange": "SMART"
     },
     "CAST": {
-      "conid": 855753575,
+      "conid": 2832602,
       "currency": null,
-      "description": "FREECAST INC",
-      "exchange": "NASDAQ"
+      "description": "CAST",
+      "exchange": "SMART"
     },
     "CCC": {
       "conid": 505405416,
@@ -175,19 +163,19 @@
       "exchange": "NASDAQ"
     },
     "CCM": {
-      "conid": 716121769,
+      "conid": 459105937,
       "currency": null,
-      "description": "CONCORD MEDICAL - SPON ADR",
-      "exchange": "NYSE"
+      "description": "CCM",
+      "exchange": "SMART"
     },
     "CFLT": {
       "conid": 498854138,
       "currency": null,
       "description": "CONFLUENT INC-CLASS A",
-      "exchange": "NASDAQ"
+      "exchange": "VALUE"
     },
     "CINT": {
-      "conid": 525260366,
+      "conid": 472448381,
       "currency": null,
       "description": "CINT",
       "exchange": "SMART"
@@ -217,10 +205,10 @@
       "exchange": "SMART"
     },
     "CS": {
-      "conid": 29612141,
+      "conid": 475686918,
       "currency": null,
-      "description": "AXA SA",
-      "exchange": "SBF"
+      "description": "CS",
+      "exchange": "SMART"
     },
     "CSU": {
       "conid": 39194759,
@@ -229,10 +217,10 @@
       "exchange": "SMART"
     },
     "CTM": {
-      "conid": 589635261,
+      "conid": 222034437,
       "currency": null,
-      "description": "CASTELLUM INC",
-      "exchange": "AMEX"
+      "description": "CTM",
+      "exchange": "SMART"
     },
     "CVRX": {
       "conid": 499640666,
@@ -240,14 +228,8 @@
       "description": "CVRX",
       "exchange": "SMART"
     },
-    "DB7": {
-      "conid": 90657189,
-      "currency": null,
-      "description": "DIB",
-      "exchange": "SMART"
-    },
     "DBG": {
-      "conid": 1321980,
+      "conid": 81027661,
       "currency": null,
       "description": "DBG",
       "exchange": "SMART"
@@ -331,10 +313,10 @@
       "exchange": "SMART"
     },
     "FDY": {
-      "conid": 603515480,
+      "conid": 557991769,
       "currency": null,
-      "description": "FDY",
-      "exchange": "FWB2"
+      "description": "FARADAY COPPER CORP",
+      "exchange": "TSE"
     },
     "FIZZ": {
       "conid": 2016423,
@@ -343,16 +325,16 @@
       "exchange": "NASDAQ"
     },
     "FPC": {
-      "conid": 603518025,
+      "conid": 162104085,
       "currency": null,
-      "description": "FIRST PACIFIC CO",
-      "exchange": "FWB2"
+      "description": "FPC",
+      "exchange": "SMART"
     },
     "FRO": {
-      "conid": 604736961,
+      "conid": 604736964,
       "currency": null,
       "description": "FRONTLINE PLC",
-      "exchange": "NYSE"
+      "exchange": "OSE"
     },
     "FSLR": {
       "conid": 41622169,
@@ -378,22 +360,10 @@
       "description": "GOGOLD RESOURCES INC",
       "exchange": "TSE"
     },
-    "GGEO": {
-      "conid": 603513514,
-      "currency": null,
-      "description": "GO91",
-      "exchange": "FWB2"
-    },
     "GLNG": {
       "conid": 16692333,
       "currency": null,
       "description": "GLNG",
-      "exchange": "SMART"
-    },
-    "GOFORE": {
-      "conid": 603520765,
-      "currency": null,
-      "description": "1E2",
       "exchange": "SMART"
     },
     "GOOGL": {
@@ -427,10 +397,10 @@
       "exchange": "SMART"
     },
     "HAS": {
-      "conid": 957694,
+      "conid": 754956,
       "currency": null,
-      "description": "HAS",
-      "exchange": "SMART"
+      "description": "HASBRO INC",
+      "exchange": "NASDAQ"
     },
     "HAV": {
       "conid": 519271023,
@@ -487,10 +457,10 @@
       "exchange": "SMART"
     },
     "ININ": {
-      "conid": 603512253,
+      "conid": 160213511,
       "currency": null,
-      "description": "72G",
-      "exchange": "SMART"
+      "description": "INTER INDUSTRIES PLUS LTD",
+      "exchange": "TASE"
     },
     "INISS B": {
       "conid": 497190310,
@@ -499,10 +469,10 @@
       "exchange": "SMART"
     },
     "IOB": {
-      "conid": 4875046,
+      "conid": 56985741,
       "currency": null,
-      "description": "IBAB",
-      "exchange": "SMART"
+      "description": "INDIAN OVERSEAS BANK",
+      "exchange": "NSE"
     },
     "IPCO": {
       "conid": 272954082,
@@ -571,7 +541,7 @@
       "exchange": "SMART"
     },
     "LINC": {
-      "conid": 35046585,
+      "conid": 493546198,
       "currency": null,
       "description": "LINC",
       "exchange": "SMART"
@@ -589,21 +559,21 @@
       "exchange": "SMART"
     },
     "LUC": {
-      "conid": 52641828,
+      "conid": 181155161,
       "currency": null,
       "description": "LUCARA DIAMOND CORP",
-      "exchange": "TSE"
+      "exchange": "SFB"
     },
     "LUG": {
-      "conid": 603525823,
+      "conid": 177584482,
       "currency": null,
-      "description": "LUG",
-      "exchange": "FWB2"
+      "description": "LUNDIN GOLD INC",
+      "exchange": "SFB"
     },
     "LUMI": {
-      "conid": 603522202,
+      "conid": 278544593,
       "currency": null,
-      "description": "8KS",
+      "description": "LUMI",
       "exchange": "SMART"
     },
     "LUND B": {
@@ -613,10 +583,10 @@
       "exchange": "SMART"
     },
     "MAU": {
-      "conid": 451447716,
+      "conid": 29857163,
       "currency": null,
-      "description": "MONTAGE GOLD CORP",
-      "exchange": "TSE"
+      "description": "MAU",
+      "exchange": "SMART"
     },
     "MDB": {
       "conid": 292833239,
@@ -625,7 +595,7 @@
       "exchange": "NASDAQ"
     },
     "MER": {
-      "conid": 37099368,
+      "conid": 785082299,
       "currency": null,
       "description": "MER",
       "exchange": "SMART"
@@ -673,10 +643,10 @@
       "exchange": "NASDAQ"
     },
     "MSA": {
-      "conid": 527091247,
+      "conid": 145946660,
       "currency": null,
-      "description": "MSA",
-      "exchange": "SMART"
+      "description": "MSA SAFETY INC",
+      "exchange": "NYSE"
     },
     "MSCI": {
       "conid": 47101335,
@@ -727,10 +697,10 @@
       "exchange": "SMART"
     },
     "NET": {
-      "conid": 466706633,
+      "conid": 382633646,
       "currency": null,
-      "description": "NET",
-      "exchange": "SMART"
+      "description": "CLOUDFLARE INC - CLASS A",
+      "exchange": "NYSE"
     },
     "NFLX": {
       "conid": 15124833,
@@ -745,7 +715,7 @@
       "exchange": "TSE"
     },
     "NGS": {
-      "conid": 16420271,
+      "conid": 586067739,
       "currency": null,
       "description": "NGS",
       "exchange": "SMART"
@@ -865,10 +835,10 @@
       "exchange": "SMART"
     },
     "PRM": {
-      "conid": 743353381,
+      "conid": 48880576,
       "currency": null,
-      "description": "PERIMETER SOLUTIONS INC",
-      "exchange": "NYSE"
+      "description": "PRM",
+      "exchange": "SMART"
     },
     "PSIX": {
       "conid": 93903658,
@@ -887,12 +857,6 @@
       "currency": null,
       "description": "PUBM",
       "exchange": "SMART"
-    },
-    "QIIWI": {
-      "conid": 603524792,
-      "currency": null,
-      "description": "4UJ",
-      "exchange": "FWB2"
     },
     "QLYS": {
       "conid": 114814349,
@@ -919,10 +883,10 @@
       "exchange": "NASDAQ"
     },
     "RS1": {
-      "conid": 517611084,
+      "conid": 12103838,
       "currency": null,
-      "description": "RH",
-      "exchange": "IBIS"
+      "description": "RS1",
+      "exchange": "SMART"
     },
     "RUG": {
       "conid": 477139497,
@@ -955,7 +919,7 @@
       "exchange": "SMART"
     },
     "SFL": {
-      "conid": 75095437,
+      "conid": 390603973,
       "currency": null,
       "description": "SFL",
       "exchange": "SMART"
@@ -979,10 +943,10 @@
       "exchange": "NYSE"
     },
     "SOC": {
-      "conid": 159331056,
+      "conid": 683779067,
       "currency": null,
-      "description": "SOC",
-      "exchange": "SMART"
+      "description": "SABLE OFFSHORE CORP",
+      "exchange": "NYSE"
     },
     "SOHU": {
       "conid": 320224936,
@@ -997,22 +961,16 @@
       "exchange": "SMART"
     },
     "SPG": {
-      "conid": 733485881,
+      "conid": 367283209,
       "currency": null,
       "description": "SPG",
       "exchange": "SMART"
     },
-    "SPOTR": {
-      "conid": 789471277,
-      "currency": null,
-      "description": "6V6",
-      "exchange": "FWB2"
-    },
     "STNG": {
       "conid": 349869083,
       "currency": null,
-      "description": "SCORPIO TANKERS INC",
-      "exchange": "NYSE"
+      "description": "STNG",
+      "exchange": "SMART"
     },
     "STOR B": {
       "conid": 518529268,
@@ -1025,12 +983,6 @@
       "currency": null,
       "description": "STWK",
       "exchange": "SMART"
-    },
-    "TCC A": {
-      "conid": 448573779,
-      "currency": null,
-      "description": "TCC",
-      "exchange": "VALUE"
     },
     "TEAD": {
       "conid": 504262517,
@@ -1177,10 +1129,10 @@
       "exchange": "SMART"
     },
     "ZAL": {
-      "conid": 168731675,
+      "conid": 158032384,
       "currency": null,
-      "description": "ZALANDO SE",
-      "exchange": "IBIS"
+      "description": "ZAL",
+      "exchange": "SMART"
     },
     "ZG": {
       "conid": 184072087,

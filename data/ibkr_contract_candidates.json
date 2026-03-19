@@ -1,5 +1,18 @@
 {
   "ADVT": {
+    "borsdata_candidates": [
+      {
+        "countryId": 1,
+        "insId": 1751,
+        "isin": "SE0011724889",
+        "market": "Nordic",
+        "marketId": 6,
+        "name": "Adverty",
+        "reportCurrency": "SEK",
+        "stockPriceCurrency": "SEK",
+        "yahoo": "ADVT.ST"
+      }
+    ],
     "borsdata_name": "Adverty",
     "candidates": [
       {
@@ -18,21 +31,111 @@
       }
     ],
     "ibkr_symbol": "ADVT",
-    "isin": "SE0011724889"
+    "isin": "SE0011724889",
+    "preferred_market": "Nordic",
+    "universe_company_name": "Adverty"
   },
   "AMH2 B": {
+    "borsdata_candidates": [
+      {
+        "countryId": 1,
+        "insId": 501,
+        "isin": "SE0001356932",
+        "market": "Nordic",
+        "marketId": 5,
+        "name": "Amhult 2",
+        "reportCurrency": "SEK",
+        "stockPriceCurrency": "SEK",
+        "yahoo": "AMH2-B.ST"
+      }
+    ],
     "borsdata_name": "Amhult 2",
     "candidates": [],
     "ibkr_symbol": "AMH2.B",
-    "isin": "SE0001356932"
+    "isin": "SE0001356932",
+    "preferred_market": "Nordic",
+    "universe_company_name": "Amhult 2"
+  },
+  "BEYOND": {
+    "borsdata_candidates": [
+      {
+        "countryId": 1,
+        "insId": 1770,
+        "isin": "SE0011614965",
+        "market": "Nordic",
+        "marketId": 5,
+        "name": "Beyond Frames",
+        "reportCurrency": "SEK",
+        "stockPriceCurrency": "SEK",
+        "yahoo": "BEYOND.ST"
+      }
+    ],
+    "borsdata_name": "Beyond Frames",
+    "candidates": [],
+    "ibkr_symbol": "BEYOND",
+    "isin": "SE0011614965",
+    "preferred_market": "Nordic",
+    "universe_company_name": "Beyond Frames"
+  },
+  "BRIGHT": {
+    "borsdata_candidates": [
+      {
+        "countryId": 1,
+        "insId": 421,
+        "isin": "SE0017937279",
+        "market": "Nordic",
+        "marketId": 4,
+        "name": "BrightBid",
+        "reportCurrency": "SEK",
+        "stockPriceCurrency": "SEK",
+        "yahoo": "BRIGHT.ST"
+      }
+    ],
+    "borsdata_name": "BrightBid",
+    "candidates": [
+      {
+        "conid": 325214298,
+        "currency": null,
+        "description": "BRIGHT SOLAR LTD",
+        "exchange": "NSE",
+        "symbol": "BRIGHT"
+      },
+      {
+        "conid": 705927076,
+        "currency": null,
+        "description": "BRIGHT PACKAGING INDUS BHD",
+        "exchange": "BURSAMY",
+        "symbol": "BRIGHT"
+      }
+    ],
+    "ibkr_symbol": "BRIGHT",
+    "isin": "SE0017937279",
+    "preferred_market": "Nordic",
+    "universe_company_name": "BrightBid"
   },
   "BRK.B": {
+    "borsdata_candidates": [
+      {
+        "countryId": 5,
+        "insId": 12636,
+        "isin": "US0846707026",
+        "market": "Global",
+        "marketId": 32,
+        "name": "Berkshire Hathaway Inc",
+        "reportCurrency": "USD",
+        "stockPriceCurrency": "USD",
+        "yahoo": "BRK.B"
+      }
+    ],
     "borsdata_name": "Berkshire Hathaway Inc",
     "candidates": [],
     "ibkr_symbol": "BRK.B",
-    "isin": "US0846707026"
+    "isin": "US0846707026",
+    "preferred_market": "Global",
+    "universe_company_name": "Berkshire Hathaway Inc"
   },
   "CLA": {
+    "borsdata_candidates": [],
     "borsdata_name": "",
     "candidates": [
       {
@@ -58,30 +161,233 @@
       }
     ],
     "ibkr_symbol": "CLA",
-    "isin": ""
+    "isin": "",
+    "preferred_market": "Nordic",
+    "universe_company_name": null
+  },
+  "DB7": {
+    "borsdata_candidates": [
+      {
+        "countryId": 8,
+        "insId": 34519,
+        "isin": "IT0001469995",
+        "market": "Global",
+        "marketId": 39,
+        "name": "Digital Bros SpA",
+        "reportCurrency": "EUR",
+        "stockPriceCurrency": "EUR",
+        "yahoo": "DB7.F"
+      }
+    ],
+    "borsdata_name": "Digital Bros SpA",
+    "candidates": [],
+    "ibkr_symbol": "DB7",
+    "isin": "IT0001469995",
+    "preferred_market": "Global",
+    "universe_company_name": null
+  },
+  "GGEO": {
+    "borsdata_candidates": [
+      {
+        "countryId": 1,
+        "insId": 580,
+        "isin": "SE0005562014",
+        "market": "Nordic",
+        "marketId": 4,
+        "name": "Guideline Geo",
+        "reportCurrency": "SEK",
+        "stockPriceCurrency": "SEK",
+        "yahoo": "GGEO.ST"
+      }
+    ],
+    "borsdata_name": "Guideline Geo",
+    "candidates": [],
+    "ibkr_symbol": "GGEO",
+    "isin": "SE0005562014",
+    "preferred_market": "Nordic",
+    "universe_company_name": null
+  },
+  "GOFORE": {
+    "borsdata_candidates": [
+      {
+        "countryId": 3,
+        "insId": 1569,
+        "isin": "FI4000283130",
+        "market": "Nordic",
+        "marketId": 15,
+        "name": "Gofore",
+        "reportCurrency": "EUR",
+        "stockPriceCurrency": "EUR",
+        "yahoo": "GOFORE.HE"
+      }
+    ],
+    "borsdata_name": "Gofore",
+    "candidates": [],
+    "ibkr_symbol": "GOFORE",
+    "isin": "FI4000283130",
+    "preferred_market": "Nordic",
+    "universe_company_name": "Gofore"
+  },
+  "META": {
+    "error": "Ticker appears multiple times in the universe; using the first entry because overrides are keyed by bare ticker.",
+    "universe_entries": [
+      {
+        "company_name": null,
+        "market": "Global",
+        "ticker": "META"
+      },
+      {
+        "company_name": "Metacon",
+        "market": "Nordic",
+        "ticker": "META"
+      }
+    ]
   },
   "NOVU": {
+    "borsdata_candidates": [
+      {
+        "countryId": 1,
+        "insId": 562,
+        "isin": "SE0001989260",
+        "market": "Nordic",
+        "marketId": 5,
+        "name": "Novus",
+        "reportCurrency": "SEK",
+        "stockPriceCurrency": "SEK",
+        "yahoo": "NOVU.ST"
+      }
+    ],
     "borsdata_name": "Novus",
     "candidates": [],
     "ibkr_symbol": "NOVU",
-    "isin": "SE0001989260"
+    "isin": "SE0001989260",
+    "preferred_market": "Nordic",
+    "universe_company_name": "Novus"
+  },
+  "QIIWI": {
+    "borsdata_candidates": [
+      {
+        "countryId": 1,
+        "insId": 1543,
+        "isin": "SE0010245373",
+        "market": "Nordic",
+        "marketId": 4,
+        "name": "Qiiwi Games",
+        "reportCurrency": "SEK",
+        "stockPriceCurrency": "SEK",
+        "yahoo": "QIIWI.ST"
+      }
+    ],
+    "borsdata_name": "Qiiwi Games",
+    "candidates": [],
+    "ibkr_symbol": "QIIWI",
+    "isin": "SE0010245373",
+    "preferred_market": "Nordic",
+    "universe_company_name": "Qiiwi Games"
   },
   "RECY B": {
+    "borsdata_candidates": [
+      {
+        "countryId": 1,
+        "insId": 491,
+        "isin": "SE0014808978",
+        "market": "Nordic",
+        "marketId": 5,
+        "name": "Recyctec",
+        "reportCurrency": "SEK",
+        "stockPriceCurrency": "SEK",
+        "yahoo": "RECY-B.ST"
+      }
+    ],
     "borsdata_name": "Recyctec",
     "candidates": [],
     "ibkr_symbol": "RECY.B",
-    "isin": "SE0014808978"
+    "isin": "SE0014808978",
+    "preferred_market": "Nordic",
+    "universe_company_name": "Recyctec"
   },
   "SPLTN": {
+    "borsdata_candidates": [
+      {
+        "countryId": 1,
+        "insId": 2294,
+        "isin": "SE0013382546",
+        "market": "Nordic",
+        "marketId": 6,
+        "name": "Spiltan Invest",
+        "reportCurrency": "SEK",
+        "stockPriceCurrency": "SEK",
+        "yahoo": "SPLTN.ST"
+      }
+    ],
     "borsdata_name": "Spiltan Invest",
     "candidates": [],
     "ibkr_symbol": "SPLTN",
-    "isin": "SE0013382546"
+    "isin": "SE0013382546",
+    "preferred_market": "Nordic",
+    "universe_company_name": null
+  },
+  "SPOTR": {
+    "borsdata_candidates": [
+      {
+        "countryId": 1,
+        "insId": 1396,
+        "isin": "SE0025166416",
+        "market": "Nordic",
+        "marketId": 4,
+        "name": "Spotr Group",
+        "reportCurrency": "SEK",
+        "stockPriceCurrency": "SEK",
+        "yahoo": "SPOTR.ST"
+      }
+    ],
+    "borsdata_name": "Spotr Group",
+    "candidates": [],
+    "ibkr_symbol": "SPOTR",
+    "isin": "SE0025166416",
+    "preferred_market": "Nordic",
+    "universe_company_name": null
+  },
+  "TCC A": {
+    "borsdata_candidates": [
+      {
+        "countryId": 1,
+        "insId": 1466,
+        "isin": "SE0014965604",
+        "market": "Nordic",
+        "marketId": 6,
+        "name": "TCECUR",
+        "reportCurrency": "SEK",
+        "stockPriceCurrency": "SEK",
+        "yahoo": "TCC-A.ST"
+      }
+    ],
+    "borsdata_name": "TCECUR",
+    "candidates": [],
+    "ibkr_symbol": "TCC.A",
+    "isin": "SE0014965604",
+    "preferred_market": "Nordic",
+    "universe_company_name": "TCECUR"
   },
   "VIAFIN": {
+    "borsdata_candidates": [
+      {
+        "countryId": 3,
+        "insId": 1763,
+        "isin": "FI4000349212",
+        "market": "Nordic",
+        "marketId": 30,
+        "name": "Viafin Service",
+        "reportCurrency": "EUR",
+        "stockPriceCurrency": "EUR",
+        "yahoo": "VIAFIN.HE"
+      }
+    ],
     "borsdata_name": "Viafin Service",
     "candidates": [],
     "ibkr_symbol": "VIAFIN",
-    "isin": "FI4000349212"
+    "isin": "FI4000349212",
+    "preferred_market": "Nordic",
+    "universe_company_name": "Viafin Service"
   }
 }
