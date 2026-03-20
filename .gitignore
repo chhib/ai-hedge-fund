@@ -45,6 +45,7 @@ Thumbs.db
 
 # Txt files
 *.txt
+!portfolios/*_universe.txt
 
 # PDF files
 *.pdf

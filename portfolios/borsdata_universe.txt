@@ -1,0 +1,216 @@
+# Börsdata Universe - 206 tickers (2 delisted)
+# ~100 Nordic, ~106 Global
+# Updated from portfolio mapping
+#
+# Format: TICKER  # Market  Company Name
+# Delisted tickers: # DELISTED: TICKER - Reason (skipped automatically)
+
+AAPL            # Global  Apple Inc
+ABNB            # Global 
+AMD             # Global 
+AMR             # Global 
+ANNX            # Global 
+ARVN            # Global  Arvinas Inc
+ASPI            # Global  ASP Isotopes Inc
+ATI             # Global 
+AXS             # Global 
+BIDU            # Global  Baidu Inc
+BLDP            # Global  Ballard Power Systems Inc
+BN              # Global  Danone SA
+BRK.B           # Global  Berkshire Hathaway Inc
+BRZE            # Global  Braze Inc
+BT.A            # Global 
+CCC             # Global  CCC Intelligent Solutions
+CCM             # Global  Canagold Resources Ltd
+CFLT            # Global  Confluent Inc
+CISS            # Global  C3is Inc
+CSU             # Global  Constellation Software Inc
+CVRX            # Global 
+DB7             # Global 
+DBG             # Global  Doubleview Gold Corp
+DDD             # Global 
+DDOG            # Global  Datadog Inc
+DHT             # Global  DHT Holdings Inc
+DOMO            # Global  Domo Inc
+EA              # Global 
+EBAY            # Global  eBay Inc
+# DELISTED: EMX - EMX Royalty Corp not in Borsdata coverage
+FDEV            # Global 
+FDY             # Global 
+FIZZ            # Global 
+FPC             # Global  Falco Resources Ltd
+FSLR            # Global  First Solar Inc
+FWZ             # Global  Fireweed Metals Corp
+GGD             # Global 
+GLNG            # Global  Golar LNG Ltd
+GOOGL           # Global  Alphabet Inc
+GOT             # Global  Goliath Resources Ltd
+GOTU            # Global 
+GPRO            # Global  GoPro Inc
+GRVY            # Global  GRAVITY Co Ltd
+HAS             # Global  Hasbro Inc
+HIVE            # Global 
+IOB             # Global  Ion Beam Applications SA 
+ITT             # Global 
+JOYY            # Global  JOYY Inc
+KSPI            # Global  Kaspi.kz JSC
+KT              # Global 
+LEM             # Global  Leading Edge Materials Corp
+LOGI            # Global  Logitech International SA
+MAU             # Global  Etablissements Maurel & Prom
+MDB             # Global  MongoDB Inc
+META            # Global 
+MKO             # Global  Mako Mining Corp
+MNY             # Global  MoneyHero Ltd
+MRNA            # Global  Moderna Inc
+MRVI            # Global  Maravai LifeSciences Holdings Inc
+MSA             # Global 
+MSCI            # Global 
+MSFT            # Global  Microsoft Corp
+MTCH            # Global  Match Group Inc
+MU              # Global  Micron Technology Inc
+NCTY            # Global 
+NEON            # Global  Neonode Inc
+NET             # Global  Cloudflare Inc
+NFLX            # Global  Netflix Inc
+NGEX            # Global  NGEx Minerals Ltd
+NOA             # Global  North American Construction Group
+NTNX            # Global 
+NVDA            # Global  NVIDIA Corp
+NVEC            # Global 
+NVGS            # Global  Navigator Holdings Ltd
+ONDS            # Global  Ondas Holdings Inc
+ONFO            # Global  Onfolio Holdings Inc
+PEN             # Global 
+PINS            # Global  Pinterest Inc
+PLTK            # Global  Playtika Holding Corp
+PRM             # Global  Prim SA
+PTLO            # Global  Portillos Inc
+PUBM            # Global  PubMatic Inc
+QLYS            # Global  Qualys Inc
+ROP             # Global  Roper Technologies Inc
+RS1             # Global 
+SBLK            # Global 
+SFL             # Global 
+SNAP            # Global 
+SOC             # Global 
+SOHU            # Global 
+STNG            # Global  Scorpio Tankers Inc
+TEAD            # Global  Teads Holding Co
+TK              # Global  Teekay Corp Ltd
+TRUP            # Global  Trupanion Inc
+TSLA            # Global  Tesla Inc
+TTD             # Global  The Trade Desk Inc
+TTWO            # Global 
+TVK             # Global  TerraVest Industries Inc
+UBI             # Global 
+VRT             # Global  Vertiv Holdings Co
+VZLA            # Global 
+WB              # Global  Weibo Corp
+WDAY            # Global  Workday Inc
+XPEL            # Global  XPEL Inc
+XYZ             # Global 
+YTRA            # Global 
+ZG              # Global  Zillow Group Inc
+4C              # Nordic  4C Group
+ADVE            # Nordic  Advenica
+ADVT            # Nordic  Adverty
+AMH2 B          # Nordic  Amhult 2 
+APOTEA          # Nordic 
+AQ              # Nordic  AQ Group
+BAHN B          # Nordic  Bahnhof
+BEGR            # Nordic 
+BEIJ B          # Nordic  Beijer Ref
+BERNER B        # Nordic  Berner Industrier
+BEYOND          # Nordic  Beyond Frames
+BIOWKS          # Nordic  Bio-Works
+BOMILL          # Nordic  BoMill
+BRIGHT          # Nordic  BrightBid
+BUSER           # Nordic  Bambuser
+CINT            # Nordic 
+CLA             # Nordic 
+CLIME B         # Nordic  Climeon
+CMH             # Nordic  Chordate Medical
+CRNO B          # Nordic  Cereno Scientific
+CS              # Nordic 
+CTM             # Nordic  Catena Media
+DORO            # Nordic  Doro
+EGTX            # Nordic 
+EMBELL          # Nordic  Embellence
+EMBRAC B        # Nordic  Embracer 
+ENGCON B        # Nordic  Engcon
+FRO             # Nordic 
+G5EN            # Nordic  G5 Entertainment
+GGEO            # Nordic 
+GOFORE          # Nordic  Gofore
+HAV             # Nordic  Hav Group
+HEBA B          # Nordic  Heba
+HM B            # Nordic  Hennes & Mauritz
+HOVE            # Nordic  Hove
+HTRO            # Nordic 
+IMPC            # Nordic  Impact Coatings
+INDU A          # Nordic  Industrivärden A
+INFREA          # Nordic 
+ININ            # Nordic 
+INISS B         # Nordic  Inission
+IPCO            # Nordic 
+ITECH           # Nordic  I-Tech
+K2A B           # Nordic  K2A 
+KAMBI           # Nordic 
+KESKOB          # Nordic  Kesko B
+KLARA B         # Nordic  KlaraBo 
+LINC            # Nordic 
+LUC             # Nordic 
+LUG             # Nordic  Lundin Gold
+LUMI            # Nordic 
+LUND B          # Nordic  Lundbergföretagen
+MER             # Nordic 
+META            # Nordic  Metacon
+MNTC            # Nordic  Mentice
+MPCC            # Nordic  MPC Container Ships
+MTG B           # Nordic  Modern Times Group B
+NEPA            # Nordic  Nepa
+NGS             # Nordic 
+NIBE B          # Nordic  NIBE Industrier
+NORTHM          # Nordic  North Media
+NOVU            # Nordic  Novus
+NREST           # Nordic  Nordrest
+OBAB            # Nordic 
+OET             # Nordic 
+ONCOZ           # Nordic  OncoZenge
+PDX             # Nordic  Paradox Interactive
+PLAZ B          # Nordic  Platzer Fastigheter
+QIIWI           # Nordic  Qiiwi Games
+QSYS            # Nordic  Qualisys
+RANA            # Nordic 
+RECY B          # Nordic  Recyctec
+RUG             # Nordic  RugVista
+SBOK            # Nordic 
+SEA1            # Nordic 
+SERT            # Nordic  Serstech
+SHB B           # Nordic  Handelsbanken B
+SLEEP           # Nordic  Sleep Cycle
+SOLAR B         # Nordic  Solar 
+# DELISTED: SOZAP - Delisted from Nasdaq Stockholm 2024
+SPG             # Nordic 
+SPLTN           # Nordic 
+SPOTR           # Nordic 
+STOR B          # Nordic  Storskogen 
+STWK            # Nordic  Stockwik Förvaltning
+TCC A           # Nordic  TCECUR
+TELIA           # Nordic 
+TITA B          # Nordic  Titania
+TRMD A          # Nordic  TORM
+UNIBAP          # Nordic  Unibap Space Solutions
+VEND            # Nordic  Vend Marketplaces A
+VIAFIN          # Nordic  Viafin Service
+VNV             # Nordic 
+VSSAB B         # Nordic  Viking Supply
+VWS             # Nordic  Vestas Wind Systems
+YUBICO          # Nordic 
+ZAL             # Nordic 
+PSIX            # Global  Power Solutions International
+OLN             # Global  Olin Corp
+LODE            # Global  Comstock
+EAST            # Nordic. East nine fd East capital
+CAST            #castellum
