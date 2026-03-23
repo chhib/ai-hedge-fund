@@ -106,3 +106,11 @@ _This is the active session file. New sessions should be added here._
 - **Fix**: `--max-workers` CLI flag was ignored -- ThreadPoolExecutor was hardcoded to cap at 16. Now respects the flag and default raised from 4 to 50 (gpt-5-nano allows 500+ RPM at Tier 1)
 - **Data**: CFLT (Confluent Inc) confirmed not in Borsdata coverage -- warnings are expected and non-fatal
 - **Tests**: All passing (portfolio_runner 4/4, enhanced_portfolio_manager 4/4)
+
+## Session 110 (Fix IBKR dot-format tickers not found in Borsdata mapping)
+**Date**: 2026-03-23 | **Model**: Claude Opus 4.6 (1M context)
+
+- **Fix**: `get_market()` in `borsdata_ticker_mapping.py` now falls back to space-separated lookup when dot-separated IBKR tickers (e.g., `EMBRAC.B`) are not found -- resolves 26 of 30 false "not in Borsdata mapping" warnings
+- **Fix**: `CLA` corrected to `CLA B` (Clas Ohlson B shares) in both `borsdata_universe.txt` and `ibkr_universe.txt`
+- **Finding**: 3 tickers genuinely not in Borsdata API: CFLT (Confluent), CMH (Chordate Medical), DORO -- warnings are expected
+- **Root cause**: System 1 (market detection) did direct `ticker.upper()` lookups without converting IBKR dot-notation to Borsdata space-notation

@@ -1,0 +1,210 @@
+# IBKR universe (generated)
+# Source: borsdata_universe.txt
+# Format: IBKR_TICKER  # from Borsdata ticker
+
+AAPL         # AAPL
+ABNB         # ABNB
+AMD          # AMD
+AMR          # AMR
+ANNX         # ANNX
+ARVN         # ARVN
+ASPI         # ASPI
+ATI          # ATI
+AXS          # AXS
+BIDU         # BIDU
+BLDP         # BLDP
+BN           # BN
+BRK.B        # BRK.B
+BRZE         # BRZE
+BT.A         # BT.A
+CCC          # CCC
+CCM          # CCM
+CFLT         # CFLT
+CISS         # CISS
+CSU          # CSU
+CVRX         # CVRX
+DB7          # DB7
+DBG          # DBG
+DDD          # DDD
+DDOG         # DDOG
+DHT          # DHT
+DOMO         # DOMO
+EA           # EA
+EBAY         # EBAY
+FDEV         # FDEV
+FDY          # FDY
+FIZZ         # FIZZ
+FPC          # FPC
+FSLR         # FSLR
+FWZ          # FWZ
+GGD          # GGD
+GLNG         # GLNG
+GOOGL        # GOOGL
+GOT          # GOT
+GOTU         # GOTU
+GPRO         # GPRO
+GRVY         # GRVY
+HAS          # HAS
+HIVE         # HIVE
+IOB          # IOB
+ITT          # ITT
+JOYY         # JOYY
+KSPI         # KSPI
+KT           # KT
+LEM          # LEM
+LOGI         # LOGI
+MAU          # MAU
+MDB          # MDB
+META         # META
+MKO          # MKO
+MNY          # MNY
+MRNA         # MRNA
+MRVI         # MRVI
+MSA          # MSA
+MSCI         # MSCI
+MSFT         # MSFT
+MTCH         # MTCH
+MU           # MU
+NCTY         # NCTY
+NEON         # NEON
+NET          # NET
+NFLX         # NFLX
+NGEX         # NGEX
+NOA          # NOA
+NTNX         # NTNX
+NVDA         # NVDA
+NVEC         # NVEC
+NVGS         # NVGS
+ONDS         # ONDS
+ONFO         # ONFO
+PEN          # PEN
+PINS         # PINS
+PLTK         # PLTK
+PRM          # PRM
+PTLO         # PTLO
+PUBM         # PUBM
+QLYS         # QLYS
+ROP          # ROP
+RS1          # RS1
+SBLK         # SBLK
+SFL          # SFL
+SNAP         # SNAP
+SOC          # SOC
+SOHU         # SOHU
+STNG         # STNG
+TEAD         # TEAD
+TK           # TK
+TRUP         # TRUP
+TSLA         # TSLA
+TTD          # TTD
+TTWO         # TTWO
+TVK          # TVK
+UBI          # UBI
+VRT          # VRT
+VZLA         # VZLA
+WB           # WB
+WDAY         # WDAY
+XPEL         # XPEL
+XYZ          # XYZ
+YTRA         # YTRA
+ZG           # ZG
+4C           # 4C
+ADVE         # ADVE
+ADVT         # ADVT
+AMH2.B       # AMH2 B
+APOTEA       # APOTEA
+AQ           # AQ
+BAHN.B       # BAHN B
+BEGR         # BEGR
+BEIJ.B       # BEIJ B
+BERNER.B     # BERNER B
+BEYOND       # BEYOND
+BIOWKS       # BIOWKS
+BOMILL       # BOMILL
+BRIGHT       # BRIGHT
+BUSER        # BUSER
+CINT         # CINT
+CLA.B        # CLA B
+CLIME.B      # CLIME B
+CMH          # CMH
+CRNO.B       # CRNO B
+CS           # CS
+CTM          # CTM
+DORO         # DORO
+EGTX         # EGTX
+EMBELL       # EMBELL
+EMBRAC.B     # EMBRAC B
+ENGCON.B     # ENGCON B
+FRO          # FRO
+G5EN         # G5EN
+GGEO         # GGEO
+GOFORE       # GOFORE
+HAV          # HAV
+HEBA.B       # HEBA B
+HM.B         # HM B
+HOVE         # HOVE
+HTRO         # HTRO
+IMPC         # IMPC
+INDU.A       # INDU A
+INFREA       # INFREA
+ININ         # ININ
+INISS.B      # INISS B
+IPCO         # IPCO
+ITECH        # ITECH
+K2A.B        # K2A B
+KAMBI        # KAMBI
+KESKOB       # KESKOB
+KLARA.B      # KLARA B
+LINC         # LINC
+LUC          # LUC
+LUG          # LUG
+LUMI         # LUMI
+LUND.B       # LUND B
+MER          # MER
+MNTC         # MNTC
+MPCC         # MPCC
+MTG.B        # MTG B
+NEPA         # NEPA
+NGS          # NGS
+NIBE.B       # NIBE B
+NORTHM       # NORTHM
+NOVU         # NOVU
+NREST        # NREST
+OBAB         # OBAB
+OET          # OET
+ONCOZ        # ONCOZ
+PDX          # PDX
+PLAZ.B       # PLAZ B
+QIIWI        # QIIWI
+QSYS         # QSYS
+RANA         # RANA
+RECY.B       # RECY B
+RUG          # RUG
+SBOK         # SBOK
+SEA1         # SEA1
+SERT         # SERT
+SHB.B        # SHB B
+SLEEP        # SLEEP
+SOLAR.B      # SOLAR B
+SPG          # SPG
+SPLTN        # SPLTN
+SPOTR        # SPOTR
+STOR.B       # STOR B
+STWK         # STWK
+TCC.A        # TCC A
+TELIA        # TELIA
+TITA.B       # TITA B
+TRMD.A       # TRMD A
+UNIBAP       # UNIBAP
+VEND         # VEND
+VIAFIN       # VIAFIN
+VNV          # VNV
+VSSAB.B      # VSSAB B
+VWS          # VWS
+YUBICO       # YUBICO
+ZAL          # ZAL
+PSIX         # PSIX
+OLN          # OLN
+LODE         # LODE
+EAST         # EAST
+CAST         # CAST

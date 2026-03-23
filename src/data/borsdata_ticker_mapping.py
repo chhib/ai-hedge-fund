@@ -175,7 +175,12 @@ class TickerMapping:
         if not self._loaded:
             self.ensure_loaded()
 
-        return self._mapping.get(ticker.upper())
+        upper = ticker.upper()
+        result = self._mapping.get(upper)
+        if result is None and "." in upper:
+            # IBKR uses dots for share classes (LUND.B), Borsdata uses spaces (LUND B)
+            result = self._mapping.get(upper.replace(".", " "))
+        return result
 
     def get_stats(self) -> Dict[str, int]:
         """Get statistics about the current mapping.

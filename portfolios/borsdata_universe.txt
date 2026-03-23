@@ -128,7 +128,7 @@ BOMILL          # Nordic  BoMill
 BRIGHT          # Nordic  BrightBid
 BUSER           # Nordic  Bambuser
 CINT            # Nordic 
-CLA             # Nordic 
+CLA B           # Nordic  Clas Ohlson
 CLIME B         # Nordic  Climeon
 CMH             # Nordic  Chordate Medical
 CRNO B          # Nordic  Cereno Scientific
