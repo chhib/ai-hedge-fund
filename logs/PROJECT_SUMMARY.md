@@ -1,6 +1,6 @@
 # Börsdata Integration Project Summary
 
-_Last updated: 2026-03-19 (Session 104)_
+_Last updated: 2026-03-23 (Session 109)_
 
 ## End Goal
 Rebuild the data ingestion and processing pipeline so the application relies on Börsdata's REST API. The system accepts Börsdata-native tickers, supports both Nordic and Global markets, and maintains compatibility with the original user-facing workflows.
@@ -27,7 +27,11 @@ The AI hedge fund system is fully operational with both CLI and web interfaces:
 - Contract override stale-checking: `hedge ibkr validate` with `--fix` auto-refresh
 - Error recovery: retry on connection failures, order status polling with partial fill detection
 - `hedge ibkr orders` command for live order monitoring
-- Next: governor threshold tuning against live history and portfolio reconciliation
+- Live what-if validation on 2026-03-19 shows Swedish `LUMI` orders on ISK account `U22372535` are blocked for both `BUY` and `SELL` with `No trading permissions`
+- The regular account `U22372536` can create `LUMI` what-if previews; `BUY` reaches an insufficient-cash error and `SELL` reaches a no-position / no-shorting-on-cash-account error instead of a permissions error
+- Operational path still points to internal position transfer from `U22372535` to `U22372536` before liquidation, but Client Portal is not offering `U22372536` as an immediately eligible destination from the ISK account
+- Portal now suggests only manual destination entry / eligibility review for this transfer path, which may require destination-account credentials and approval review over several business days
+- Next: try manual destination entry for `U22372536` in Client Portal and capture the eligibility result; if rejected, escalate to IBKR support for a manual internal journal/position transfer request
 
 ## Active Session File
 **`logs/sessions/session_101.md`** - Sessions 101-110

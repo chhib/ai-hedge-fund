@@ -27,9 +27,7 @@ def test_ensure_ibkr_gateway_prints_manual_start_instructions_when_localhost_off
         portfolio_runner._ensure_ibkr_gateway(config)
 
     output = capsys.readouterr().out
-    assert "IBKR Gateway on localhost is not responding on ports 5000 or 5001." in output
-    assert "Suggestion: start the IBKR Client Portal Gateway:" in output
-    assert "bin/run.sh root/conf.yaml" in output
+    assert "IBKR Gateway not responding on ports 5000 or 5001." in output
     assert "Attempting to start it automatically..." in output
 
     message = str(excinfo.value)

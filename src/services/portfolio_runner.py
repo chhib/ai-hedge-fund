@@ -7,6 +7,7 @@ import socket
 import subprocess
 import time
 import uuid
+import webbrowser
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -129,6 +130,34 @@ def _find_running_gateway(timeout: float = 2.0) -> tuple[str | None, bool]:
     return None, False
 
 
+def _wait_for_ibkr_auth(base_url: str, timeout: float = 2.0, max_wait: int = 120) -> bool:
+    """Open the browser for IBKR login and poll until authenticated.
+
+    Returns True if authenticated within *max_wait* seconds.
+    """
+    print(f"Opening browser for IBKR authentication: {base_url}")
+    webbrowser.open(base_url)
+    print(f"Waiting up to {max_wait}s for authentication...")
+
+    start = time.monotonic()
+    attempt = 0
+    while time.monotonic() - start < max_wait:
+        time.sleep(3)
+        attempt += 1
+        _, authenticated = _check_ibkr_gateway(base_url, timeout=timeout)
+        if authenticated:
+            elapsed = int(time.monotonic() - start)
+            print(f"✓ Authenticated after {elapsed}s")
+            return True
+        if attempt % 5 == 0:
+            elapsed = int(time.monotonic() - start)
+            remaining = max_wait - elapsed
+            print(f"  Still waiting for login... ({remaining}s remaining)")
+
+    print("Timed out waiting for authentication.")
+    return False
+
+
 def _start_ibkr_gateway(port: int = 5001) -> bool:
     """Start the IBKR Client Portal Gateway if installed."""
     if not IBKR_GATEWAY_DIR.exists():
@@ -178,30 +207,34 @@ def _ensure_ibkr_gateway(config: "RebalanceConfig") -> str:
     if is_running:
         if is_authenticated:
             return preferred_gateway_url
+        # Brief grace period — gateway may still be finishing auth
         for _ in range(5):
             time.sleep(2)
             _, is_authenticated = _check_ibkr_gateway(preferred_gateway_url, timeout=config.ibkr_timeout)
             if is_authenticated:
                 return preferred_gateway_url
+        # Open browser and wait for user to log in
+        if _wait_for_ibkr_auth(preferred_gateway_url, timeout=config.ibkr_timeout):
+            return preferred_gateway_url
         raise RuntimeError(
             f"IBKR Gateway running but not authenticated.\n"
             f"Please log in at: {preferred_gateway_url}\n"
             f"Then re-run this command."
         )
 
-    # First check if there's already a running gateway on either port
+    # Check if there's already a running gateway on either port
     found_url, is_authenticated = _find_running_gateway(timeout=config.ibkr_timeout)
 
     if found_url:
         if is_authenticated:
-            return found_url  # Ready to use
-        # Give the gateway a brief window to finish authentication
+            return found_url
         for _ in range(5):
             time.sleep(2)
             _, is_authenticated = _check_ibkr_gateway(found_url, timeout=config.ibkr_timeout)
             if is_authenticated:
                 return found_url
-        # Running but not authenticated
+        if _wait_for_ibkr_auth(found_url, timeout=config.ibkr_timeout):
+            return found_url
         raise RuntimeError(
             f"IBKR Gateway running but not authenticated.\n"
             f"Please log in at: {found_url}\n"
@@ -217,9 +250,8 @@ def _ensure_ibkr_gateway(config: "RebalanceConfig") -> str:
             f"{manual_start_instructions}"
         )
 
-    # No gateway running, try to start one
-    print("⚠️  IBKR Gateway on localhost is not responding on ports 5000 or 5001.")
-    print(manual_start_instructions)
+    # No gateway running — start it automatically
+    print("IBKR Gateway not responding on ports 5000 or 5001.")
     print("Attempting to start it automatically...")
     if not _start_ibkr_gateway(config.ibkr_port):
         raise RuntimeError(
@@ -227,7 +259,7 @@ def _ensure_ibkr_gateway(config: "RebalanceConfig") -> str:
             f"{manual_start_instructions}"
         )
 
-    # Check if it's now running and needs auth
+    # Gateway process is up — check auth state
     gateway_url = preferred_gateway_url
     running, is_authenticated = _check_ibkr_gateway(gateway_url, timeout=config.ibkr_timeout)
 
@@ -237,14 +269,18 @@ def _ensure_ibkr_gateway(config: "RebalanceConfig") -> str:
             f"{manual_start_instructions}"
         )
 
-    if running and not is_authenticated:
-        raise RuntimeError(
-            f"IBKR Gateway started but requires authentication.\n"
-            f"Please log in at: {gateway_url}\n"
-            f"Then re-run this command."
-        )
+    if is_authenticated:
+        return gateway_url
 
-    return gateway_url
+    # Open browser for login and wait
+    if _wait_for_ibkr_auth(gateway_url, timeout=config.ibkr_timeout):
+        return gateway_url
+
+    raise RuntimeError(
+        f"IBKR Gateway started but authentication timed out.\n"
+        f"Please log in at: {gateway_url}\n"
+        f"Then re-run this command."
+    )
 
 
 AnalystGroup = Literal["all", "basic", "famous", "core"]
@@ -261,7 +297,7 @@ class RebalanceConfig:
     analysts: str = "all"
     model: str = "gpt-4o"
     model_provider: Optional[str] = None
-    max_workers: int = 4
+    max_workers: int = 50
     max_holdings: int = 8
     max_position: float = 0.25
     min_position: float = 0.05

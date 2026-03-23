@@ -162,6 +162,27 @@ def test_request_no_retry_on_http_error(monkeypatch):
     assert call_count == 1
 
 
+def test_request_401_uses_reauthentication_message(monkeypatch):
+    client = IBKRClient(base_url="https://example.com")
+
+    class DummyResponse:
+        status_code = 401
+        text = ""
+
+    monkeypatch.setattr(client.session, "request", lambda *args, **kwargs: DummyResponse())
+
+    with pytest.raises(IBKRError, match="Open https://example.com and log in again"):
+        client._request("GET", "/iserver/accounts")
+
+
+def test_ensure_authenticated_raises_when_auth_status_false(monkeypatch):
+    client = IBKRClient(base_url="https://example.com")
+    monkeypatch.setattr(client, "get_auth_status", lambda: {"authenticated": False})
+
+    with pytest.raises(IBKRError, match="Open https://example.com and log in again"):
+        client.ensure_authenticated()
+
+
 def test_get_orders_path(monkeypatch):
     client = IBKRClient(base_url="https://example.com")
     seen = {}

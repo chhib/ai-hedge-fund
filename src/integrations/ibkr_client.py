@@ -72,6 +72,16 @@ class IBKRClient:
         """Return the list of trading accounts from the /iserver namespace."""
         return self._request("GET", "/iserver/accounts")
 
+    def get_auth_status(self) -> Any:
+        """Return the current /iserver authentication state."""
+        return self._request("GET", "/iserver/auth/status")
+
+    def ensure_authenticated(self) -> None:
+        """Raise a helpful error if the IBKR /iserver session is no longer authenticated."""
+        status = self.get_auth_status()
+        if isinstance(status, dict) and not status.get("authenticated", False):
+            raise IBKRError(_format_authentication_error(self.base_url))
+
     def resolve_account_id(self, preferred: Optional[str] = None) -> Optional[str]:
         """Resolve an IBKR trading account id, optionally by alias."""
         accounts_payload: Any = None
@@ -227,6 +237,8 @@ class IBKRClient:
             except requests.RequestException as exc:
                 raise IBKRError(f"IBKR request failed: {exc}") from exc
 
+            if response.status_code == 401:
+                raise IBKRError(_format_authentication_error(self.base_url))
             if response.status_code >= 400:
                 raise IBKRError(f"IBKR API error {response.status_code}: {response.text}")
             try:
@@ -296,6 +308,13 @@ def _transform_positions(rows: List[Dict[str, Any]]) -> List[Position]:
             )
         )
     return positions
+
+
+def _format_authentication_error(base_url: str) -> str:
+    return (
+        f"IBKR Gateway session expired or is not authenticated. "
+        f"Open {base_url} and log in again, then rerun the command."
+    )
 
 
 def _transform_ledger_balances(ledger: Dict[str, Any]) -> Dict[str, float]:

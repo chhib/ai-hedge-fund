@@ -47,3 +47,62 @@ _This is the active session file. New sessions should be added here._
   - `poetry run python scripts/build_ibkr_contract_overrides.py --input <tmp LUG universe> --output <tmp> --report <tmp> --limit 1 --refresh-existing`
   - `PYTHONWARNINGS=ignore poetry run python scripts/build_ibkr_contract_overrides.py --refresh-existing`
   - `poetry run python - <<'PY' ... inspect data/ibkr_contract_mappings.json / data/ibkr_contract_candidates.json ... PY`
+
+## Session 105 (`project summary refresh` -- align active focus and IBKR investigation state)
+**Date**: 2026-03-19 | **Model**: GPT-5 Codex
+
+- **Reconciliation**: Confirmed `logs/sessions/session_101.md` is the active session file for sessions 101-110; older instructions still referenced `session_091.md`, so the current summary needed a state refresh
+- **Investigation setup**: Started a live check on whether `LUMI` could be moved from ISK account `U22372535` to regular account `U22372536` and sold there
+- **Blocker**: The local IBKR Client Portal Gateway was offline during this session; direct calls to `https://localhost:5001` for `/iserver/auth/status` and `/iserver/secdef/search?symbol=LUMI&secType=STK` both failed with connection refused before account or preview validation could run
+- **Docs**: Updated `logs/PROJECT_SUMMARY.md` so the current focus now reflects the Swedish-stock permission gap, the pending `LUMI` transfer/sell investigation, and the gateway-offline blocker
+- **Verification**:
+  - `poetry run python - <<'PY' ... client.get_auth_status() ... PY`
+  - `poetry run python - <<'PY' ... client.search_contracts('LUMI') ... PY`
+
+## Session 106 (`IBKR gateway restart` -- restore local listener on 5001)
+**Date**: 2026-03-19 | **Model**: GPT-5 Codex
+
+- **Action**: Restarted the local IBKR Client Portal Gateway from `clientportal.gw` after confirming port `5001` was free and no gateway process was running
+- **Operational detail**: Direct `nohup` startup exited immediately on this machine, so the stable restart path was a detached `screen` session: `screen -dmS ibkr-gateway ./bin/run.sh ./root/conf.yaml`
+- **Result**: Java process `23148` is now listening on `*:5001`
+- **Auth state**: The gateway is up but not yet logged in; `GET /v1/api/tickle` now returns `401 Unauthorized`, which is the expected pre-login state after restart
+- **Docs**: Updated `logs/PROJECT_SUMMARY.md` to replace the “gateway offline” blocker with the current “gateway running, browser login required” state
+- **Verification**:
+  - `lsof -nP -iTCP:5001 -sTCP:LISTEN`
+  - `screen -ls`
+  - `curl -sk -D - https://localhost:5001/v1/api/tickle`
+
+## Session 107 (`LUMI` transfer investigation -- ISK sell blocked, regular account path looks viable)
+**Date**: 2026-03-19 | **Model**: GPT-5 Codex
+
+- **Live account state**: Confirmed `LUMI` (`conid 278544593`, `SEK`, valid exchanges `SMART,SFB`) is currently held in ISK account `U22372535` with position `11`; regular account `U22372536` currently holds no positions
+- **Live what-if result**: `LUMI` `SELL` and `BUY` previews on `U22372535` both fail with `IBKR API error 500: {"error":"No trading permissions.","action":"order_cannot_be_created"}`; this also reproduces when routing the sell preview via `SMART`, so the block is not an `SFB`-only routing issue
+- **Regular account result**: `LUMI` `BUY` preview on `U22372536` succeeds far enough to produce a normal insufficient-cash error, and `SELL` preview reaches `Short stock positions can only be held in a margin account`, which indicates order creation is working there and the blocker is lack of holdings rather than permissions
+- **Docs cross-check**: Official IBKR Client Portal docs show an internal position-transfer workflow under `Transfer & Pay > Transfer Positions > Internal`; IBKR's Account Management API docs also state internal position transfers are supported between IBKR accounts when source and destination accounts match on title/residence/tax ID and IB entity
+- **Portal UI note**: Attempted browser automation against `https://localhost:5001`, but the browser session landed on the login page instead of the already-authorized API session, so transfer-screen eligibility was not directly verified in the UI during this pass
+- **Conclusion**: Based on the live previews, moving `LUMI` from `U22372535` to `U22372536` appears to be the plausible way to liquidate it; selling directly from the ISK account is currently blocked
+- **Verification**:
+  - `poetry run python - <<'PY' ... client.get_auth_status(); client.get_trading_accounts(); client.list_accounts() ... PY`
+  - `poetry run python - <<'PY' ... client.get_positions('U22372535'); client.get_positions('U22372536') ... PY`
+  - `poetry run python - <<'PY' ... client.get_contract_info(278544593); client.get_contract_rules(278544593, is_buy=False, exchange='SFB'); client.get_contract_rules(278544593, is_buy=True, exchange='SFB') ... PY`
+  - `poetry run python - <<'PY' ... client.preview_order('U22372535', lumi_sell_payload_sfb) ... PY`
+  - `poetry run python - <<'PY' ... client.preview_order('U22372535', lumi_sell_payload_smart) ... PY`
+  - `poetry run python - <<'PY' ... client.preview_order('U22372535', lumi_buy_payload_sfb) ... PY`
+  - `poetry run python - <<'PY' ... client.preview_order('U22372536', lumi_buy_payload_sfb); client.preview_order('U22372536', lumi_sell_payload_smart) ... PY`
+
+## Session 108 (`LUMI` transfer portal check -- no immediate self-service destination)
+**Date**: 2026-03-19 | **Model**: GPT-5 Codex
+
+- **Portal finding**: In Client Portal `Transfer & Pay > Transfer Positions` with source account `U22372535`, the `Destination Account` selector did not offer `U22372536` as a dropdown destination for an immediate internal position transfer
+- **UI guidance**: The portal instead showed the manual-entry note: destination accounts can be entered manually to check eligibility, but manually entered accounts may require destination-account login credentials and approval review that can take several business days
+- **Impact**: This weakens the prior assumption that the transfer would be a straightforward self-service move; the regular account still looks sell-capable from live what-if previews, but the current blocker has shifted to IBKR transfer eligibility rather than order permissions there
+- **Next step**: Try typing `U22372536` manually into the destination field and continue until IBKR either accepts the eligibility check or rejects the transfer path; if rejected, open an IBKR support case requesting a manual internal position transfer / journal of `LUMI` from `U22372535` to `U22372536`
+
+## Session 109 (Gateway auto-start, universe tracking, analyst concurrency)
+**Date**: 2026-03-23 | **Model**: Claude Opus 4.6 (1M context)
+
+- **Feature**: IBKR gateway auto-start now opens the browser and polls for authentication (up to 120s) instead of raising an error and requiring a re-run
+- **Fix**: `portfolios/borsdata_universe.txt` (206 tickers) committed to repo; added `.gitignore` exception for `portfolios/*_universe.txt`
+- **Fix**: `--max-workers` CLI flag was ignored -- ThreadPoolExecutor was hardcoded to cap at 16. Now respects the flag and default raised from 4 to 50 (gpt-5-nano allows 500+ RPM at Tier 1)
+- **Data**: CFLT (Confluent Inc) confirmed not in Borsdata coverage -- warnings are expected and non-fatal
+- **Tests**: All passing (portfolio_runner 4/4, enhanced_portfolio_manager 4/4)

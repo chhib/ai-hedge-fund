@@ -57,7 +57,7 @@ class EnhancedPortfolioManager:
         no_cache_agents: bool = False,
         verbose: bool = False,
         session_id: str = None,
-        max_workers: int = 4,
+        max_workers: int = 50,
         use_governor: bool = False,
         governor_profile: str = "preservation",
     ):
@@ -578,8 +578,7 @@ class EnhancedPortfolioManager:
                 return None
 
         if uncached_combos:
-            # Scale workers to actual uncached work, up to 16
-            max_workers = min(len(uncached_combos), 16)
+            max_workers = min(len(uncached_combos), self.max_workers)
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 future_to_combo = {}
                 for analyst_info, ticker_idx, ticker in uncached_combos:

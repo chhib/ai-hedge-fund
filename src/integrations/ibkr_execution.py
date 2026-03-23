@@ -785,6 +785,7 @@ def _process_submission(
     confirm_callback: Callable[[str], bool],
     report: ExecutionReport,
 ) -> None:
+    ibkr.ensure_authenticated()
     submit_response = ibkr.place_order(account_id, order_payload)
     report.submissions.append({"intent": intent, "response": submit_response})
 
@@ -813,6 +814,7 @@ def _process_submission(
             report.skipped.append(OrderSkip(ticker=intent.ticker, action=intent.action, reason="Submission warning declined"))
             return
 
+        ibkr.ensure_authenticated()
         response = ibkr.reply(submit_warning[0], confirmed=True)
         report.submissions.append({"intent": intent, "response": response, "reply_to": submit_warning[0]})
 

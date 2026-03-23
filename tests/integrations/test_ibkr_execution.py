@@ -1,3 +1,5 @@
+import pytest
+
 import src.integrations.ibkr_execution as ibkr_execution
 from src.integrations.ibkr_contract_mapper import ContractOverride
 from src.integrations.ibkr_execution import build_order_intents, execute_ibkr_rebalance_trades, format_execution_cash_summary, _extract_order_id, _poll_order_status, _apply_snapshot_prices, OrderIntent, OrderSkip, OrderStatusResult, ResolvedOrder, ExecutionReport
@@ -32,6 +34,9 @@ class FakeIBKRClient:
     def get_contract_rules(self, conid, is_buy, exchange=None):
         # Return a mock response with a default tick size of 0.01
         return {"rules": {"increment": 0.01}}
+
+    def ensure_authenticated(self):
+        return None
 
     def preview_order(self, account_id, order):
         self.preview_calls.append(order)
@@ -815,6 +820,36 @@ def test_order_status_timeout_via_monotonic(monkeypatch):
 
     result = _poll_order_status(StuckClient(), "123", "AAA", 5, poll_interval=2, poll_timeout=30)
     assert result.status == "Timeout"
+
+
+def test_execute_surfaces_authentication_error_before_submission(monkeypatch):
+    class AuthExpiredClient(FakeIBKRClient):
+        def ensure_authenticated(self):
+            raise IBKRError("IBKR Gateway session expired or is not authenticated. Open https://localhost:5001 and log in again, then rerun the command.")
+
+    recommendations = [
+        {"ticker": "AAA", "action": "ADD", "current_shares": 0, "target_shares": 2, "current_price": 5.0, "currency": "USD"},
+    ]
+    contracts = {
+        "AAA": [{"contracts": [{"conid": 111, "exchange": "SMART", "currency": "USD"}]}],
+    }
+    snapshot = [{"conid": "111", "84": "5.10"}]
+    fake = AuthExpiredClient(contracts=contracts, snapshot=snapshot)
+
+    monkeypatch.setattr(ibkr_execution, "load_contract_overrides", lambda: {})
+
+    with pytest.raises(IBKRError, match="log in again"):
+        execute_ibkr_rebalance_trades(
+            recommendations,
+            base_url="https://example.com",
+            account_id="U123",
+            preview_only=True,
+            execute=True,
+            confirm=lambda _: True,
+            client=fake,
+        )
+
+    assert fake.place_calls == []
 
 
 def test_apply_snapshot_prices_fallback_to_last():

@@ -27,7 +27,7 @@ def cli() -> None:
 @click.option("--analysts", default="all", show_default=True, help="Analyst preset or comma-separated list")
 @click.option("--model", default="gpt-4o", show_default=True, help="LLM model name")
 @click.option("--model-provider", help="Optional model provider override")
-@click.option("--max-workers", default=4, show_default=True, type=int, help="Parallel worker cap for analyst tasks")
+@click.option("--max-workers", default=50, show_default=True, type=int, help="Parallel worker cap for analyst tasks")
 @click.option("--max-holdings", default=8, show_default=True, type=int, help="Maximum holdings in the target portfolio")
 @click.option("--max-position", default=0.25, show_default=True, type=float, help="Maximum position size as decimal")
 @click.option("--min-position", default=0.05, show_default=True, type=float, help="Minimum position size as decimal")
