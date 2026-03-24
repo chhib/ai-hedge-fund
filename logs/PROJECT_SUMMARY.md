@@ -1,11 +1,11 @@
 # AI Hedge Fund -- Project Summary
 
-_Last updated: 2026-03-24 (Session 117)_
+_Last updated: 2026-03-24 (Session 118)_
 
 ## End Goal
 Transform from a single-strategy CLI tool into a **trading pod shop**: config-driven analyst groups (pods) with independent lifecycles, a promotion ladder (backtest -> paper -> live), an always-on daemon with scheduling, and a web dashboard -- all built on the Decision DB as the queryable source of truth for every decision the system makes.
 
-**Completed milestones**: Borsdata migration (sole data provider), IBKR execution pipeline, portfolio governor, Decision DB (append-only ledger).
+**Completed milestones**: Borsdata migration (sole data provider), IBKR execution pipeline, portfolio governor, Decision DB (append-only ledger), EPM decomposition, Pod Abstraction.
 
 ## Current Status: Production Ready ✅
 
@@ -20,8 +20,9 @@ The AI hedge fund system is fully operational with both CLI and web interfaces:
 - ✅ **Performance Optimized**: 95% API call reduction, parallel processing, caching
 
 ## Current Focus
-- **Decision DB shipped** (Session 117): append-only SQLite ledger capturing full pipeline chain (signals -> aggregation -> governor -> trades -> execution) in `data/decisions.db`. Foundation for trading pod shop architecture.
-- **Next up**: Pod Abstraction -- config-driven analyst groups with independent lifecycle (rank 2 from ideation)
+- **Pod Abstraction shipped** (Session 118): config-driven analyst pods (`config/pods.yaml`, 18 pods), each proposing its own portfolio, paper P&L tracked independently, merged for real execution. EPM decomposed into 4 pipeline modules. PRs #7 (refactor) + #8 (pods).
+- **Decision DB shipped** (Session 117): append-only SQLite ledger capturing full pipeline chain (signals -> aggregation -> governor -> trades -> execution) in `data/decisions.db`. New `pod_proposals` table added for pod portfolio proposals.
+- **Next up**: Paper Trading (#4 from ideation) -- virtual execution with forward P&L tracking per pod
 - Adaptive portfolio governor merged to `main`: preservation-first analyst weighting, deployment throttling, and trade gating
 - `hedge governor status` command added for live/readable governor state inspection
 - `hedge rebalance --use-governor` and `hedge backtest --use-governor` now support closed-loop capital control
