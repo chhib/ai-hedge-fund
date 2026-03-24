@@ -1,0 +1,51 @@
+# config/pods.yaml -- Pod definitions
+# Each pod wraps one analyst and proposes its own portfolio.
+# 1 pod = 1 analyst. Adding a pod = adding a YAML entry.
+
+defaults:
+  max_picks: 3
+  enabled: true
+
+pods:
+  # Famous investors (13)
+  - name: warren_buffett
+    analyst: warren_buffett
+  - name: charlie_munger
+    analyst: charlie_munger
+  - name: ben_graham
+    analyst: ben_graham
+  - name: peter_lynch
+    analyst: peter_lynch
+  - name: phil_fisher
+    analyst: phil_fisher
+  - name: bill_ackman
+    analyst: bill_ackman
+  - name: cathie_wood
+    analyst: cathie_wood
+  - name: michael_burry
+    analyst: michael_burry
+  - name: mohnish_pabrai
+    analyst: mohnish_pabrai
+  - name: stanley_druckenmiller
+    analyst: stanley_druckenmiller
+  - name: aswath_damodaran
+    analyst: aswath_damodaran
+  - name: rakesh_jhunjhunwala
+    analyst: rakesh_jhunjhunwala
+  - name: jim_simons
+    analyst: jim_simons
+
+  # Core deterministic analysts (4)
+  - name: fundamentals
+    analyst: fundamentals_analyst
+  - name: technical
+    analyst: technical_analyst
+  - name: sentiment
+    analyst: sentiment_analyst
+  - name: valuation
+    analyst: valuation_analyst
+
+  # Sentiment specialist (1)
+  - name: news_sentiment
+    analyst: news_sentiment_analyst
+    enabled: false  # disabled by default -- noisy
