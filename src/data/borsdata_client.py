@@ -239,23 +239,26 @@ class BorsdataClient:
         if not normalised:
             raise BorsdataAPIError("Ticker symbol is required")
 
+        # IBKR uses dots for share classes (LUND.B), Borsdata uses spaces (LUND B)
+        borsdata_normalised = normalised.replace(".", " ") if "." in normalised else normalised
+
         if use_global:
             self._ensure_global_instrument_cache(api_key=api_key, force_refresh=force_refresh)
-            instrument = self._global_instrument_by_ticker.get(normalised)
+            instrument = self._global_instrument_by_ticker.get(normalised) or self._global_instrument_by_ticker.get(borsdata_normalised)
             if instrument is None:
                 # Some tickers may only be available after a fresh sync
                 self._ensure_global_instrument_cache(api_key=api_key, force_refresh=True)
-                instrument = self._global_instrument_by_ticker.get(normalised)
+                instrument = self._global_instrument_by_ticker.get(normalised) or self._global_instrument_by_ticker.get(borsdata_normalised)
 
             if instrument is None:
                 raise BorsdataAPIError(f"Ticker '{ticker}' not found in Börsdata global instruments")
         else:
             self._ensure_instrument_cache(api_key=api_key, force_refresh=force_refresh)
-            instrument = self._instrument_by_ticker.get(normalised)
+            instrument = self._instrument_by_ticker.get(normalised) or self._instrument_by_ticker.get(borsdata_normalised)
             if instrument is None:
                 # Some tickers may only be available after a fresh sync
                 self._ensure_instrument_cache(api_key=api_key, force_refresh=True)
-                instrument = self._instrument_by_ticker.get(normalised)
+                instrument = self._instrument_by_ticker.get(normalised) or self._instrument_by_ticker.get(borsdata_normalised)
 
             if instrument is None:
                 raise BorsdataAPIError(f"Ticker '{ticker}' not found in Börsdata instruments")

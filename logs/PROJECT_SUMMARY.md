@@ -1,6 +1,6 @@
 # Börsdata Integration Project Summary
 
-_Last updated: 2026-03-23 (Session 109)_
+_Last updated: 2026-03-24 (Session 111)_
 
 ## End Goal
 Rebuild the data ingestion and processing pipeline so the application relies on Börsdata's REST API. The system accepts Börsdata-native tickers, supports both Nordic and Global markets, and maintains compatibility with the original user-facing workflows.
@@ -34,7 +34,7 @@ The AI hedge fund system is fully operational with both CLI and web interfaces:
 - Next: try manual destination entry for `U22372536` in Client Portal and capture the eligibility result; if rejected, escalate to IBKR support for a manual internal journal/position transfer request
 
 ## Active Session File
-**`logs/sessions/session_101.md`** - Sessions 101-110
+**`logs/sessions/session_111.md`** - Sessions 111-120
 
 ## Decision Log (Key Decisions)
 
