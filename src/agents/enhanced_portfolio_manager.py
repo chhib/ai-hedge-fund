@@ -1,4 +1,3 @@
-import math
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -7,7 +6,6 @@ from src.utils.portfolio_loader import Portfolio, Position
 from src.utils.currency import (
     normalize_currency_code,
     normalize_price_and_currency,
-    compute_cost_basis_after_rebalance,
 )
 from src.data.analysis_cache import get_analysis_cache
 from src.data.analyst_task_queue import get_task_queue, TaskKey
@@ -159,9 +157,22 @@ class EnhancedPortfolioManager:
 
     def generate_rebalancing_recommendations(self, max_holdings: int = 8, max_position: float = 0.25, min_position: float = 0.05, min_trade_size: float = 500) -> Dict[str, Any]:
         """
-        Generate long-only rebalancing recommendations
-        Maintains concentrated portfolio of max_holdings positions
+        Generate long-only rebalancing recommendations.
+        Delegates to pipeline stage modules for each step.
         """
+        from src.services.pipeline.signal_aggregator import (
+            aggregate_signals,
+            apply_long_only_constraint,
+            apply_ticker_penalties,
+        )
+        from src.services.pipeline.position_sizer import (
+            select_top_positions,
+            calculate_target_positions,
+        )
+        from src.services.pipeline.trade_generator import (
+            generate_recommendations,
+            calculate_updated_portfolio,
+        )
 
         # Track analysis date for queue/caching purposes
         analysis_timestamp = datetime.now()
@@ -171,7 +182,7 @@ class EnhancedPortfolioManager:
         all_signals = self._collect_analyst_signals()
 
         # Step 2: Compute baseline scores for governor diagnostics
-        baseline_scores = self._aggregate_signals(all_signals)
+        baseline_scores = aggregate_signals(all_signals, universe=self.universe)
 
         governor_decision = self._evaluate_governor(
             aggregated_scores=baseline_scores,
@@ -179,9 +190,10 @@ class EnhancedPortfolioManager:
         )
 
         # Step 3: Aggregate signals with adaptive analyst weights
-        aggregated_scores = self._aggregate_signals(
+        aggregated_scores = aggregate_signals(
             all_signals,
             analyst_weights=governor_decision.analyst_weights if governor_decision else None,
+            universe=self.universe,
         )
 
         # Decision DB: record governor decision + aggregations
@@ -198,21 +210,30 @@ class EnhancedPortfolioManager:
                 pass  # Decision DB is passive
 
         # Step 4: Apply LONG-ONLY constraint
-        long_only_scores = self._apply_long_only_constraint(aggregated_scores)
+        long_only_scores = apply_long_only_constraint(aggregated_scores)
         if governor_decision:
-            long_only_scores = self._apply_ticker_penalties(long_only_scores, governor_decision)
+            long_only_scores = apply_ticker_penalties(long_only_scores, governor_decision.ticker_penalties)
 
         # Step 5: Select top positions (concentration constraint)
-        selected_tickers = self._select_top_positions(long_only_scores, max_holdings)
+        selected_tickers = select_top_positions(long_only_scores, max_holdings)
 
         # Step 6: Calculate target positions for selected tickers
         effective_max_position = governor_decision.max_position_override if governor_decision and governor_decision.max_position_override is not None else max_position
-        target_positions = self._calculate_target_positions(selected_tickers, long_only_scores, effective_max_position, min_position)
+        target_positions = calculate_target_positions(selected_tickers, long_only_scores, effective_max_position, min_position)
         if governor_decision:
             target_positions = self.governor.apply_to_target_weights(target_positions, governor_decision)
 
         # Step 7: Generate recommendations
-        recommendations = self._generate_recommendations(target_positions, min_trade_size)
+        recommendations, self._current_position_values = generate_recommendations(
+            target_positions=target_positions,
+            min_trade_size=min_trade_size,
+            portfolio=self.portfolio,
+            exchange_rates=self.exchange_rates,
+            get_price_context=self._get_price_context,
+            get_ticker_currency=self._get_ticker_currency,
+            home_currency=self.home_currency,
+            verbose=self.verbose,
+        )
         if governor_decision:
             recommendations = self.governor.apply_to_recommendations(recommendations, governor_decision)
 
@@ -224,7 +245,12 @@ class EnhancedPortfolioManager:
                 pass  # Decision DB is passive
 
         # Step 8: Calculate updated portfolio
-        updated_portfolio = self._calculate_updated_portfolio(recommendations)
+        updated_portfolio = calculate_updated_portfolio(
+            recommendations=recommendations,
+            portfolio=self.portfolio,
+            exchange_rates=self.exchange_rates,
+            home_currency=self.home_currency,
+        )
 
         return {
             "analysis_date": analysis_timestamp.isoformat(),
@@ -792,42 +818,13 @@ class EnhancedPortfolioManager:
         signals: List[AnalystSignal],
         analyst_weights: Optional[Dict[str, float]] = None,
     ) -> Dict[str, float]:
-        """
-        Aggregate multiple analyst signals per ticker
-        Handles SHORT signals by reducing the score, not going negative
-        """
-        ticker_signals = {}
-
-        for signal in signals:
-            if signal.ticker not in ticker_signals:
-                ticker_signals[signal.ticker] = []
-            ticker_signals[signal.ticker].append(signal)
-
-        aggregated = {}
-        for ticker, ticker_sigs in ticker_signals.items():
-            # Weighted average by confidence plus governor-supplied analyst trust.
-            total_weight = sum(s.confidence * (analyst_weights.get(s.analyst, 1.0) if analyst_weights else 1.0) for s in ticker_sigs)
-            if total_weight > 0:
-                weighted_sum = sum(
-                    s.signal * s.confidence * (analyst_weights.get(s.analyst, 1.0) if analyst_weights else 1.0)
-                    for s in ticker_sigs
-                )
-                aggregated[ticker] = weighted_sum / total_weight
-            else:
-                aggregated[ticker] = 0
-
-        # If no signals, assign neutral score to all universe tickers
-        if not aggregated:
-            for ticker in self.universe:
-                aggregated[ticker] = 0.5  # Neutral score
-
-        return aggregated
+        """Delegate to pipeline.signal_aggregator."""
+        from src.services.pipeline.signal_aggregator import aggregate_signals
+        return aggregate_signals(signals, analyst_weights, universe=self.universe)
 
     def _apply_ticker_penalties(self, scores: Dict[str, float], decision: GovernorDecision) -> Dict[str, float]:
-        adjusted: Dict[str, float] = {}
-        for ticker, score in scores.items():
-            adjusted[ticker] = score * decision.ticker_penalties.get(ticker, 1.0)
-        return adjusted
+        from src.services.pipeline.signal_aggregator import apply_ticker_penalties
+        return apply_ticker_penalties(scores, decision.ticker_penalties)
 
     def _evaluate_governor(
         self,
@@ -846,90 +843,19 @@ class EnhancedPortfolioManager:
         )
 
     def _apply_long_only_constraint(self, scores: Dict[str, float]) -> Dict[str, float]:
-        """
-        Convert -1 to 1 signals into 0 to 1 long-only scores
-        -1 (strong sell) → 0 (sell all)
-        0 (neutral) → 0.5 (hold)
-        1 (strong buy) → 1 (max position)
-        """
-        long_only = {}
-        for ticker, score in scores.items():
-            # Transform: (score + 1) / 2 maps [-1,1] to [0,1]
-            long_only[ticker] = (score + 1) / 2
-        return long_only
+        """Delegate to pipeline.signal_aggregator."""
+        from src.services.pipeline.signal_aggregator import apply_long_only_constraint
+        return apply_long_only_constraint(scores)
 
     def _select_top_positions(self, scores: Dict[str, float], max_holdings: int) -> List[str]:
-        """
-        Select top N positions for concentrated portfolio
-        Path-independent: selects best positions regardless of current holdings
-        """
-        MIN_SCORE_THRESHOLD = 0.5  # Minimum score to be considered (0.5 = neutral)
-
-        # Filter tickers that meet minimum threshold
-        qualified_tickers = {t: s for t, s in scores.items() if s >= MIN_SCORE_THRESHOLD}
-
-        # Sort by score and select top N
-        sorted_tickers = sorted(qualified_tickers.items(), key=lambda x: x[1], reverse=True)
-        selected = [t for t, score in sorted_tickers[:max_holdings]]
-
-        return selected
+        """Delegate to pipeline.position_sizer."""
+        from src.services.pipeline.position_sizer import select_top_positions
+        return select_top_positions(scores, max_holdings)
 
     def _calculate_target_positions(self, selected_tickers: List[str], scores: Dict[str, float], max_position: float, min_position: float) -> Dict[str, float]:
-        """
-        Calculate target portfolio weights for selected tickers
-        Ensures concentrated portfolio with meaningful position sizes
-        """
-        if not selected_tickers:
-            return {}
-
-        # Get scores for selected tickers
-        selected_scores = {t: scores[t] for t in selected_tickers}
-
-        # Normalize scores to sum to 1
-        total_score = sum(selected_scores.values())
-        if total_score == 0:
-            return {}
-
-        count = len(selected_tickers)
-        effective_max_position = max(max_position, 1.0 / count)
-        effective_max_position = min(effective_max_position, 1.0)
-
-        target_weights = {}
-        for ticker in selected_tickers:
-            base_weight = selected_scores[ticker] / total_score
-
-            if base_weight > effective_max_position:
-                weight = effective_max_position
-            elif base_weight < min_position:
-                weight = min_position
-            else:
-                weight = base_weight
-
-            target_weights[ticker] = weight
-
-        total_weight = sum(target_weights.values())
-
-        # If weights exceed total, scale down proportionally
-        if total_weight > 1.0:
-            for ticker in target_weights:
-                target_weights[ticker] /= total_weight
-            total_weight = sum(target_weights.values())
-
-        # If there is remaining allocation capacity, distribute among non-capped tickers
-        if total_weight < 1.0:
-            residual = 1.0 - total_weight
-            capacities = {ticker: max(0.0, effective_max_position - weight) for ticker, weight in target_weights.items()}
-            capacity_total = sum(capacities.values())
-
-            if capacity_total > 0 and residual > 0:
-                for ticker, capacity in capacities.items():
-                    if capacity <= 0:
-                        continue
-                    addition = residual * (capacity / capacity_total)
-                    addition = min(addition, capacity)
-                    target_weights[ticker] += addition
-
-        return target_weights
+        """Delegate to pipeline.position_sizer."""
+        from src.services.pipeline.position_sizer import calculate_target_positions
+        return calculate_target_positions(selected_tickers, scores, max_position, min_position)
 
     def _get_ticker_currency(self, ticker: str) -> str:
         """
@@ -1141,497 +1067,44 @@ class EnhancedPortfolioManager:
         return context
 
     def _get_position_value_info(self, position: Position) -> Dict[str, float]:
-        """
-        Calculate the current market value for a position using price context data.
-        Falls back to cost basis when pricing data is unavailable.
-        """
-        price_context = None
-        try:
-            price_context = self._get_price_context(position.ticker)
-        except Exception:
-            # _get_price_context already logs warnings when verbose; continue with fallbacks.
-            price_context = None
-
-        price_candidates = []
-        if price_context:
-            price_candidates.extend(
-                [
-                    getattr(price_context, "entry_price", None),
-                    getattr(price_context, "latest_close", None),
-                ]
-            )
-        price_candidates.append(position.cost_basis)
-
-        price = next((float(p) for p in price_candidates if p is not None and p > 0), 0.0)
-
-        # Align currency with price context when available, otherwise fall back to stored currency.
-        currency = None
-        if price_context and getattr(price_context, "currency", None):
-            currency = price_context.currency
-        elif position.currency:
-            currency = position.currency
-        else:
-            currency = self.home_currency
-
-        fx_rate = self.exchange_rates.get(currency, 1.0)
-        value_home = position.shares * price * fx_rate
-
-        return {
-            "price": price,
-            "currency": currency,
-            "fx_rate": fx_rate,
-            "value_home": value_home,
-        }
+        """Delegate to pipeline.trade_generator."""
+        from src.services.pipeline.trade_generator import _get_position_value_info
+        return _get_position_value_info(position, self._get_price_context, self.exchange_rates, self.home_currency)
 
     def _generate_recommendations(self, target_positions: Dict[str, float], min_trade_size: float) -> List[Dict[str, Any]]:
-        """
-        Generate trading recommendations based on target positions vs current portfolio
-        Multi-currency aware: calculates per-currency totals and validates cash constraints
-        """
-        recommendations = []
-        current_tickers = {p.ticker for p in self.portfolio.positions}
-        all_tickers = set(list(target_positions.keys()) + list(current_tickers))
-
-        # Track current market value for existing positions using live pricing context.
-        position_value_map: Dict[str, Dict[str, float]] = {}
-
-        # Calculate total portfolio value in HOME CURRENCY
-        total_value_home = 0.0
-
-        # Convert position values to home currency
-        for pos in self.portfolio.positions:
-            value_info = self._get_position_value_info(pos)
-            position_value_map[pos.ticker] = value_info
-            total_value_home += value_info["value_home"]
-
-        # Convert cash holdings to home currency
-        for currency, cash in self.portfolio.cash_holdings.items():
-            fx_rate = self.exchange_rates.get(currency, 1.0)
-            total_value_home += cash * fx_rate
-
-        total_value = total_value_home
-        self._current_position_values = position_value_map
-
-        for ticker in all_tickers:
-            # Current position
-            current_pos = next((p for p in self.portfolio.positions if p.ticker == ticker), None)
-            current_weight = 0.0
-            current_shares = 0.0
-            if current_pos:
-                value_info = position_value_map.get(ticker)
-                if value_info:
-                    current_value_home = value_info["value_home"]
-                    current_weight = current_value_home / total_value if total_value > 0 else 0
-                else:
-                    fx_rate = self.exchange_rates.get(current_pos.currency, 1.0)
-                    current_value_home = current_pos.shares * current_pos.cost_basis * fx_rate
-                    current_weight = current_value_home / total_value if total_value > 0 else 0
-                current_shares = current_pos.shares
-
-            # Target position
-            target_weight = target_positions.get(ticker, 0.0)
-
-            # Determine action
-            weight_delta = target_weight - current_weight
-
-            if abs(weight_delta * total_value) < min_trade_size:
-                action = "HOLD"
-            elif target_weight == 0 and current_weight > 0:
-                action = "SELL"
-            elif target_weight > 0 and current_weight == 0:
-                action = "ADD"
-            elif weight_delta > 0:
-                action = "INCREASE"
-            elif weight_delta < 0:
-                action = "DECREASE"
-            else:
-                action = "HOLD"
-
-            price_context = self._get_price_context(ticker)
-            currency = price_context.currency or (current_pos.currency if current_pos else self._get_ticker_currency(ticker))
-
-            # Align with existing position currency when possible
-            if current_pos and currency and current_pos.currency and currency != current_pos.currency:
-                if self.verbose:
-                    print(f"⚠️  Currency update for {ticker}: {current_pos.currency} → {currency}")
-
-            fx_rate = self.exchange_rates.get(currency, 1.0)
-            target_value_home = target_weight * total_value
-
-            # Select trade price based on intended action
-            if action in {"ADD", "INCREASE"}:
-                trade_price = price_context.buy_price or price_context.entry_price
-            elif action in {"SELL", "DECREASE"}:
-                trade_price = price_context.sell_price or price_context.entry_price
-            else:
-                trade_price = price_context.entry_price
-
-            # Fallback handling for missing price context
-            if current_pos and price_context.sample_size == 0:
-                trade_price = current_pos.cost_basis or trade_price
-                currency = current_pos.currency or currency
-                fx_rate = self.exchange_rates.get(currency, 1.0)
-
-            if trade_price <= 0:
-                fallback_price = price_context.latest_close
-                if (fallback_price is None or fallback_price <= 0) and current_pos:
-                    fallback_price = current_pos.cost_basis
-                trade_price = fallback_price if fallback_price and fallback_price > 0 else 100.0
-
-            trade_price_home = trade_price * fx_rate
-            target_shares = target_value_home / trade_price_home if trade_price_home > 0 else 0
-            value_delta = (target_shares - current_shares) * trade_price
-
-            recommendations.append(
-                {
-                    "ticker": ticker,
-                    "action": action,
-                    "current_shares": current_shares,
-                    "current_weight": current_weight,
-                    "target_shares": target_shares,
-                    "target_weight": target_weight,
-                    "value_delta": value_delta,
-                    "confidence": 0.75,  # Simplified
-                    "reasoning": f"Target allocation: {target_weight:.1%}",
-                    "current_price": trade_price,
-                    "currency": currency,
-                    "pricing_basis": price_context.entry_price,
-                    "pricing_band": {"low": price_context.band_low, "high": price_context.band_high},
-                    "latest_close": price_context.latest_close,
-                    "atr": price_context.atr,
-                    "pricing_sample": price_context.sample_size,
-                    "pricing_source": price_context.source,
-                    "desired_weight": target_weight,
-                }
-            )
-
-        # Validate and adjust for cash constraints per currency
-        recommendations = self._validate_cash_constraints(recommendations)
-
-        return self._round_and_top_up_shares(recommendations, target_positions, total_value, min_trade_size)
+        """Delegate to pipeline.trade_generator."""
+        from src.services.pipeline.trade_generator import generate_recommendations
+        recommendations, self._current_position_values = generate_recommendations(
+            target_positions=target_positions,
+            min_trade_size=min_trade_size,
+            portfolio=self.portfolio,
+            exchange_rates=self.exchange_rates,
+            get_price_context=self._get_price_context,
+            get_ticker_currency=self._get_ticker_currency,
+            home_currency=self.home_currency,
+            verbose=self.verbose,
+        )
+        return recommendations
 
     def _validate_cash_constraints(self, recommendations: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """
-        Validate that recommendations don't exceed available cash.
-        All calculations in HOME CURRENCY to handle multi-currency portfolios.
-        Scale down ALL purchases proportionally if total cash insufficient.
-        """
-        # Calculate total cash available in HOME CURRENCY (pre-trade)
-        total_cash_available = 0.0
-        for currency, cash in self.portfolio.cash_holdings.items():
-            fx_rate = self.exchange_rates.get(currency, 1.0)
-            total_cash_available += cash * fx_rate
-
-        sale_proceeds_home = 0.0
-        purchase_requirements_home = 0.0
-
-        position_lookup = {p.ticker: p for p in self.portfolio.positions}
-
-        for rec in recommendations:
-            fx_rate = self.exchange_rates.get(rec["currency"], 1.0)
-
-            if rec["action"] == "SELL":
-                sale_value = rec["current_shares"] * rec["current_price"] * fx_rate
-                sale_proceeds_home += sale_value
-
-            elif rec["action"] == "ADD":
-                purchase_value = rec["target_shares"] * rec["current_price"] * fx_rate
-                purchase_requirements_home += purchase_value
-
-            elif rec["action"] == "INCREASE":
-                existing = position_lookup.get(rec["ticker"])
-                if existing:
-                    delta_shares = rec["target_shares"] - existing.shares
-                    if delta_shares > 0:
-                        purchase_requirements_home += delta_shares * rec["current_price"] * fx_rate
-                    elif delta_shares < 0:
-                        sale_proceeds_home += abs(delta_shares) * rec["current_price"] * fx_rate
-
-            elif rec["action"] == "DECREASE":
-                existing = position_lookup.get(rec["ticker"])
-                if existing:
-                    delta_shares = existing.shares - rec["target_shares"]
-                    sale_proceeds_home += delta_shares * rec["current_price"] * fx_rate
-
-        projected_cash_available = total_cash_available + sale_proceeds_home
-
-        if purchase_requirements_home > projected_cash_available:
-            if projected_cash_available <= 0:
-                scale_factor = 0.0
-            else:
-                scale_factor = (projected_cash_available * 0.99) / purchase_requirements_home
-
-            scale_factor = max(min(scale_factor, 1.0), 0.0)
-
-            for rec in recommendations:
-                if rec["action"] in ["ADD", "INCREASE"]:
-                    if rec["action"] == "ADD":
-                        rec["target_shares"] *= scale_factor
-                        rec["target_weight"] *= scale_factor
-                    elif rec["action"] == "INCREASE":
-                        existing = position_lookup.get(rec["ticker"])
-                        if existing:
-                            delta_shares = rec["target_shares"] - existing.shares
-                            if delta_shares > 0:
-                                scaled_delta = delta_shares * scale_factor
-                                rec["target_shares"] = existing.shares + scaled_delta
-                                rec["target_weight"] *= scale_factor
-
-        return recommendations
+        """Delegate to pipeline.trade_generator."""
+        from src.services.pipeline.trade_generator import _validate_cash_constraints
+        return _validate_cash_constraints(recommendations, self.portfolio, self.exchange_rates)
 
     def _round_and_top_up_shares(self, recommendations: List[Dict[str, Any]], target_positions: Dict[str, float], total_value: float, min_trade_size: float) -> List[Dict[str, Any]]:
-        """
-        Round share counts to integers and, when possible, deploy residual cash so the
-        resulting portfolio stays close to the intended allocation.
-        """
-        if total_value <= 0:
-            return recommendations
-
-        for rec in recommendations:
-            if "desired_weight" not in rec:
-                rec["desired_weight"] = target_positions.get(rec["ticker"], 0.0)
-
-        for rec in recommendations:
-            if rec["ticker"].upper() == "CASH":
-                continue
-
-            current_shares = rec["current_shares"]
-            raw_target_shares = rec["target_shares"]
-            action = rec["action"]
-
-            if action == "SELL":
-                adjusted_shares = 0.0
-            elif action == "ADD":
-                adjusted_shares = math.floor(raw_target_shares)
-            elif action == "INCREASE":
-                delta = max(0.0, raw_target_shares - current_shares)
-                adjusted_shares = current_shares + math.floor(delta)
-            elif action == "DECREASE":
-                delta = max(0.0, current_shares - raw_target_shares)
-                adjusted_shares = current_shares - math.floor(delta)
-            else:
-                adjusted_shares = round(raw_target_shares)
-
-            adjusted_shares = max(0.0, float(adjusted_shares))
-            rec["target_shares"] = adjusted_shares
-
-            delta_shares = adjusted_shares - current_shares
-            if adjusted_shares == 0 and current_shares > 0:
-                rec["action"] = "SELL"
-            elif delta_shares > 0 and current_shares == 0:
-                rec["action"] = "ADD"
-            elif delta_shares > 0:
-                rec["action"] = "INCREASE"
-            elif delta_shares < 0 and adjusted_shares > 0:
-                rec["action"] = "DECREASE"
-            elif delta_shares < 0:
-                rec["action"] = "SELL"
-            else:
-                rec["action"] = "HOLD"
-
-            rec["value_delta"] = delta_shares * rec["current_price"]
-
-            fx_rate = self.exchange_rates.get(rec["currency"], 1.0)
-            position_value_home = adjusted_shares * rec["current_price"] * fx_rate
-            rec["target_weight"] = position_value_home / total_value if total_value > 0 else 0.0
-
-        self._allocate_residual_cash(recommendations, total_value, min_trade_size)
-
-        return recommendations
+        """Delegate to pipeline.trade_generator."""
+        from src.services.pipeline.trade_generator import _round_and_top_up_shares
+        return _round_and_top_up_shares(recommendations, target_positions, total_value, min_trade_size, self.exchange_rates)
 
     def _allocate_residual_cash(self, recommendations: List[Dict[str, Any]], total_value: float, min_trade_size: float, base_weight_tolerance: float = 0.02) -> None:
-        """
-        Greedily allocate remaining cash to the most attractive tickers while keeping the
-        final allocation close to the intended weights. Gradually relaxes the tolerance if
-        residual cash remains so we prefer investing over leaving idle balances.
-        """
-        if total_value <= 0:
-            return
-
-        non_cash: List[Dict[str, Any]] = []
-        residual_home = total_value
-
-        for rec in recommendations:
-            if rec["ticker"].upper() == "CASH":
-                continue
-            fx_rate = self.exchange_rates.get(rec["currency"], 1.0)
-            allocation = rec["target_shares"] * rec["current_price"] * fx_rate
-            residual_home -= allocation
-            non_cash.append(rec)
-
-        residual_home = max(residual_home, 0.0)
-
-        if residual_home < min_trade_size:
-            return
-
-        tolerance_schedule = [0.0, base_weight_tolerance, 0.05, 0.1, 0.2, 0.5, 1.0]
-
-        while residual_home >= min_trade_size - 1e-6:
-            candidate = None
-            candidate_units = 0
-            candidate_cost = 0.0
-            candidate_deficit = -1.0
-
-            for tolerance in tolerance_schedule:
-                for rec in non_cash:
-                    desired_weight = rec.get("desired_weight", 0.0)
-                    current_weight = rec.get("target_weight", 0.0)
-                    deficit = max(0.0, desired_weight - current_weight)
-
-                    fx_rate = self.exchange_rates.get(rec["currency"], 1.0)
-                    share_cost_home = rec["current_price"] * fx_rate
-                    if share_cost_home <= 0:
-                        continue
-
-                    max_affordable_units = int(residual_home // share_cost_home)
-                    if max_affordable_units <= 0:
-                        continue
-
-                    min_units = 1
-                    if min_trade_size > 0:
-                        min_units = max(1, math.ceil(min_trade_size / share_cost_home))
-                    if max_affordable_units < min_units:
-                        continue
-
-                    if tolerance < 1.0:
-                        allowable_home = max(
-                            0.0,
-                            (desired_weight + tolerance) * total_value - current_weight * total_value,
-                        )
-                        max_units_tolerance = int(allowable_home // share_cost_home)
-                        if max_units_tolerance <= 0:
-                            continue
-                        units = min(max_affordable_units, max(min_units, max_units_tolerance))
-                    else:
-                        units = max_affordable_units
-
-                    if units < min_units:
-                        continue
-
-                    if candidate is None or deficit > candidate_deficit or (
-                        abs(deficit - candidate_deficit) < 1e-9 and share_cost_home * units < candidate_cost
-                    ):
-                        candidate = rec
-                        candidate_units = units
-                        candidate_cost = share_cost_home * units
-                        candidate_deficit = deficit
-
-                if candidate:
-                    break
-
-            if not candidate:
-                break
-
-            fx_rate = self.exchange_rates.get(candidate["currency"], 1.0)
-
-            candidate["target_shares"] += float(candidate_units)
-            delta_shares = candidate["target_shares"] - candidate["current_shares"]
-            if candidate["current_shares"] == 0 and candidate["target_shares"] > 0:
-                candidate["action"] = "ADD"
-            elif candidate["target_shares"] > candidate["current_shares"]:
-                candidate["action"] = "INCREASE"
-            elif candidate["target_shares"] < candidate["current_shares"]:
-                candidate["action"] = "DECREASE"
-            elif candidate["target_shares"] == 0 and candidate["current_shares"] > 0:
-                candidate["action"] = "SELL"
-            else:
-                candidate["action"] = "HOLD"
-
-            candidate["value_delta"] = delta_shares * candidate["current_price"]
-            position_value_home = candidate["target_shares"] * candidate["current_price"] * fx_rate
-            candidate["target_weight"] = position_value_home / total_value if total_value > 0 else 0.0
-
-            residual_home -= candidate_cost
-
-            if residual_home < 0 and abs(residual_home) < 1e-6:
-                residual_home = 0.0
-                break
+        """Delegate to pipeline.trade_generator."""
+        from src.services.pipeline.trade_generator import _allocate_residual_cash
+        _allocate_residual_cash(recommendations, total_value, min_trade_size, self.exchange_rates, base_weight_tolerance)
 
     def _calculate_updated_portfolio(self, recommendations: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """
-        Calculate the updated portfolio after applying recommendations
-        Properly handles date_acquired for new and modified positions
-        Deducts cash for purchases and adds cash for sales
-        """
-        updated_positions = []
-        updated_cash = dict(self.portfolio.cash_holdings)  # Copy current cash
-
-        if self.home_currency not in updated_cash:
-            updated_cash[self.home_currency] = 0.0
-
-        for rec in recommendations:
-            ticker = rec["ticker"]
-            currency = rec["currency"]
-
-            if rec["action"] == "SELL":
-                # Add cash back from sale (in home currency)
-                sale_value = rec["current_shares"] * rec["current_price"]
-                fx_rate = self.exchange_rates.get(currency, 1.0)
-                updated_cash[self.home_currency] += sale_value * fx_rate
-                # Position sold, not included in output
-                continue
-
-            elif rec["action"] == "ADD":
-                # Deduct cash for purchase (in home currency)
-                purchase_value = rec["target_shares"] * rec["current_price"]
-                fx_rate = self.exchange_rates.get(currency, 1.0)
-                updated_cash[self.home_currency] -= purchase_value * fx_rate
-
-                # New position - use today's date
-                updated_positions.append({"ticker": ticker, "shares": rec["target_shares"], "cost_basis": rec["current_price"], "currency": rec["currency"], "date_acquired": datetime.now().strftime("%Y-%m-%d")})
-
-            elif rec["action"] in ["INCREASE", "DECREASE", "HOLD"]:
-                # Find existing position
-                existing = next((p for p in self.portfolio.positions if p.ticker == ticker), None)
-
-                if existing and rec["target_shares"] > 0:
-                    if rec["action"] == "INCREASE":
-                        # Deduct cash for additional shares (in home currency)
-                        delta_shares = rec["target_shares"] - existing.shares
-                        purchase_value = delta_shares * rec["current_price"]
-                        fx_rate = self.exchange_rates.get(currency, 1.0)
-                        updated_cash[self.home_currency] -= purchase_value * fx_rate
-
-                        # Calculate updated cost basis
-                        new_cost_basis = compute_cost_basis_after_rebalance(
-                            existing_shares=existing.shares,
-                            existing_cost_basis=existing.cost_basis,
-                            existing_currency=existing.currency,
-                            current_price=rec["current_price"],
-                            target_currency=rec["currency"],
-                            target_shares=rec["target_shares"],
-                            action=rec["action"],
-                        )
-                    elif rec["action"] == "DECREASE":
-                        # Add cash back from partial sale (in home currency)
-                        delta_shares = existing.shares - rec["target_shares"]
-                        sale_value = delta_shares * rec["current_price"]
-                        fx_rate = self.exchange_rates.get(currency, 1.0)
-                        updated_cash[self.home_currency] += sale_value * fx_rate
-
-                        new_cost_basis = compute_cost_basis_after_rebalance(
-                            existing_shares=existing.shares,
-                            existing_cost_basis=existing.cost_basis,
-                            existing_currency=existing.currency,
-                            current_price=rec["current_price"],
-                            target_currency=rec["currency"],
-                            target_shares=rec["target_shares"],
-                            action=rec["action"],
-                        )
-                    else:
-                        new_cost_basis = compute_cost_basis_after_rebalance(
-                            existing_shares=existing.shares,
-                            existing_cost_basis=existing.cost_basis,
-                            existing_currency=existing.currency,
-                            current_price=rec["current_price"],
-                            target_currency=rec["currency"],
-                            target_shares=rec["target_shares"],
-                            action=rec["action"],
-                        )
-
-                    updated_positions.append({"ticker": ticker, "shares": rec["target_shares"], "cost_basis": new_cost_basis, "currency": rec["currency"], "date_acquired": existing.date_acquired.strftime("%Y-%m-%d") if existing.date_acquired else ""})
-
-        return {"positions": updated_positions, "cash": updated_cash}
+        """Delegate to pipeline.trade_generator."""
+        from src.services.pipeline.trade_generator import calculate_updated_portfolio
+        return calculate_updated_portfolio(recommendations, self.portfolio, self.exchange_rates, self.home_currency)
 
     def _portfolio_summary(self) -> Dict[str, Any]:
         """Generate summary of current portfolio in HOME CURRENCY"""
