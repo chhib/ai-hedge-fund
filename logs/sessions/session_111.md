@@ -19,3 +19,14 @@ _This is the active session file. New sessions should be added here._
 - **Root cause**: IBKR's `/iserver/marketdata/snapshot` returns empty on first call for any conid; requires a "prime" call first. This caused HOVE (CPH) to use stale 3-day-average price, triggering IBKR's "price exceeds 3%" and "no market data" warnings
 - **Cleanup**: Removed CFLT, CMH, DORO from both universe files (not in Borsdata coverage)
 - **Tests**: 27/27 IBKR execution tests passing
+
+## Session 113 (Market-aware order execution with sell-first sequencing)
+**Date**: 2026-03-24 | **Model**: Claude Opus 4.6 (1M context)
+
+- **Feature**: Orders now partitioned by market open/closed status before execution. Closed-market orders are deferred with clear skip reason (e.g., "Market closed (NYSE CLOSED)")
+- **Feature**: `EXCHANGE_SESSIONS` constant covers 18 exchanges (Nordic, European, US, Canadian) with timezone-aware open/close hours
+- **Feature**: `_is_market_open(exchange)` checks timezone-local hours including weekend detection
+- **Feature**: Warning when buys may lack cash from sells deferred on closed markets
+- **Root cause**: At 13:40 CET, sells on NYSE/TSX were silently filtered (market closed), leaving only buys which then prompted without available cash. The existing sell-before-buy sequencing worked but had no market-hours awareness
+- **Decision**: Unknown exchanges and SMART routing default to "assume open" -- let IBKR reject rather than skip valid orders
+- **Tests**: 27/27 IBKR execution tests passing

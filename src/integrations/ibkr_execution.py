@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import logging
 import time
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Sequence
@@ -15,6 +17,54 @@ logger = logging.getLogger(__name__)
 from src.integrations.ibkr_client import IBKRClient, IBKRError
 from src.integrations.ibkr_contract_mapper import ContractOverride, load_contract_overrides
 from src.integrations.ticker_mapper import map_borsdata_to_ibkr
+
+# (timezone, open_hour, open_min, close_hour, close_min)
+EXCHANGE_SESSIONS: Dict[str, tuple[str, int, int, int, int]] = {
+    "SFB": ("Europe/Stockholm", 9, 0, 17, 30),
+    "CPH": ("Europe/Copenhagen", 9, 0, 17, 0),
+    "OSE": ("Europe/Oslo", 9, 0, 16, 20),
+    "HEL": ("Europe/Helsinki", 10, 0, 18, 30),
+    "HEX": ("Europe/Helsinki", 10, 0, 18, 30),
+    "XETRA": ("Europe/Berlin", 9, 0, 17, 30),
+    "FWB": ("Europe/Berlin", 8, 0, 22, 0),
+    "FWB2": ("Europe/Berlin", 8, 0, 22, 0),
+    "LSE": ("Europe/London", 8, 0, 16, 30),
+    "AEB": ("Europe/Amsterdam", 9, 0, 17, 30),
+    "NASDAQ": ("America/New_York", 9, 30, 16, 0),
+    "NYSE": ("America/New_York", 9, 30, 16, 0),
+    "AMEX": ("America/New_York", 9, 30, 16, 0),
+    "ARCA": ("America/New_York", 9, 30, 16, 0),
+    "TSX": ("America/Toronto", 9, 30, 16, 0),
+    "TSXV": ("America/Toronto", 9, 30, 16, 0),
+    "PINK": ("America/New_York", 9, 30, 16, 0),
+    "BATS": ("America/New_York", 9, 30, 16, 0),
+}
+
+
+def _is_market_open(exchange: str | None, now: datetime | None = None) -> bool:
+    """Check if an exchange is currently open for regular trading."""
+    if not exchange or exchange.upper() == "SMART":
+        return True  # SMART routing — assume open, let IBKR decide
+    key = exchange.upper().split(".")[0]
+    session = EXCHANGE_SESSIONS.get(key)
+    if session is None:
+        return True  # Unknown exchange — assume open
+    tz_name, oh, om, ch, cm = session
+    tz = ZoneInfo(tz_name)
+    local_now = (now or datetime.now(tz)).astimezone(tz)
+    if local_now.weekday() >= 5:
+        return False
+    open_time = local_now.replace(hour=oh, minute=om, second=0, microsecond=0)
+    close_time = local_now.replace(hour=ch, minute=cm, second=0, microsecond=0)
+    return open_time <= local_now <= close_time
+
+
+def _market_status_label(exchange: str | None) -> str:
+    """Return a human-readable market status string like 'OSE OPEN' or 'NYSE CLOSED'."""
+    name = (exchange or "SMART").upper().split(".")[0]
+    if _is_market_open(exchange):
+        return f"{name} OPEN"
+    return f"{name} CLOSED"
 
 
 @dataclass(slots=True)
@@ -222,7 +272,7 @@ def execute_ibkr_rebalance_trades(
     # Build all order payloads upfront
     order_payloads = [_build_order_payload(resolved, resolved_account, tick_sizes.get(resolved.conid)) for resolved in resolved_orders]
 
-    # Sequence sells before buys to ensure cash is freed up before purchases
+    # Partition by side and market status
     sell_pairs: List[tuple[ResolvedOrder, Dict[str, Any]]] = []
     buy_pairs: List[tuple[ResolvedOrder, Dict[str, Any]]] = []
     for resolved, payload in zip(resolved_orders, order_payloads):
@@ -231,15 +281,48 @@ def execute_ibkr_rebalance_trades(
         else:
             buy_pairs.append((resolved, payload))
 
-    if preview_only and not execute and sell_pairs and buy_pairs:
+    # Defer orders on closed markets
+    open_sells: List[tuple[ResolvedOrder, Dict[str, Any]]] = []
+    deferred_sells: List[tuple[ResolvedOrder, Dict[str, Any]]] = []
+    for pair in sell_pairs:
+        exchange = pair[0].exchange or pair[0].listing_exchange
+        if _is_market_open(exchange):
+            open_sells.append(pair)
+        else:
+            deferred_sells.append(pair)
+
+    open_buys: List[tuple[ResolvedOrder, Dict[str, Any]]] = []
+    deferred_buys: List[tuple[ResolvedOrder, Dict[str, Any]]] = []
+    for pair in buy_pairs:
+        exchange = pair[0].exchange or pair[0].listing_exchange
+        if _is_market_open(exchange):
+            open_buys.append(pair)
+        else:
+            deferred_buys.append(pair)
+
+    # Report deferred orders
+    for resolved, _ in deferred_sells:
+        status = _market_status_label(resolved.exchange or resolved.listing_exchange)
+        report.skipped.append(OrderSkip(ticker=resolved.intent.ticker, action=resolved.intent.action, reason=f"Market closed ({status})"))
+    for resolved, _ in deferred_buys:
+        status = _market_status_label(resolved.exchange or resolved.listing_exchange)
+        report.skipped.append(OrderSkip(ticker=resolved.intent.ticker, action=resolved.intent.action, reason=f"Market closed ({status})"))
+
+    # Warn if buys depend on cash from deferred sells
+    if deferred_sells and open_buys:
+        deferred_sell_tickers = [r.intent.ticker for r, _ in deferred_sells]
+        report.warnings.append(f"Sell orders deferred (market closed): {', '.join(deferred_sell_tickers)}. Buy orders may lack cash from these sells.")
+
+    if preview_only and not execute and open_sells and open_buys:
         report.warnings.append("Buy previews deferred until sell orders execute; rerun after sells to fund purchases.")
-        for resolved, _ in buy_pairs:
+        for resolved, _ in open_buys:
             report.skipped.append(OrderSkip(ticker=resolved.intent.ticker, action=resolved.intent.action, reason="Deferred until sells executed"))
-        resolved_orders = [resolved for resolved, _ in sell_pairs]
-        order_payloads = [payload for _, payload in sell_pairs]
+        resolved_orders = [resolved for resolved, _ in open_sells]
+        order_payloads = [payload for _, payload in open_sells]
     else:
-        resolved_orders = [resolved for resolved, _ in sell_pairs] + [resolved for resolved, _ in buy_pairs]
-        order_payloads = [payload for _, payload in sell_pairs] + [payload for _, payload in buy_pairs]
+        # Sells first, then buys — only open-market orders
+        resolved_orders = [resolved for resolved, _ in open_sells] + [resolved for resolved, _ in open_buys]
+        order_payloads = [payload for _, payload in open_sells] + [payload for _, payload in open_buys]
 
     # Try batch preview first to avoid cash depletion issue
     batch_preview_results = _run_batch_preview(ibkr, resolved_account, resolved_orders, order_payloads, report)
