@@ -38,3 +38,11 @@ _This is the active session file. New sessions should be added here._
 - **Feature**: Sell quantities clamped to actual holdings to prevent accidental short selling on cash accounts (ISK)
 - **Root cause**: SFL sell on cash account U22372535 triggered "Short stock positions can only be held in a margin account" because IBKR didn't see the position in that account. The long-only guard now catches this early with a clear "Not held in account (long-only)" skip reason
 - **Tests**: Updated FakeIBKRClient with `get_positions()` and added position data to 4 tests; 27/27 passing
+
+## Session 115 (Exclude untradeable ISK positions: LUMI, LUG)
+**Date**: 2026-03-24 | **Model**: Claude Opus 4.6 (1M context)
+
+- **Fix**: Added `EXCLUDED_ISK_POSITIONS = {"LUMI", "LUG"}` in `ibkr_client.py` -- these are filtered out during `_transform_positions()` before entering the portfolio
+- **Decision**: Hardcode exclusion rather than CLI flag because these positions are permanently stuck (ISK account U22372535 has no trading permissions, and Client Portal won't allow self-service transfer to U22372536)
+- **Effect**: LUMI and LUG no longer appear in holdings, don't trigger sell recommendations, and don't inflate portfolio value calculations
+- **Tests**: 27/27 passing

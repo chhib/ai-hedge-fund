@@ -269,6 +269,12 @@ def _load_borsdata_tickers_for_mapper() -> None:
         pass  # Continue without verification if Börsdata unavailable
 
 
+# Positions stuck in ISK account with no trading permissions.
+# These exist on paper but cannot be bought or sold.
+# See session logs 107-108 for transfer attempts.
+EXCLUDED_ISK_POSITIONS = {"LUMI", "LUG"}
+
+
 def _transform_positions(rows: List[Dict[str, Any]]) -> List[Position]:
     positions: List[Position] = []
     for row in rows:
@@ -285,6 +291,11 @@ def _transform_positions(rows: List[Dict[str, Any]]) -> List[Position]:
             conid = row.get("conid")
             symbol = str(conid) if conid is not None else None
         if not symbol:
+            continue
+
+        # Skip untradeable ISK positions
+        if symbol.upper() in EXCLUDED_ISK_POSITIONS:
+            logger.warning("Excluding %s from portfolio (untradeable ISK position)", symbol)
             continue
 
         # Map to Börsdata format (learns and persists mappings)
