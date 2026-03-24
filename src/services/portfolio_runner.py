@@ -371,6 +371,27 @@ def run_rebalance(config: RebalanceConfig) -> RebalanceOutcome:
     session_id = str(uuid.uuid4())
     if config.verbose:
         print(f"Session ID: {session_id}\n")
+
+    # Decision DB: record the run
+    try:
+        import json as _json
+        from dataclasses import asdict
+        from src.data.decision_store import get_decision_store
+
+        config_snapshot = {k: str(v) if isinstance(v, Path) else v for k, v in asdict(config).items()}
+        get_decision_store().record_run(
+            run_id=session_id,
+            run_type="dry_run" if config.dry_run else "live",
+            analysis_date=datetime.now().strftime("%Y-%m-%d"),
+            analysts=analyst_list,
+            universe=universe_list,
+            portfolio_source=config.portfolio_source,
+            portfolio_path=str(config.portfolio_path) if config.portfolio_path else None,
+            config_json=_json.dumps(config_snapshot, default=str, sort_keys=True),
+        )
+    except Exception:
+        pass  # Decision DB is passive
+
     manager = EnhancedPortfolioManager(
         portfolio=portfolio,
         universe=universe_list,
