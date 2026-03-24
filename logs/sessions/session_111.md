@@ -71,3 +71,21 @@ _This is the active session file. New sessions should be added here._
 - **Tests**: 16 new tests (WAL, CRUD all 6 tables, recommendation_id FK linking, close_price NULL fallback, append-only, thread safety); 209/210 passing (1 pre-existing IBKR test failure)
 - **PR**: #6 squash-merged to main
 - **Next**: Pod Abstraction brainstorm (`/ce:brainstorm`)
+
+## Session 118 (Pod Abstraction -- brainstorm, plan, and implementation)
+**Date**: 2026-03-24 | **Model**: Claude Opus 4.6 (1M context)
+
+- **Brainstorm**: Full ce:brainstorm session defining pod abstraction requirements. Key decisions: 1 pod = 1 analyst, portfolio proposer (not just signal emitter), track separate + trade merged, equal-weight merge, single pods.yaml, EPM decomposition prerequisite, long-only, all analysts become pods. Researched real pod shop structures (Citadel, Millennium, Point72) for capital allocation patterns.
+- **Refactor**: Decomposed 1,658-line EnhancedPortfolioManager into 4 pipeline modules in `src/services/pipeline/`: signal_aggregator, position_sizer, trade_generator, signal_collector. EPM methods become thin delegations. Pure refactoring, zero behavior change. PR #7.
+- **Feature**: Pod config system -- `config/pods.yaml` with 18 pods (13 famous + 4 core + 1 news_sentiment), Pod dataclass + YAML loader with ANALYST_CONFIG validation, `resolve_pods()` for selection.
+- **Feature**: Pod proposer -- two-stage portfolio proposal: LLM path (second call synthesizing signals into portfolio) and deterministic path (sort by score, take top N, proportional weights).
+- **Feature**: Decision DB `pod_proposals` table -- run_id, pod_id, rank, ticker, target_weight, signal_score, reasoning. Index on (pod_id, created_at).
+- **Feature**: Pod merger -- equal-weight merge of N proposals with consensus amplification and max_holdings enforcement.
+- **Feature**: `run_pods()` orchestrator in portfolio_runner.py -- sequential per-pod signal collection + proposal, then merge + governor + trade generation.
+- **Feature**: CLI `--pods` flag on `hedge rebalance` (e.g., `--pods all`, `--pods "buffett,simons"`), `hedge pods` status command, `--analysts` deprecation warning.
+- **Decision**: pod_id lives only on `runs` table, cascades via run_id JOIN to other tables (no schema migration on existing 5 tables).
+- **Decision**: Sequential pod execution (rate limits are primary constraint). Intra-pod parallelism via existing ThreadPoolExecutor.
+- **Decision**: Governor evaluates post-merge only. Per-pod governor profiles deferred.
+- **Tests**: 209/210 passing (same pre-existing IBKR failure). End-to-end dry-run verified.
+- **PRs**: #7 (EPM decomposition), #8 (pod abstraction)
+- **Docs**: `docs/brainstorms/2026-03-24-pod-abstraction-requirements.md`, `docs/plans/2026-03-24-005-feat-pod-abstraction-config-driven-analyst-pods-plan.md`

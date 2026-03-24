@@ -295,6 +295,7 @@ class RebalanceConfig:
     universe_path: Optional[Path]
     universe_tickers: Optional[str]
     analysts: str = "all"
+    pods: Optional[str] = None  # "all" | comma-separated pod names | None (legacy mode)
     model: str = "gpt-4o"
     model_provider: Optional[str] = None
     max_workers: int = 50
@@ -434,6 +435,257 @@ def run_rebalance(config: RebalanceConfig) -> RebalanceOutcome:
         print("\n⚠️  Dry-run mode - no files saved")
 
     return RebalanceOutcome(session_id=session_id, results=results, output_path=output_path, unknown_tickers=unknown)
+
+
+def run_pods(config: RebalanceConfig) -> RebalanceOutcome:
+    """Execute the pod-based rebalance flow.
+
+    For each enabled pod (sequential):
+      1. Collect signals for the pod's single analyst
+      2. Generate portfolio proposal (LLM or deterministic)
+      3. Record signals + proposal to Decision DB
+
+    Then merge all proposals, evaluate with governor, size positions,
+    and generate trade recommendations.
+    """
+    import json as _json
+    from dataclasses import asdict
+
+    from src.config.pod_config import resolve_pods
+    from src.data.decision_store import get_decision_store
+    from src.services.pipeline.pod_merger import merge_proposals
+    from src.services.pipeline.pod_proposer import propose_portfolio
+    from src.services.pipeline.position_sizer import calculate_target_positions, select_top_positions
+    from src.services.pipeline.signal_aggregator import apply_long_only_constraint, apply_ticker_penalties
+    from src.services.pipeline.trade_generator import calculate_updated_portfolio, generate_recommendations
+
+    if not config.pods:
+        raise ValueError("run_pods requires config.pods to be set (e.g., 'all')")
+
+    # Load portfolio and universe (same as run_rebalance)
+    portfolio = _load_portfolio_from_source(config)
+    if config.portfolio_source == "ibkr":
+        account_label = portfolio.resolved_account_id or (config.ibkr_account or "unknown account")
+        print(f"\n✓ Loaded portfolio from IBKR account {account_label} with {len(portfolio.positions)} positions")
+    else:
+        print(f"\n✓ Loaded portfolio with {len(portfolio.positions)} positions")
+
+    universe_list = load_universe(
+        str(config.universe_path) if config.universe_path else None,
+        config.universe_tickers,
+        verbose=True,
+    )
+    if not universe_list:
+        raise ValueError("Universe is empty.")
+    print(f"✓ Loaded universe with {len(universe_list)} tickers")
+
+    ticker_markets, unknown = _build_ticker_market_map(universe_list)
+    _warn_unknown_tickers(unknown)
+    _ensure_current_holdings_in_universe(portfolio, universe_list)
+
+    # Resolve pods from config
+    pods = resolve_pods(config.pods)
+    print(f"✓ Running {len(pods)} pods: {', '.join(p.name for p in pods)}\n")
+
+    model_config = {"name": config.model, "provider": config.model_provider}
+    decision_store = get_decision_store()
+    all_proposals = []
+
+    # Sequential pod execution
+    for pod in pods:
+        pod_run_id = str(uuid.uuid4())
+        print(f"── Pod: {pod.name} (analyst: {pod.analyst}) ──")
+
+        # Record pod run in Decision DB
+        try:
+            config_snapshot = {k: str(v) if isinstance(v, Path) else v for k, v in asdict(config).items()}
+            decision_store.record_run(
+                run_id=pod_run_id,
+                run_type="dry_run" if config.dry_run else "live",
+                analysis_date=datetime.now().strftime("%Y-%m-%d"),
+                analysts=[pod.analyst],
+                universe=universe_list,
+                portfolio_source=config.portfolio_source,
+                portfolio_path=str(config.portfolio_path) if config.portfolio_path else None,
+                config_json=_json.dumps(config_snapshot, default=str, sort_keys=True),
+                pod_id=pod.name,
+            )
+        except Exception:
+            pass
+
+        # Collect signals for this pod's single analyst
+        manager = EnhancedPortfolioManager(
+            portfolio=portfolio,
+            universe=universe_list,
+            analysts=[pod.analyst],
+            model_config=model_config,
+            ticker_markets=ticker_markets,
+            home_currency=config.home_currency,
+            no_cache=config.no_cache,
+            no_cache_agents=config.no_cache_agents,
+            verbose=config.verbose,
+            session_id=pod_run_id,
+            max_workers=config.max_workers,
+            use_governor=False,  # Governor runs post-merge
+            governor_profile=config.governor_profile,
+        )
+
+        signals = manager._collect_analyst_signals()
+        print(f"  Signals: {len(signals)} collected")
+
+        # Generate portfolio proposal
+        try:
+            proposal = propose_portfolio(pod, signals, pod_run_id, model_config)
+            if proposal.picks:
+                # Record proposal to Decision DB
+                try:
+                    decision_store.record_pod_proposal(
+                        run_id=pod_run_id,
+                        pod_id=pod.name,
+                        picks=[
+                            {"rank": p.rank, "ticker": p.ticker, "target_weight": p.target_weight, "signal_score": p.signal_score}
+                            for p in proposal.picks
+                        ],
+                        reasoning=proposal.reasoning,
+                    )
+                except Exception:
+                    pass
+
+                print(f"  Proposal: {', '.join(f'{p.ticker} {p.target_weight:.0%}' for p in proposal.picks)}")
+                all_proposals.append(proposal)
+            else:
+                print(f"  Proposal: empty (no qualifying picks)")
+        except Exception as e:
+            print(f"  Proposal failed: {e}")
+
+        print()
+
+    if not all_proposals:
+        print("No proposals generated from any pod. Aborting.")
+        return RebalanceOutcome(
+            session_id="no-proposals",
+            results={"recommendations": [], "governor": None},
+            output_path=None,
+            unknown_tickers=unknown,
+        )
+
+    # Merge all pod proposals
+    print(f"── Merging {len(all_proposals)} pod proposals ──")
+    merged_weights = merge_proposals(all_proposals, max_holdings=config.max_holdings)
+    print(f"  Merged portfolio: {len(merged_weights)} positions")
+    for ticker, weight in sorted(merged_weights.items(), key=lambda x: -x[1]):
+        print(f"    {ticker}: {weight:.1%}")
+    print()
+
+    # Governor evaluation on merged portfolio (optional)
+    governor_decision = None
+    if config.use_governor:
+        from src.services.portfolio_governor import PortfolioGovernor
+        governor = PortfolioGovernor(profile=config.governor_profile)
+        all_analyst_names = [p.analyst for p in pods]
+        governor_decision = governor.evaluate(
+            selected_analysts=all_analyst_names,
+            aggregated_scores=merged_weights,
+            ticker_markets=ticker_markets,
+            max_position=config.max_position,
+            persist=True,
+        )
+        if governor_decision:
+            merged_weights = apply_ticker_penalties(merged_weights, governor_decision.ticker_penalties)
+            merged_weights = governor.apply_to_target_weights(merged_weights, governor_decision)
+
+    # Position sizing: the merged weights are already in [0,1] range
+    # Apply long-only selection and target calculation
+    selected = select_top_positions(merged_weights, config.max_holdings, min_score_threshold=0.0)
+    target_positions = {t: merged_weights[t] for t in selected}
+
+    # Normalize target_positions to sum to 1.0
+    total = sum(target_positions.values())
+    if total > 0:
+        target_positions = {t: w / total for t, w in target_positions.items()}
+
+    # Create a manager for price context and trade generation
+    merge_session_id = str(uuid.uuid4())
+    trade_manager = EnhancedPortfolioManager(
+        portfolio=portfolio,
+        universe=universe_list,
+        analysts=[],
+        model_config=model_config,
+        ticker_markets=ticker_markets,
+        home_currency=config.home_currency,
+        no_cache=config.no_cache,
+        verbose=config.verbose,
+        session_id=merge_session_id,
+        use_governor=False,
+    )
+    # Reuse prefetched data from the last pod's manager if available
+    trade_manager.prefetched_data = manager.prefetched_data
+    trade_manager.exchange_rates = manager.exchange_rates
+
+    # Generate trade recommendations
+    recommendations, _ = generate_recommendations(
+        target_positions=target_positions,
+        min_trade_size=config.min_trade,
+        portfolio=portfolio,
+        exchange_rates=trade_manager.exchange_rates,
+        get_price_context=trade_manager._get_price_context,
+        get_ticker_currency=trade_manager._get_ticker_currency,
+        home_currency=config.home_currency,
+        verbose=config.verbose,
+    )
+
+    if governor_decision and config.use_governor:
+        from src.services.portfolio_governor import PortfolioGovernor
+        governor = PortfolioGovernor(profile=config.governor_profile)
+        recommendations = governor.apply_to_recommendations(recommendations, governor_decision)
+
+    # Record merged results to Decision DB
+    try:
+        decision_store.record_trade_recommendations(merge_session_id, recommendations)
+    except Exception:
+        pass
+
+    updated_portfolio = calculate_updated_portfolio(
+        recommendations=recommendations,
+        portfolio=portfolio,
+        exchange_rates=trade_manager.exchange_rates,
+        home_currency=config.home_currency,
+    )
+
+    results = {
+        "analysis_date": datetime.now().isoformat(),
+        "current_portfolio": {
+            "total_value": 0,
+            "num_positions": len(portfolio.positions),
+            "cash_holdings": portfolio.cash_holdings,
+            "home_currency": config.home_currency,
+        },
+        "recommendations": recommendations,
+        "updated_portfolio": updated_portfolio,
+        "governor": governor_decision,
+        "pod_proposals": [
+            {
+                "pod_id": p.pod_id,
+                "picks": [{"rank": pk.rank, "ticker": pk.ticker, "weight": pk.target_weight} for pk in p.picks],
+                "reasoning": p.reasoning,
+            }
+            for p in all_proposals
+        ],
+    }
+
+    display_results(results, config.verbose)
+
+    output_path = None
+    if not config.dry_run:
+        output_dir = config.output_dir or Path.cwd()
+        output_path = output_dir / f"portfolio_{datetime.now().strftime('%Y%m%d')}.csv"
+        df = format_as_portfolio_csv(results)
+        df.to_csv(output_path, index=False)
+        print(f"\n✅ Rebalanced portfolio saved to: {output_path}")
+    else:
+        print("\n⚠️  Dry-run mode - no files saved")
+
+    return RebalanceOutcome(session_id=merge_session_id, results=results, output_path=output_path, unknown_tickers=unknown)
 
 
 def _build_ticker_market_map(universe: List[str]) -> tuple[Dict[str, str], List[str]]:
