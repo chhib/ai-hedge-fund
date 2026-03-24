@@ -19,7 +19,6 @@ BRZE         # BRZE
 BT.A         # BT.A
 CCC          # CCC
 CCM          # CCM
-CFLT         # CFLT
 CISS         # CISS
 CSU          # CSU
 CVRX         # CVRX
@@ -126,11 +125,9 @@ BUSER        # BUSER
 CINT         # CINT
 CLA.B        # CLA B
 CLIME.B      # CLIME B
-CMH          # CMH
 CRNO.B       # CRNO B
 CS           # CS
 CTM          # CTM
-DORO         # DORO
 EGTX         # EGTX
 EMBELL       # EMBELL
 EMBRAC.B     # EMBRAC B

@@ -22,7 +22,7 @@ BRZE            # Global  Braze Inc
 BT.A            # Global 
 CCC             # Global  CCC Intelligent Solutions
 CCM             # Global  Canagold Resources Ltd
-CFLT            # Global  Confluent Inc
+# DELISTED: CFLT - Confluent Inc not in Borsdata coverage
 CISS            # Global  C3is Inc
 CSU             # Global  Constellation Software Inc
 CVRX            # Global 
@@ -130,11 +130,11 @@ BUSER           # Nordic  Bambuser
 CINT            # Nordic 
 CLA B           # Nordic  Clas Ohlson
 CLIME B         # Nordic  Climeon
-CMH             # Nordic  Chordate Medical
+# DELISTED: CMH - Chordate Medical not in Borsdata coverage
 CRNO B          # Nordic  Cereno Scientific
 CS              # Nordic 
 CTM             # Nordic  Catena Media
-DORO            # Nordic  Doro
+# DELISTED: DORO - Doro not in Borsdata coverage
 EGTX            # Nordic 
 EMBELL          # Nordic  Embellence
 EMBRAC B        # Nordic  Embracer 

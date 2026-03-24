@@ -184,7 +184,10 @@ def execute_ibkr_rebalance_trades(
     if not resolved_orders:
         return report
 
-    snapshot = ibkr.get_marketdata_snapshot([order.conid for order in resolved_orders])
+    conids = [order.conid for order in resolved_orders]
+    ibkr.get_marketdata_snapshot(conids)  # Prime call — tells iServer to start streaming
+    time.sleep(1.5)
+    snapshot = ibkr.get_marketdata_snapshot(conids)  # Actual data call
     _apply_snapshot_prices(resolved_orders, snapshot, report)
 
     # Fetch contract rules for tick size rounding + trading permissions
@@ -588,6 +591,8 @@ def _select_candidate(
 
 def _apply_snapshot_prices(orders: List[ResolvedOrder], snapshot: Any, report: ExecutionReport) -> None:
     if not snapshot:
+        for order in orders:
+            report.warnings.append(f"{order.intent.ticker}: No snapshot data returned, using Borsdata price {order.intent.limit_price:.4f}")
         return
 
     snapshot_rows: List[Dict[str, Any]] = []
@@ -599,11 +604,14 @@ def _apply_snapshot_prices(orders: List[ResolvedOrder], snapshot: Any, report: E
     for order in orders:
         row = next((r for r in snapshot_rows if str(r.get("conid")) == str(order.conid)), None)
         if not row:
+            report.warnings.append(f"{order.intent.ticker}: No snapshot row for conid {order.conid}, using Borsdata price {order.intent.limit_price:.4f}")
             continue
         bid = _to_float(row.get("31"))
         ask = _to_float(row.get("84"))
         last = _to_float(row.get("86"))
-        new_price = order.intent.limit_price
+        availability = row.get("6509", "")
+        old_price = order.intent.limit_price
+        new_price = old_price
         if order.intent.side == "BUY" and ask > 0:
             new_price = ask
         elif order.intent.side == "SELL" and bid > 0:
@@ -614,6 +622,11 @@ def _apply_snapshot_prices(orders: List[ResolvedOrder], snapshot: Any, report: E
         if new_price <= 0:
             report.skipped.append(OrderSkip(ticker=order.intent.ticker, action=order.intent.action, reason="No valid market data price"))
             continue
+
+        if new_price != old_price:
+            logger.info("%s: Live price %.4f (bid=%.4f ask=%.4f last=%.4f avail=%s) replaced Borsdata %.4f", order.intent.ticker, new_price, bid, ask, last, availability, old_price)
+        else:
+            report.warnings.append(f"{order.intent.ticker}: No live bid/ask/last (avail={availability}), using Borsdata price {old_price:.4f}")
 
         order.intent.limit_price = new_price
 

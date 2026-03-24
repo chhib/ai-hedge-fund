@@ -165,7 +165,7 @@ class IBKRClient:
             # Fallback to info-and-rules for environments that do not support /contract/rules
             return self._request("GET", f"/iserver/contract/{conid}/info-and-rules", params={"isBuy": str(is_buy).lower()})
 
-    def get_marketdata_snapshot(self, conids: Iterable[int], fields: str = "31,84,86") -> Any:
+    def get_marketdata_snapshot(self, conids: Iterable[int], fields: str = "31,84,86,6509") -> Any:
         """Fetch a market data snapshot for conids."""
         joined = ",".join(str(c) for c in conids)
         return self._request("GET", "/iserver/marketdata/snapshot", params={"conids": joined, "fields": fields})
