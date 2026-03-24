@@ -46,3 +46,12 @@ _This is the active session file. New sessions should be added here._
 - **Decision**: Hardcode exclusion rather than CLI flag because these positions are permanently stuck (ISK account U22372535 has no trading permissions, and Client Portal won't allow self-service transfer to U22372536)
 - **Effect**: LUMI and LUG no longer appear in holdings, don't trigger sell recommendations, and don't inflate portfolio value calculations
 - **Tests**: 27/27 passing
+
+## Session 116 (Trading Pod Shop ideation + Decision DB brainstorm and plan)
+**Date**: 2026-03-24 | **Model**: Claude Opus 4.6 (1M context)
+
+- **Ideation**: Full ce:ideate session exploring transformation from "5 favorite analysts" to a trading pod shop architecture. 48 raw ideas from 6 parallel sub-agents, deduped to 17 unique candidates, 7 survivors after adversarial filtering.
+- **Ranked ideas**: (1) Decision DB, (2) Pod Abstraction, (3) Monolith Decomposition, (4) Paper Trading, (5) Daemon Mode, (6) Governor Pod Lifecycle, (7) Web UI Pod Dashboard
+- **Brainstorm**: Decision DB requirements defined -- full pipeline capture (signals -> aggregation -> governor -> trades -> execution), SQLite standalone `decisions.db`, eager writes for crash resilience, store everything (full transcripts, price context)
+- **Plan**: Comprehensive implementation plan for Decision DB with 5 phases, ERD, exact integration points identified at line-level in enhanced_portfolio_manager.py and portfolio_runner.py
+- **Docs**: `docs/ideation/2026-03-24-trading-pod-shop-ideation.md`, `docs/brainstorms/2026-03-24-decision-db-requirements.md`, `docs/plans/2026-03-24-004-feat-decision-db-append-only-ledger-plan.md`
