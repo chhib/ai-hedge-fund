@@ -161,6 +161,22 @@ class DecisionStore:
                 """
             )
 
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS pod_proposals (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    run_id TEXT NOT NULL,
+                    pod_id TEXT NOT NULL,
+                    rank INTEGER NOT NULL,
+                    ticker TEXT NOT NULL,
+                    target_weight REAL NOT NULL,
+                    signal_score REAL,
+                    reasoning TEXT,
+                    created_at TEXT NOT NULL
+                )
+                """
+            )
+
             # Indexes
             conn.execute("CREATE INDEX IF NOT EXISTS idx_signals_run_id ON signals (run_id)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_signals_ticker_date ON signals (ticker, analysis_date)")
@@ -170,6 +186,8 @@ class DecisionStore:
             conn.execute("CREATE INDEX IF NOT EXISTS idx_trade_recommendations_run_id ON trade_recommendations (run_id)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_execution_outcomes_run_id ON execution_outcomes (run_id)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_execution_outcomes_rec_id ON execution_outcomes (recommendation_id)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_pod_proposals_pod_created ON pod_proposals (pod_id, created_at)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_pod_proposals_run_id ON pod_proposals (run_id)")
 
     # ── Write methods (all INSERT-only, never UPSERT) ──
 
@@ -391,7 +409,66 @@ class DecisionStore:
                 ],
             )
 
+    def record_pod_proposal(
+        self,
+        run_id: str,
+        pod_id: str,
+        picks: List[Dict[str, Any]],
+        reasoning: Optional[str] = None,
+    ) -> None:
+        """Record a pod's portfolio proposal. One row per pick."""
+        now = datetime.now().isoformat()
+        with self._connect() as conn:
+            for pick in picks:
+                conn.execute(
+                    """
+                    INSERT INTO pod_proposals (run_id, pod_id, rank, ticker,
+                        target_weight, signal_score, reasoning, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        run_id,
+                        pod_id,
+                        pick.get("rank", 0),
+                        pick.get("ticker", ""),
+                        pick.get("target_weight", 0.0),
+                        pick.get("signal_score"),
+                        reasoning if pick.get("rank", 0) == 1 else None,
+                        now,
+                    ),
+                )
+
     # ── Read methods ──
+
+    def get_pod_proposals(
+        self,
+        pod_id: Optional[str] = None,
+        run_id: Optional[str] = None,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """Query pod proposals with optional filters."""
+        clauses, params = [], []
+        if pod_id:
+            clauses.append("pod_id = ?")
+            params.append(pod_id)
+        if run_id:
+            clauses.append("run_id = ?")
+            params.append(run_id)
+        if date_from:
+            clauses.append("created_at >= ?")
+            params.append(date_from)
+        if date_to:
+            clauses.append("created_at <= ?")
+            params.append(date_to)
+
+        where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"SELECT * FROM pod_proposals{where} ORDER BY pod_id, created_at, rank",
+                params,
+            ).fetchall()
+        return [dict(r) for r in rows]
 
     def get_run(self, run_id: str) -> Optional[Dict[str, Any]]:
         with self._connect() as conn:
