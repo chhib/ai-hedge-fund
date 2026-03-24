@@ -55,3 +55,19 @@ _This is the active session file. New sessions should be added here._
 - **Brainstorm**: Decision DB requirements defined -- full pipeline capture (signals -> aggregation -> governor -> trades -> execution), SQLite standalone `decisions.db`, eager writes for crash resilience, store everything (full transcripts, price context)
 - **Plan**: Comprehensive implementation plan for Decision DB with 5 phases, ERD, exact integration points identified at line-level in enhanced_portfolio_manager.py and portfolio_runner.py
 - **Docs**: `docs/ideation/2026-03-24-trading-pod-shop-ideation.md`, `docs/brainstorms/2026-03-24-decision-db-requirements.md`, `docs/plans/2026-03-24-004-feat-decision-db-append-only-ledger-plan.md`
+
+## Session 117 (Decision DB implementation -- append-only ledger)
+**Date**: 2026-03-24 | **Model**: Claude Opus 4.6 (1M context)
+
+- **Feature**: `src/data/decision_store.py` -- append-only SQLite ledger (`data/decisions.db`) with 6 tables: runs, signals, aggregations, governor_decisions, trade_recommendations, execution_outcomes
+- **Feature**: WAL mode for concurrent access from ThreadPoolExecutor threads (first WAL usage in project)
+- **Feature**: Eager signal writes in `run_analyst()` + cache-hit batch path in `enhanced_portfolio_manager.py`
+- **Feature**: `record_run()` in `portfolio_runner.py` after session_id generation with full config snapshot
+- **Feature**: Aggregation + governor decision recording after signal collection
+- **Feature**: Trade recommendations get UUID4 `recommendation_id` injected; execution outcomes link back via this FK
+- **Feature**: IBKR execution outcomes recorded in `hedge.py` after `execute_ibkr_rebalance_trades()` returns
+- **Decision**: All Decision DB writes wrapped in try/except -- passive observer, cannot break pipeline
+- **Decision**: Close price extracted from prefetched Borsdata data at signal time; NULL when unavailable
+- **Tests**: 16 new tests (WAL, CRUD all 6 tables, recommendation_id FK linking, close_price NULL fallback, append-only, thread safety); 209/210 passing (1 pre-existing IBKR test failure)
+- **PR**: #6 squash-merged to main
+- **Next**: Pod Abstraction brainstorm (`/ce:brainstorm`)
