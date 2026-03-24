@@ -1,9 +1,11 @@
-# Börsdata Integration Project Summary
+# AI Hedge Fund -- Project Summary
 
 _Last updated: 2026-03-24 (Session 117)_
 
 ## End Goal
-Rebuild the data ingestion and processing pipeline so the application relies on Börsdata's REST API. The system accepts Börsdata-native tickers, supports both Nordic and Global markets, and maintains compatibility with the original user-facing workflows.
+Transform from a single-strategy CLI tool into a **trading pod shop**: config-driven analyst groups (pods) with independent lifecycles, a promotion ladder (backtest -> paper -> live), an always-on daemon with scheduling, and a web dashboard -- all built on the Decision DB as the queryable source of truth for every decision the system makes.
+
+**Completed milestones**: Borsdata migration (sole data provider), IBKR execution pipeline, portfolio governor, Decision DB (append-only ledger).
 
 ## Current Status: Production Ready ✅
 
