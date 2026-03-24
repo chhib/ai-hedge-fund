@@ -1,7 +1,7 @@
 ---
 title: "feat: Pod Abstraction -- Config-Driven Analyst Pods with Independent Paper P&L"
 type: feat
-status: active
+status: completed
 date: 2026-03-24
 origin: docs/brainstorms/2026-03-24-pod-abstraction-requirements.md
 ---
