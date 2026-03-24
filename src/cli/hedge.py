@@ -159,6 +159,9 @@ def rebalance(
                 skip_swedish_stocks=ibkr_skip_swedish_stocks,
             )
             _render_ibkr_report(report, outcome.results)
+
+            # Decision DB: record execution outcomes
+            _record_execution_outcomes(outcome, report)
         except Exception as exc:  # pragma: no cover - CLI level guardrail
             click.secho(f"Error: {exc}", fg="red")
             raise click.Abort()
@@ -312,6 +315,53 @@ def _export_transcript(session_id: str) -> None:
         click.secho(f"Transcript export failed: {exc}", fg="red")
         return
     click.secho(f"Transcript saved to {output}", fg="green")
+
+
+def _record_execution_outcomes(outcome, report) -> None:
+    """Record IBKR execution outcomes to the Decision DB."""
+    try:
+        from src.data.decision_store import get_decision_store
+
+        recommendations = outcome.results.get("recommendations", [])
+        # Build ticker -> recommendation_id lookup
+        rec_id_by_ticker = {}
+        for rec in recommendations:
+            rec_id = rec.get("recommendation_id")
+            if rec_id:
+                rec_id_by_ticker[rec["ticker"]] = rec_id
+
+        outcomes = []
+
+        # Filled/partial orders from order_statuses
+        for status_result in report.order_statuses:
+            rec_id = rec_id_by_ticker.get(status_result.ticker)
+            outcomes.append({
+                "recommendation_id": rec_id,
+                "execution_type": "live" if report.executed else "paper",
+                "ticker": status_result.ticker,
+                "side": None,  # not directly on OrderStatusResult
+                "fill_price": status_result.avg_fill_price,
+                "fill_quantity": status_result.filled_qty,
+                "fill_timestamp": None,
+                "ibkr_order_id": status_result.order_id,
+                "status": status_result.status.lower(),
+            })
+
+        # Skipped orders
+        for skip in report.skipped:
+            rec_id = rec_id_by_ticker.get(skip.ticker)
+            outcomes.append({
+                "recommendation_id": rec_id,
+                "execution_type": "skipped",
+                "ticker": skip.ticker,
+                "status": "skipped" if "defer" not in skip.reason.lower() else "deferred",
+                "rejection_reason": skip.reason,
+            })
+
+        if outcomes:
+            get_decision_store().record_execution_outcomes(outcome.session_id, outcomes)
+    except Exception:
+        pass  # Decision DB is passive
 
 
 def _render_ibkr_report(report, results: Optional[dict] = None) -> None:

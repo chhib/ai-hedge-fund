@@ -11,6 +11,7 @@ from src.utils.currency import (
 )
 from src.data.analysis_cache import get_analysis_cache
 from src.data.analyst_task_queue import get_task_queue, TaskKey
+from src.data.decision_store import get_decision_store
 from src.services.portfolio_governor import GovernorDecision, PortfolioGovernor
 
 
@@ -183,6 +184,19 @@ class EnhancedPortfolioManager:
             analyst_weights=governor_decision.analyst_weights if governor_decision else None,
         )
 
+        # Decision DB: record governor decision + aggregations
+        if self.session_id:
+            try:
+                decision_store = get_decision_store()
+                if governor_decision:
+                    decision_store.record_governor_decision(self.session_id, governor_decision)
+                agg_weights = governor_decision.analyst_weights if governor_decision else {}
+                agg_records = self._build_aggregation_records(all_signals, aggregated_scores, agg_weights)
+                if agg_records:
+                    decision_store.record_aggregations(self.session_id, agg_records)
+            except Exception:
+                pass  # Decision DB is passive
+
         # Step 4: Apply LONG-ONLY constraint
         long_only_scores = self._apply_long_only_constraint(aggregated_scores)
         if governor_decision:
@@ -201,6 +215,13 @@ class EnhancedPortfolioManager:
         recommendations = self._generate_recommendations(target_positions, min_trade_size)
         if governor_decision:
             recommendations = self.governor.apply_to_recommendations(recommendations, governor_decision)
+
+        # Decision DB: record trade recommendations (injects recommendation_id into each dict)
+        if self.session_id:
+            try:
+                get_decision_store().record_trade_recommendations(self.session_id, recommendations)
+            except Exception:
+                pass  # Decision DB is passive
 
         # Step 8: Calculate updated portfolio
         updated_portfolio = self._calculate_updated_portfolio(recommendations)
@@ -430,6 +451,31 @@ class EnhancedPortfolioManager:
                 if self.verbose:
                     print(f"  Warning: Failed to batch-save session analyses: {e}")
 
+        # ── Decision DB: batch-record cached signals ──
+        if cached_session_rows and self.session_id:
+            try:
+                decision_store = get_decision_store()
+                for row in cached_session_rows:
+                    close_price, price_currency, price_source = self._extract_close_price(row["ticker"])
+                    decision_store.record_signal(
+                        run_id=self.session_id,
+                        ticker=row["ticker"],
+                        analyst_name=row["analyst_name"],
+                        signal=row["signal"],
+                        signal_numeric=row["signal_numeric"],
+                        confidence=row["confidence"],
+                        reasoning=row["reasoning"],
+                        model_name=row.get("model_name"),
+                        model_provider=row.get("model_provider"),
+                        close_price=close_price,
+                        currency=price_currency,
+                        price_source=price_source,
+                        analysis_date=end_date,
+                    )
+            except Exception as e:
+                if self.verbose:
+                    print(f"  Warning: Failed to record cached signals to Decision DB: {e}")
+
         # ── Slow path: only submit cache MISSES to ThreadPoolExecutor ──
         def run_analyst(analyst_info, state, ticker, ticker_idx):
             analyst_name = analyst_info["name"]
@@ -543,6 +589,27 @@ class EnhancedPortfolioManager:
                     except Exception as e:
                         if self.verbose:
                             print(f"  Warning: Failed to save analysis to database: {e}")
+
+                    # Decision DB: record signal (eager write per analyst x ticker)
+                    try:
+                        close_price, price_currency, price_source = self._extract_close_price(ticker)
+                        get_decision_store().record_signal(
+                            run_id=self.session_id,
+                            ticker=ticker,
+                            analyst_name=analyst_name,
+                            signal=signal_str,
+                            signal_numeric=numeric_signal,
+                            confidence=confidence,
+                            reasoning=reasoning,
+                            model_name=storage_model_name if uses_llm else None,
+                            model_provider=storage_model_provider if uses_llm else None,
+                            close_price=close_price,
+                            currency=price_currency,
+                            price_source=price_source,
+                            analysis_date=end_date,
+                        )
+                    except Exception:
+                        pass  # Decision DB is passive -- never break the pipeline
 
                 # Cache results even when --no-cache-agents is used (for next run)
                 # Only skip caching if --no-cache is set (which bypasses everything)
@@ -943,6 +1010,43 @@ class EnhancedPortfolioManager:
             if self.verbose:
                 print(f"Warning: Could not fetch price for {ticker}: {e}")
             return 100.0, self._get_ticker_currency(ticker)
+
+    def _build_aggregation_records(
+        self,
+        all_signals: List[AnalystSignal],
+        aggregated_scores: Dict[str, float],
+        analyst_weights: Dict[str, float],
+    ) -> List[Dict[str, Any]]:
+        """Build aggregation records with per-ticker analyst metadata."""
+        ticker_analysts: Dict[str, List[str]] = {}
+        for sig in all_signals:
+            ticker_analysts.setdefault(sig.ticker, []).append(sig.analyst)
+
+        records = []
+        for ticker, score in aggregated_scores.items():
+            analysts_for_ticker = ticker_analysts.get(ticker, [])
+            weights_for_ticker = {a: analyst_weights.get(a, 1.0) for a in analysts_for_ticker}
+            records.append({
+                "ticker": ticker,
+                "weighted_score": score,
+                "contributing_analysts": len(analysts_for_ticker),
+                "analyst_weights": weights_for_ticker,
+            })
+        return records
+
+    def _extract_close_price(self, ticker: str) -> tuple:
+        """Extract latest close price from prefetched data for Decision DB.
+
+        Returns (close_price, currency, price_source) -- all nullable.
+        """
+        prices = self.prefetched_data.get(ticker, {}).get("prices", [])
+        if prices:
+            sorted_prices = sorted(prices, key=lambda p: p.time)
+            latest = sorted_prices[-1]
+            close = float(latest.close) if latest.close is not None else None
+            currency = self._get_ticker_currency(ticker) if close else None
+            return close, currency, "borsdata"
+        return None, None, None
 
     def _get_price_context(self, ticker: str) -> PriceContext:
         """
