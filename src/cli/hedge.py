@@ -24,7 +24,8 @@ def cli() -> None:
 @click.option("--portfolio", type=click.Path(path_type=Path, exists=True), help="Path to the current portfolio CSV (required for CSV source)")
 @click.option("--universe", type=click.Path(path_type=Path, exists=True), help="Path to a universe list")
 @click.option("--universe-tickers", type=str, help="Comma-separated tickers if no file is provided")
-@click.option("--analysts", default="all", show_default=True, help="Analyst preset or comma-separated list")
+@click.option("--pods", default=None, help="Pod selection: 'all' or comma-separated pod names (e.g., 'buffett,simons')")
+@click.option("--analysts", default="all", show_default=True, help="[Deprecated: use --pods] Analyst preset or comma-separated list")
 @click.option("--model", default="gpt-4o", show_default=True, help="LLM model name")
 @click.option("--model-provider", help="Optional model provider override")
 @click.option("--max-workers", default=50, show_default=True, type=int, help="Parallel worker cap for analyst tasks")
@@ -56,6 +57,7 @@ def rebalance(
     portfolio: Optional[Path],
     universe: Optional[Path],
     universe_tickers: Optional[str],
+    pods: Optional[str],
     analysts: str,
     model: str,
     model_provider: Optional[str],
@@ -92,11 +94,16 @@ def rebalance(
         click.secho("Error: --portfolio is required when --portfolio-source=csv", fg="red")
         raise click.Abort()
 
+    # Deprecation warning for --analysts when --pods is available
+    if pods is None and analysts != "all":
+        click.secho("⚠️  --analysts is deprecated. Use --pods instead.", fg="yellow", err=True)
+
     config = RebalanceConfig(
         portfolio_path=portfolio,
         universe_path=universe,
         universe_tickers=universe_tickers,
         analysts=analysts,
+        pods=pods,
         model=model,
         model_provider=model_provider,
         max_workers=max_workers,
@@ -122,7 +129,11 @@ def rebalance(
     )
 
     try:
-        outcome = run_rebalance(config)
+        if config.pods:
+            from src.services.portfolio_runner import run_pods
+            outcome = run_pods(config)
+        else:
+            outcome = run_rebalance(config)
     except Exception as exc:  # pragma: no cover - CLI level guardrail
         click.secho(f"Error: {exc}", fg="red")
         raise click.Abort()
@@ -168,6 +179,36 @@ def rebalance(
 
     if export_transcript:
         _export_transcript(outcome.session_id)
+
+
+@cli.command("pods")
+def pods_status() -> None:
+    """Show pod status: name, analyst, enabled, latest proposal, paper P&L."""
+    from src.config.pod_config import load_pods
+    from src.data.decision_store import get_decision_store
+
+    all_pods = load_pods()
+    store = get_decision_store()
+
+    click.echo(f"\n{'Pod':<25} {'Analyst':<25} {'Enabled':<9} {'Latest Proposal':<20} {'Picks'}")
+    click.echo("─" * 100)
+
+    for pod in all_pods:
+        proposals = store.get_pod_proposals(pod_id=pod.name)
+        if proposals:
+            # Get latest proposal (grouped by run_id)
+            latest_run = proposals[-1]["run_id"]
+            latest_picks = [p for p in proposals if p["run_id"] == latest_run]
+            latest_date = latest_picks[0]["created_at"][:10] if latest_picks else "—"
+            picks_str = ", ".join(f'{p["ticker"]} {p["target_weight"]:.0%}' for p in latest_picks)
+        else:
+            latest_date = "—"
+            picks_str = "—"
+
+        enabled_str = "✓" if pod.enabled else "✗"
+        click.echo(f"{pod.name:<25} {pod.analyst:<25} {enabled_str:<9} {latest_date:<20} {picks_str}")
+
+    click.echo()
 
 
 @cli.command()
