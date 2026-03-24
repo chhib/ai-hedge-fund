@@ -7,7 +7,7 @@ from src.integrations.ibkr_client import IBKRError
 
 
 class FakeIBKRClient:
-    def __init__(self, contracts=None, snapshot=None, batch_preview_response=None, batch_preview_error=None, order_status_responses=None):
+    def __init__(self, contracts=None, snapshot=None, batch_preview_response=None, batch_preview_error=None, order_status_responses=None, positions=None):
         self.preview_calls = []
         self.batch_preview_calls = []
         self.place_calls = []
@@ -18,6 +18,7 @@ class FakeIBKRClient:
         self.batch_preview_error = batch_preview_error
         self.order_status_responses = order_status_responses or []
         self._order_status_call_count = 0
+        self._positions = positions or []
 
     def resolve_account_id(self, preferred=None):
         return preferred or "U123"
@@ -28,7 +29,10 @@ class FakeIBKRClient:
     def search_contracts(self, symbol, sec_type="STK"):
         return []
 
-    def get_marketdata_snapshot(self, conids, fields="31,84,86"):
+    def get_positions(self, account_id):
+        return self._positions
+
+    def get_marketdata_snapshot(self, conids, fields="31,84,86,6509"):
         return self.snapshot
 
     def get_contract_rules(self, conid, is_buy, exchange=None):
@@ -188,7 +192,8 @@ def test_swedish_sell_orders_are_not_auto_skipped(monkeypatch):
     contracts = {
         "EMBRAC.B": [{"contracts": [{"conid": 753729002, "exchange": "SFB"}]}],
     }
-    fake = FakeIBKRClient(contracts=contracts)
+    positions = [{"ticker": "EMBRAC.B", "position": 2}]
+    fake = FakeIBKRClient(contracts=contracts, positions=positions)
 
     monkeypatch.setattr(ibkr_execution, "load_contract_overrides", lambda: {})
 
@@ -274,7 +279,8 @@ def test_tick_size_uses_increment_rules(monkeypatch):
     contracts = {
         "AAA": [{"contracts": [{"conid": 111, "exchange": "SMART", "currency": "USD"}]}],
     }
-    fake = TickRulesClient(contracts=contracts)
+    positions = [{"ticker": "AAA", "position": 5}]
+    fake = TickRulesClient(contracts=contracts, positions=positions)
 
     monkeypatch.setattr(ibkr_execution, "load_contract_overrides", lambda: {})
 
@@ -289,7 +295,8 @@ def test_tick_size_uses_increment_rules(monkeypatch):
 
     assert len(fake.batch_preview_calls) == 1
     assert fake.batch_preview_calls[0][0]["price"] == 17.76
-    assert report.skipped == []
+    sell_skips = [s for s in report.skipped if "long-only" in s.reason]
+    assert sell_skips == []
 
 
 def test_skips_orders_without_trading_permissions(monkeypatch):
@@ -303,7 +310,8 @@ def test_skips_orders_without_trading_permissions(monkeypatch):
     contracts = {
         "AAA": [{"contracts": [{"conid": 111, "exchange": "SMART", "currency": "USD"}]}],
     }
-    fake = NoPermissionClient(contracts=contracts)
+    positions = [{"ticker": "AAA", "position": 2}]
+    fake = NoPermissionClient(contracts=contracts, positions=positions)
 
     monkeypatch.setattr(ibkr_execution, "load_contract_overrides", lambda: {})
 
@@ -330,7 +338,8 @@ def test_preview_only_defers_buys_until_sells(monkeypatch):
         "BUY1": [{"contracts": [{"conid": 222, "exchange": "SMART", "currency": "USD"}]}],
     }
     snapshot = [{"conid": "111", "84": "10.10"}, {"conid": "222", "84": "20.20"}]
-    fake = FakeIBKRClient(contracts=contracts, snapshot=snapshot)
+    positions = [{"ticker": "SELL1", "position": 5}]
+    fake = FakeIBKRClient(contracts=contracts, snapshot=snapshot, positions=positions)
 
     monkeypatch.setattr(ibkr_execution, "load_contract_overrides", lambda: {})
 

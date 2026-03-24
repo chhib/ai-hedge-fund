@@ -189,6 +189,58 @@ def build_order_intents(recommendations: List[Dict[str, Any]]) -> tuple[List[Ord
     return intents, skipped
 
 
+def _validate_sells_against_positions(
+    ibkr: IBKRClient, account_id: str, intents: List[OrderIntent]
+) -> tuple[List[OrderIntent], List[OrderSkip]]:
+    """Long-only guard: validate sell orders against live IBKR positions.
+
+    Skips sells for tickers not held in this account and clamps quantity
+    to actual holdings to prevent accidental short selling.
+    """
+    sell_intents = [i for i in intents if i.side == "SELL"]
+    if not sell_intents:
+        return intents, []
+
+    try:
+        positions = ibkr.get_positions(account_id)
+    except IBKRError as exc:
+        logger.warning("Could not fetch positions for long-only validation: %s", exc)
+        return intents, []
+
+    # Build ticker -> held quantity map from IBKR positions
+    held: Dict[str, float] = {}
+    for pos in positions:
+        ticker = str(pos.get("ticker") or pos.get("contractDesc") or "").upper()
+        qty = float(pos.get("position") or pos.get("pos") or 0)
+        if ticker and qty > 0:
+            held[ticker] = held.get(ticker, 0) + qty
+
+    validated: List[OrderIntent] = []
+    skipped: List[OrderSkip] = []
+    for intent in intents:
+        if intent.side != "SELL":
+            validated.append(intent)
+            continue
+
+        ibkr_ticker = intent.ibkr_symbol.upper()
+        held_qty = held.get(ibkr_ticker, 0)
+
+        if held_qty <= 0:
+            skipped.append(OrderSkip(
+                ticker=intent.ticker, action=intent.action,
+                reason=f"Not held in account {account_id} (long-only)",
+            ))
+            continue
+
+        if intent.quantity > held_qty:
+            logger.info("%s: Clamping sell from %d to %d (actual holdings)", intent.ticker, intent.quantity, int(held_qty))
+            intent.quantity = int(held_qty)
+
+        validated.append(intent)
+
+    return validated, skipped
+
+
 def execute_ibkr_rebalance_trades(
     recommendations: List[Dict[str, Any]],
     *,
@@ -223,6 +275,10 @@ def execute_ibkr_rebalance_trades(
     report.account_id = resolved_account
     if not resolved_account:
         raise IBKRError("No IBKR trading account resolved for execution")
+
+    # Validate sell orders against live IBKR positions (long-only guard)
+    intents, position_skips = _validate_sells_against_positions(ibkr, resolved_account, intents)
+    report.skipped.extend(position_skips)
 
     resolved_orders, resolution_skips = _resolve_contracts(ibkr, intents, load_contract_overrides())
     report.skipped.extend(resolution_skips)

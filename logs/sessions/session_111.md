@@ -30,3 +30,11 @@ _This is the active session file. New sessions should be added here._
 - **Root cause**: At 13:40 CET, sells on NYSE/TSX were silently filtered (market closed), leaving only buys which then prompted without available cash. The existing sell-before-buy sequencing worked but had no market-hours awareness
 - **Decision**: Unknown exchanges and SMART routing default to "assume open" -- let IBKR reject rather than skip valid orders
 - **Tests**: 27/27 IBKR execution tests passing
+
+## Session 114 (Long-only guard: validate sells against live IBKR positions)
+**Date**: 2026-03-24 | **Model**: Claude Opus 4.6 (1M context)
+
+- **Feature**: `_validate_sells_against_positions()` fetches live IBKR positions before building orders and skips sells for tickers not held in the account
+- **Feature**: Sell quantities clamped to actual holdings to prevent accidental short selling on cash accounts (ISK)
+- **Root cause**: SFL sell on cash account U22372535 triggered "Short stock positions can only be held in a margin account" because IBKR didn't see the position in that account. The long-only guard now catches this early with a clear "Not held in account (long-only)" skip reason
+- **Tests**: Updated FakeIBKRClient with `get_positions()` and added position data to 4 tests; 27/27 passing
