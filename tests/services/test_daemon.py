@@ -85,6 +85,7 @@ class TestPodDaemon:
         job_ids = [j.id for j in jobs]
         assert "test_pod_phase1" in job_ids
         assert "gateway_health_check" in job_ids
+        assert "weekly_lifecycle_evaluation" in job_ids
 
         # Trigger shutdown
         daemon.shutdown_requested.set()
@@ -135,6 +136,41 @@ class TestPodDaemon:
         calls = mock_store_instance.update_daemon_run_status.call_args_list
         assert any(c[0][1] == "completed" for c in calls)
 
+    @patch("src.services.portfolio_runner.run_pods")
+    @patch("src.services.daemon.get_decision_store")
+    def test_phase1_persists_linked_pipeline_run_id(self, mock_store, mock_run_pods, daemon_config, test_pod):
+        mock_store_instance = MagicMock()
+        mock_store.return_value = mock_store_instance
+        daemon_config.dry_run = False
+
+        mock_run_pods.return_value = MagicMock(
+            session_id="analysis-session",
+            results={
+                "pod_proposals": [
+                    {"pod_id": "test_pod", "run_id": "pipeline-run-123", "picks": [], "reasoning": None},
+                ],
+            },
+        )
+
+        daemon = PodDaemon(daemon_config)
+        daemon._store = mock_store_instance
+        daemon._schedule_phase2 = MagicMock()
+
+        schedule = {
+            "analysis": {"hour": 8},
+            "execution": {"hour": 10},
+            "timezone": "Europe/Stockholm",
+            "exchanges": ["SFB"],
+        }
+
+        with patch("src.services.daemon.is_market_open", return_value=True):
+            daemon._run_phase1(test_pod, schedule)
+
+        completion_call = mock_store_instance.update_daemon_run_status.call_args_list[-1]
+        assert completion_call.args[1] == "completed"
+        assert completion_call.kwargs["pipeline_run_id"] == "pipeline-run-123"
+        daemon._schedule_phase2.assert_called_once()
+
     @patch("src.services.daemon.get_decision_store")
     def test_phase1_skip_on_shutdown(self, mock_store, daemon_config, test_pod):
         mock_store.return_value = MagicMock()
@@ -171,6 +207,35 @@ class TestPodDaemon:
         if not skip_reason and len(skip_call[0]) >= 5:
             skip_reason = skip_call[0][4] or ""
         assert "not authenticated" in skip_reason
+
+    @patch("src.services.portfolio_runner.execute_proposals")
+    @patch("src.services.daemon.get_decision_store")
+    def test_phase2_executes_linked_pipeline_run_with_frozen_tier(self, mock_store, mock_execute, daemon_config):
+        mock_store_instance = MagicMock()
+        mock_store.return_value = mock_store_instance
+        mock_store_instance.get_daemon_run.return_value = {
+            "id": "phase1-run-id",
+            "pod_id": "live_pod",
+            "phase": "analysis",
+            "pipeline_run_id": "pipeline-run-123",
+        }
+        daemon_config.dry_run = False
+
+        live_pod = Pod(name="live_pod", analyst="warren_buffett", tier="live", schedule="nordic-morning")
+        daemon = PodDaemon(daemon_config)
+        daemon._store = mock_store_instance
+        daemon.gateway_manager = MagicMock()
+        daemon.gateway_manager.is_authenticated.return_value = True
+        daemon._apply_drawdown_guard = MagicMock()
+
+        schedule = {"exchanges": ["SFB"], "analysis": {}, "execution": {}, "timezone": "UTC"}
+        with patch("src.services.daemon.is_market_open", return_value=True):
+            daemon._run_phase2(live_pod, schedule, "phase1-run-id")
+
+        assert mock_execute.call_count == 1
+        assert mock_execute.call_args.kwargs["phase1_run_ids"] == ["pipeline-run-123"]
+        assert mock_execute.call_args.kwargs["config"].tier_override == "live"
+        daemon._apply_drawdown_guard.assert_called_once()
 
     @patch("src.services.daemon.load_lifecycle_config")
     @patch("src.services.daemon.get_decision_store")

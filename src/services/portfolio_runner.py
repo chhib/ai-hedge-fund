@@ -582,6 +582,7 @@ def run_pods(config: RebalanceConfig) -> RebalanceOutcome:
                 "pod_proposals": [
                     {
                         "pod_id": p.pod_id,
+                        "run_id": p.run_id,
                         "picks": [{"rank": pk.rank, "ticker": pk.ticker, "weight": pk.target_weight} for pk in p.picks],
                         "reasoning": p.reasoning,
                     }
@@ -634,6 +635,7 @@ def run_pods(config: RebalanceConfig) -> RebalanceOutcome:
                 "pod_proposals": [
                     {
                         "pod_id": p.pod_id,
+                        "run_id": p.run_id,
                         "picks": [{"rank": pk.rank, "ticker": pk.ticker, "weight": pk.target_weight} for pk in p.picks],
                         "reasoning": p.reasoning,
                     }
@@ -742,6 +744,7 @@ def run_pods(config: RebalanceConfig) -> RebalanceOutcome:
         "pod_proposals": [
             {
                 "pod_id": p.pod_id,
+                "run_id": p.run_id,
                 "picks": [{"rank": pk.rank, "ticker": pk.ticker, "weight": pk.target_weight} for pk in p.picks],
                 "reasoning": p.reasoning,
             }
@@ -961,6 +964,7 @@ def execute_proposals(
             "pod_proposals": [
                 {
                     "pod_id": p.pod_id,
+                    "run_id": p.run_id,
                     "picks": [{"rank": pk.rank, "ticker": pk.ticker, "weight": pk.target_weight} for pk in p.picks],
                     "reasoning": p.reasoning,
                 }

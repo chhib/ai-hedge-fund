@@ -187,8 +187,16 @@ class PodDaemon:
             runtime_pod = self._resolve_runtime_pod(pod)
             config = self._build_rebalance_config(runtime_pod, analysis_only=True)
             outcome = run_pods(config)
+            pipeline_run_id = next(
+                (
+                    proposal.get("run_id")
+                    for proposal in outcome.results.get("pod_proposals", [])
+                    if proposal.get("pod_id") == runtime_pod.name and proposal.get("run_id")
+                ),
+                None,
+            )
 
-            self._store.update_daemon_run_status(daemon_run_id, "completed")
+            self._store.update_daemon_run_status(daemon_run_id, "completed", pipeline_run_id=pipeline_run_id)
             logger.info("Phase 1 %s: completed (session=%s)", pod.name, outcome.session_id)
 
             # Schedule Phase 2
@@ -201,7 +209,7 @@ class PodDaemon:
 
     def _schedule_phase2(self, pod: Pod, schedule: Dict[str, Any], phase1_daemon_run_id: str) -> None:
         """Schedule a one-shot Phase 2 job for today's execution time."""
-        from datetime import date, time as dt_time
+        from datetime import time as dt_time
         from zoneinfo import ZoneInfo
 
         tz_name = schedule["timezone"]
@@ -211,7 +219,7 @@ class PodDaemon:
         # Compute today's execution time as a one-shot DateTrigger
         exec_hour = int(execution_kwargs.get("hour", 10))
         exec_minute = int(execution_kwargs.get("minute", 0))
-        today = date.today()
+        today = datetime.now(tz).date()
         run_date = datetime.combine(today, dt_time(exec_hour, exec_minute), tzinfo=tz)
 
         # If execution time has already passed today, run in 5 minutes
@@ -268,21 +276,17 @@ class PodDaemon:
         try:
             from src.services.portfolio_runner import execute_proposals
 
-            # Find the Phase 1 pipeline run_ids (from Decision DB runs table, linked via daemon_runs)
             phase1_db_run = self._store.get_daemon_run(phase1_daemon_run_id)
             if not phase1_db_run:
                 raise RuntimeError(f"Phase 1 daemon run {phase1_daemon_run_id} not found")
 
-            # Get the actual pipeline run_ids for this pod from the runs table
-            recent_runs = self._store.get_runs(pod_id=pod.name)
-            phase1_run_ids = [r["run_id"] for r in recent_runs[:1]] if recent_runs else []
-
-            if not phase1_run_ids:
-                raise RuntimeError(f"No pipeline runs found for pod {pod.name}")
+            pipeline_run_id = phase1_db_run.get("pipeline_run_id")
+            if not pipeline_run_id:
+                raise RuntimeError(f"Phase 1 daemon run {phase1_daemon_run_id} has no linked pipeline run for pod {pod.name}")
 
             config = self._build_rebalance_config(pod)
             execute_proposals(
-                phase1_run_ids=phase1_run_ids,
+                phase1_run_ids=[pipeline_run_id],
                 config=config,
                 drift_threshold=self.config.drift_threshold,
             )
@@ -371,6 +375,7 @@ class PodDaemon:
             governor_profile=self.config.governor_profile,
             no_cache=self.config.no_cache,
             verbose=self.config.verbose,
+            tier_override=pod.tier,
             analysis_only=analysis_only,
         )
 

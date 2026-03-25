@@ -545,6 +545,7 @@ def test_record_and_get_daemon_run(store: DecisionStore) -> None:
     assert result["phase"] == "analysis"
     assert result["status"] == "scheduled"
     assert result["retry_count"] == 0
+    assert result["pipeline_run_id"] is None
 
 
 def test_daemon_run_lifecycle(store: DecisionStore) -> None:
@@ -582,11 +583,14 @@ def test_daemon_run_skipped(store: DecisionStore) -> None:
 
 def test_daemon_run_phase2_references_phase1(store: DecisionStore) -> None:
     store.record_daemon_run("dr-p1", "buffett", "analysis")
-    store.update_daemon_run_status("dr-p1", "completed")
+    store.update_daemon_run_status("dr-p1", "completed", pipeline_run_id="pipeline-123")
 
     store.record_daemon_run("dr-p2", "buffett", "execution", phase1_run_id="dr-p1")
     run = store.get_daemon_run("dr-p2")
     assert run["phase1_run_id"] == "dr-p1"
+
+    phase1_run = store.get_daemon_run("dr-p1")
+    assert phase1_run["pipeline_run_id"] == "pipeline-123"
 
 
 def test_get_latest_daemon_run(store: DecisionStore) -> None:

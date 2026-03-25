@@ -258,6 +258,7 @@ class DecisionStore:
                     retry_count INTEGER NOT NULL DEFAULT 0,
                     skip_reason TEXT,
                     phase1_run_id TEXT,
+                    pipeline_run_id TEXT,
                     error_message TEXT,
                     started_at TEXT,
                     completed_at TEXT,
@@ -265,6 +266,12 @@ class DecisionStore:
                 )
                 """
             )
+            daemon_run_columns = {
+                row[1]
+                for row in conn.execute("PRAGMA table_info(daemon_runs)").fetchall()
+            }
+            if "pipeline_run_id" not in daemon_run_columns:
+                conn.execute("ALTER TABLE daemon_runs ADD COLUMN pipeline_run_id TEXT")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_daemon_runs_pod_phase ON daemon_runs (pod_id, phase)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_daemon_runs_status ON daemon_runs (status)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_daemon_runs_created ON daemon_runs (created_at)")
@@ -608,7 +615,7 @@ class DecisionStore:
                     ),
                 )
         except Exception:
-            logger.debug("Failed to record pod lifecycle event for pod %s", pod_id, exc_info=True)
+            logger.warning("Failed to record pod lifecycle event for pod %s", pod_id, exc_info=True)
 
     # ── Daemon run methods (operational metadata, allows UPDATE) ──
 
@@ -619,6 +626,7 @@ class DecisionStore:
         phase: str,
         status: str = "scheduled",
         phase1_run_id: Optional[str] = None,
+        pipeline_run_id: Optional[str] = None,
     ) -> None:
         """Record a new daemon run entry."""
         try:
@@ -626,10 +634,10 @@ class DecisionStore:
                 conn.execute(
                     """
                     INSERT INTO daemon_runs (id, pod_id, phase, status, retry_count,
-                        phase1_run_id, created_at)
-                    VALUES (?, ?, ?, ?, 0, ?, ?)
+                        phase1_run_id, pipeline_run_id, created_at)
+                    VALUES (?, ?, ?, ?, 0, ?, ?, ?)
                     """,
-                    (daemon_run_id, pod_id, phase, status, phase1_run_id, datetime.now().isoformat()),
+                    (daemon_run_id, pod_id, phase, status, phase1_run_id, pipeline_run_id, datetime.now().isoformat()),
                 )
         except Exception:
             logger.debug("Failed to record daemon run %s", daemon_run_id, exc_info=True)
@@ -641,6 +649,7 @@ class DecisionStore:
         error_message: Optional[str] = None,
         retry_count: Optional[int] = None,
         skip_reason: Optional[str] = None,
+        pipeline_run_id: Optional[str] = None,
     ) -> None:
         """Update a daemon run's status and optional fields."""
         try:
@@ -664,6 +673,9 @@ class DecisionStore:
                 if skip_reason is not None:
                     sets.append("skip_reason = ?")
                     params.append(skip_reason)
+                if pipeline_run_id is not None:
+                    sets.append("pipeline_run_id = ?")
+                    params.append(pipeline_run_id)
 
                 params.append(daemon_run_id)
                 conn.execute(f"UPDATE daemon_runs SET {', '.join(sets)} WHERE id = ?", params)
