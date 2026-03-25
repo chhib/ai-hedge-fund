@@ -107,3 +107,21 @@ _This is the active session file. New sessions should be added here._
 - **PR**: #9 (feat/paper-trading)
 - **Docs**: `docs/brainstorms/2026-03-24-paper-trading-requirements.md`, `docs/plans/2026-03-25-001-feat-paper-trading-virtual-execution-plan.md`
 - **Next**: #5 Daemon Mode or #6 Governor Pod Lifecycle from the ideation
+
+## Session 120 (Daemon Mode -- always-on pod scheduler with two-phase execution)
+**Date**: 2026-03-25 | **Model**: Claude Opus 4.6 (1M context)
+
+- **Brainstorm**: Full ce:brainstorm session defining daemon mode requirements. Key decisions: standalone scheduler (separate from FastAPI), Decision DB as shared state (no daemon HTTP endpoints), two-phase daily cycle (analyze pre-open, execute ~1hr post-open), presets with cron override, uniform market-hours skip (both tiers), price-drift check only for Phase 2, escalating backoff retries (5/15/30min), daemon manages IBKR gateway lifecycle, `hedge serve` foreground process.
+- **Plan**: Comprehensive implementation plan with 6 units: market hours extraction + pod schedule config, Decision DB daemon state, two-phase pipeline split, IBKR gateway lifecycle manager, daemon core, CLI hedge serve command.
+- **Feature**: `src/utils/market_hours.py` -- extracted `EXCHANGE_SESSIONS`, `is_market_open()`, schedule presets (nordic-morning, us-morning, europe-morning, weekly-nordic) with raw cron override.
+- **Feature**: `src/data/decision_store.py` -- `daemon_runs` table for phase tracking (scheduled/running/completed/failed/skipped), retry counts, skip reasons, phase1->phase2 linkage. `busy_timeout=5000` on every connection for multi-process safety.
+- **Feature**: `src/services/portfolio_runner.py` -- `analysis_only` flag on `RebalanceConfig` for Phase 1 early return. New `execute_proposals()` function for Phase 2: loads proposals from Decision DB, fetches Phase 1 close prices from signals table, validates price drift, executes paper/live trades.
+- **Feature**: `src/services/price_validator.py` -- `PriceValidator` with configurable drift threshold (default 5%). Compares actual close prices (not signal scores) against current market prices.
+- **Feature**: `src/services/gateway_manager.py` -- Non-throwing `GatewayManager` with start/health-check/auto-restart. 3 consecutive failures trigger restart. Never raises exceptions.
+- **Feature**: `src/services/daemon.py` -- `PodDaemon` with APScheduler `BackgroundScheduler`. Per-pod cron-triggered Phase 1, `DateTrigger` one-shot Phase 2, escalating backoff retries, SIGINT/SIGTERM graceful shutdown, structured logging.
+- **Feature**: `hedge serve` CLI command with --pods, --dry-run, --drift-threshold, model/IBKR options.
+- **Review**: 7-agent multi-agent review (Python, security, performance, architecture, simplicity, agent-native, learnings). Fixed 3 P1 issues: price drift validator comparing signal scores (bug), Phase 2 using CronTrigger instead of DateTrigger, busy_timeout not propagated to operational connections. Fixed P2 cleanup: removed double try/except wrappers, backward-compatible aliases, dead code.
+- **Tests**: 115 new tests (281 total passing). Covers market hours, schedule presets, daemon lifecycle, Phase 1/2 flows, price drift, gateway manager, CLI help.
+- **PR**: #10 (feat/daemon-mode)
+- **Docs**: `docs/brainstorms/2026-03-25-daemon-mode-requirements.md`, `docs/plans/2026-03-25-002-feat-daemon-mode-always-on-scheduler-beta-plan.md`
+- **Next**: #6 Governor Pod Lifecycle or #7 Web UI Pod Dashboard
