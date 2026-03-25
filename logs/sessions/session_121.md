@@ -52,3 +52,12 @@ _This is the active session file. New sessions should be added here._
 - **P2 fixes**: Extracted `app/backend/services/pod_service.py` service layer, added confirmation dialog for promote/demote, per-pod error isolation in list endpoint, generic error messages (no exception leakage), `Path` regex validation on `pod_id`, removed unused imports, removed `[key: string]: any` from PodMetrics, fixed `catch(error: any)`, added `GET /pods/{pod_id}/proposals` endpoint, guarded against non-JSON error responses, `encodeURIComponent` on URL paths, `LifecycleConfigResponse` + `PodProposalResponse` Pydantic models, used `config.evaluation_schedule` instead of hardcoded "Weekly Monday", added `TabType 'pods'`, override temporality note in dialogs.
 - **Tests**: Added 19 tests in `tests/backend/test_pods_routes.py` covering all 6 endpoints, per-pod error isolation, input validation, path traversal rejection, tier no-ops, 404s, and event type correctness.
 - **Verification**: `poetry run pytest tests/backend/test_pods_routes.py` -- 19/19 passing. `poetry run flake8` clean. TypeScript `tsc --noEmit` clean for pod files (pre-existing errors in unrelated files).
+
+## Session 125 (`Ops README Rewrite` -- pod-first documentation)
+**Date**: 2026-03-25 | **Model**: Claude Opus 4.6
+
+- **Docs**: Rewrote README.md to center on the pod/daemon operating model instead of the legacy rebalance CLI. Covers: quick start (daemon), concepts (pods, tiers, lifecycle), config reference (pods.yaml, schedule presets), full CLI reference (serve, pods, rebalance, ibkr, scorecard, cache), web dashboard, Decision DB table reference (11 tables), and architecture.
+- **Docs**: Added progressive Testing & Validation guide in 3 tiers: Tier 1 (offline -- pytest, config validation), Tier 2 (paper -- dry-run daemon, single pod cycle, Decision DB queries), Tier 3 (IBKR -- gateway, pipeline check, what-if, live execution).
+- **Docs**: Preserved original README as `README_LEGACY.md` with backwards compatibility section linking to it.
+- **Brainstorm**: Created `docs/brainstorms/2026-03-25-ops-readme-rewrite-requirements.md` with 7 requirements for the documentation rewrite.
+- **Verification**: `hedge pods status` and pod config validation command both confirmed working.

@@ -1,6 +1,6 @@
 # AI Hedge Fund -- Project Summary
 
-_Last updated: 2026-03-25 (Session 124)_
+_Last updated: 2026-03-25 (Session 125)_
 
 ## End Goal
 Transform from a single-strategy CLI tool into a **trading pod shop**: config-driven analyst groups (pods) with independent lifecycles, a promotion ladder (backtest -> paper -> live), an always-on daemon with scheduling, and a web dashboard -- all built on the Decision DB as the queryable source of truth for every decision the system makes.

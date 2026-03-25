@@ -1,38 +1,122 @@
-# AI Hedge Fund -- Borsdata Edition
+# AI Hedge Fund -- Pod Shop
 
-Fork of [virattt/ai-hedge-fund](https://github.com/virattt/ai-hedge-fund) rebuilt around Borsdata's Nordic + Global coverage, concentrated long-only portfolios, 18 analyst agents, and Interactive Brokers execution.
+Fork of [virattt/ai-hedge-fund](https://github.com/virattt/ai-hedge-fund) rebuilt as a **trading pod shop**: 18 independent analyst pods, each proposing its own portfolio, tracked through paper trading, automatically promoted to live execution when they prove themselves, and managed by an always-on daemon scheduler.
+
+Built on Borsdata (Nordic + Global data), Interactive Brokers execution, and a Decision DB that records every signal, aggregation, and trade as an append-only audit trail.
 
 ## Quick Start
 
 ```bash
-poetry run hedge rebalance \
-  --portfolio portfolio_20251220_actual.csv \
-  --universe portfolios/borsdata_universe.txt \
-  --model gpt-5-nano \
-  --analysts favorites \
-  --use-governor
-```
-
-That's the weekly command: load current holdings CSV, score every ticker in the 206-ticker universe with the selected analysts, and output `portfolio_YYYYMMDD.csv` for next week.
-
-## Why This Fork
-
-- **Borsdata-first**: 108 KPI mappings, Nordic + Global tickers, rate-limited parallel fetcher, insider trades, report calendars, cached price history. Zero legacy FinancialDatasets code.
-- **Concentrated long-only**: 5-10 holdings, multi-currency cost basis (SEK default), ATR-derived slippage bands, deterministic analysts mixed with LLM personas.
-- **18 analysts**: 13 legendary investor personas + 5 core deterministic analysts (including position-aware news sentiment that analyzes events since each holding's acquisition date).
-- **IBKR execution**: Live positions, order preview (`--ibkr-whatif`), execution (`--ibkr-execute`), ISIN-based contract resolution with 96% universe coverage.
-- **Adaptive governor**: Preservation-first capital governor that reweights analysts from scorecard credibility, throttles deployment in hostile regimes, and can block fresh buying.
-- **Crash recovery**: Analyst x ticker tasks recorded in SQLite so same-day reruns reuse cached signals even after crashes or network loss.
-
-## Installation
-
-```bash
-git clone https://github.com/chhib/ai-hedge-fund.git
-cd ai-hedge-fund
+# 1. Install
+git clone https://github.com/chhib/ai-hedge-fund.git && cd ai-hedge-fund
 poetry install
-cp .env.example .env
-$EDITOR .env
+cp .env.example .env && $EDITOR .env   # At minimum: BORSDATA_API_KEY + one LLM key
+
+# 2. Check pod configuration
+poetry run hedge pods status
+
+# 3. Start the daemon in dry-run (no trades, no LLM calls -- just scheduling)
+poetry run hedge serve --dry-run
+
+# 4. Run a real cycle for one pod with paper trading
+poetry run hedge serve --pods fundamentals --model gpt-5-nano
+
+# 5. When ready: run all pods
+poetry run hedge serve --model gpt-5-nano --use-governor
 ```
+
+The daemon runs a two-phase daily cycle per pod:
+- **Phase 1 (Analysis)**: Pre-open -- run analysts, generate portfolio proposals
+- **Phase 2 (Execution)**: Post-open -- validate price drift, execute trades (paper or live)
+
+## Concepts
+
+### Pods
+
+A **pod** is one analyst wrapped in its own portfolio. Each pod independently:
+- Analyzes the ticker universe through its analyst lens
+- Proposes a portfolio (top picks with target weights)
+- Tracks paper P&L with virtual positions and mark-to-market snapshots
+
+All 18 pods are defined in `config/pods.yaml`. 1 pod = 1 analyst = 1 independent portfolio.
+
+### Tiers: Paper and Live
+
+Every pod starts on the **paper** tier (virtual trading only). Pods that prove themselves get promoted to **live** (real IBKR execution). Demoted pods go back to paper.
+
+Even live pods maintain a **shadow paper portfolio** so their performance can always be measured for demotion decisions.
+
+### Lifecycle Automation
+
+The daemon evaluates pods automatically:
+
+| Event | When | Criteria |
+| --- | --- | --- |
+| **Promotion** | Weekly (Monday 06:00 CET) | 30+ days history, Sharpe > 0.5, positive return, drawdown < 10% |
+| **Maintenance demotion** | Weekly (Monday 06:00 CET) | Sharpe < 0.0 or drawdown > 10% |
+| **Hard-stop demotion** | Every run (after Phase 2) | Drawdown > 10% from high-water mark |
+
+Manual overrides: `hedge pods promote <pod>` / `hedge pods demote <pod>`. Overrides persist until the next automated evaluation.
+
+### Decision DB
+
+Every decision the system makes is recorded in `data/decisions.db` (SQLite, append-only):
+
+| Table | What it stores |
+| --- | --- |
+| `runs` | Session metadata (pod, date, config) |
+| `signals` | Per-analyst per-ticker signals with reasoning |
+| `aggregations` | Weighted consensus scores |
+| `governor_decisions` | Risk regime, deployment ratio, overrides |
+| `trade_recommendations` | Final portfolio targets |
+| `execution_outcomes` | Fill prices, rejections, order IDs |
+| `pod_proposals` | Each pod's top picks and weights |
+| `paper_positions` | Virtual portfolio holdings |
+| `paper_snapshots` | Portfolio value time series |
+| `pod_lifecycle_events` | Promotion/demotion audit trail |
+| `daemon_runs` | Scheduling and phase execution state |
+
+## Configuration
+
+### config/pods.yaml
+
+```yaml
+defaults:
+  max_picks: 3           # Picks per pod per cycle
+  enabled: true
+  tier: paper            # Starting tier
+  starting_capital: 100000  # SEK
+  schedule: nordic-morning
+
+lifecycle:
+  min_history_days: 30           # Days before promotion eligible
+  promotion_sharpe: 0.5          # Annualized Sharpe threshold
+  promotion_return_pct: 0.0      # Minimum cumulative return %
+  promotion_drawdown_pct: 10.0   # Max drawdown from HWM
+  maintenance_sharpe: 0.0        # Sharpe floor for live pods
+  hard_stop_drawdown_pct: 10.0   # Immediate demotion trigger
+  evaluation_schedule: weekly-monday
+
+pods:
+  - name: warren_buffett
+    analyst: warren_buffett
+  - name: fundamentals
+    analyst: fundamentals_analyst
+  # ... 18 pods total (13 famous investors + 4 core + 1 news sentiment)
+```
+
+### Schedule Presets
+
+| Preset | Analysis | Execution | Days | Markets |
+| --- | --- | --- | --- | --- |
+| `nordic-morning` | 08:00 CET | 10:00 CET | Mon-Fri | SFB, CPH, OSE, HEL |
+| `us-morning` | 09:00 ET | 10:30 ET | Mon-Fri | NYSE, NASDAQ, AMEX |
+| `europe-morning` | 08:00 CET | 10:00 CET | Mon-Fri | XETRA, LSE, AEB |
+| `weekly-nordic` | 08:00 CET | 10:00 CET | Monday | SFB, CPH, OSE, HEL |
+
+Custom cron: set `schedule: "0 8 * * 1-5"` on any pod.
+
+### Environment Variables
 
 | Variable | Required | Purpose |
 | --- | --- | --- |
@@ -41,201 +125,200 @@ $EDITOR .env
 | `ANTHROPIC_API_KEY` | Pick one | LLM-based analysts (Anthropic) |
 | `GROQ_API_KEY` | Pick one | LLM-based analysts (Groq) |
 | `DEEPSEEK_API_KEY` | Pick one | LLM-based analysts (DeepSeek) |
-| IBKR Gateway | Optional | Live positions and order execution |
 
-IBKR credentials aren't stored in `.env`; run the Client Portal Gateway locally and supply host/port flags.
+IBKR credentials are not stored in `.env` -- run the Client Portal Gateway locally and supply host/port flags.
 
 ## CLI Reference
 
-### Primary commands
+### Daemon
 
-| Command | Description |
-| --- | --- |
-| `hedge rebalance` | Weekly rebalance (CSV or live IBKR positions) |
-| `hedge backtest` | Headless backtesting with the same analyst pipeline |
-| `hedge governor status` | Show the current or most recent preservation governor state |
-| `hedge ibkr check` | Validate all 5 IBKR pipeline stages against the live gateway |
-| `hedge ibkr validate` | Check contract overrides for staleness (`--fix` to auto-refresh) |
-| `hedge ibkr orders` | Show live orders from the IBKR gateway |
-| `hedge cache list` | List all tickers currently in the cache |
-| `hedge cache clear` | Clear cache entries (`--tickers DORO,LUND.B` or all) |
+```bash
+hedge serve [OPTIONS]
+```
 
-### Rebalance flags
+Start the always-on pod scheduler. Runs in foreground; Ctrl-C to stop.
 
 | Flag | Default | Description |
 | --- | --- | --- |
-| `--portfolio` | | Path to current holdings CSV |
-| `--universe` | | Path to universe file (e.g. `portfolios/borsdata_universe.txt`) |
-| `--universe-tickers` | | Comma-separated tickers inline (alternative to `--universe`) |
-| `--analysts` | `all` | Preset name or comma-separated list |
+| `--pods` | `all` | Pod selection: `all` or comma-separated names |
+| `--dry-run` | | Log scheduling without executing |
 | `--model` | `gpt-4o` | LLM model name |
-| `--home-currency` | `SEK` | Reporting currency |
-| `--max-workers` | `8` | Parallel workers (also `PARALLEL_MAX_WORKERS` env var) |
-| `--no-cache` | | Bypass KPI cache |
-| `--no-cache-agents` | | Bypass analyst signal cache |
-| `--export-transcript` | | Dump analyst markdown transcript after the run |
+| `--drift-threshold` | `0.05` | Price drift tolerance for Phase 2 revalidation |
+| `--use-governor` | | Enable preservation-first portfolio governor |
 | `--portfolio-source` | `csv` | `csv` or `ibkr` |
-| `--ibkr-account` | | Force a specific IBKR account ID |
-| `--ibkr-whatif` | | Preview orders without placing them |
-| `--ibkr-execute` | | Submit orders after preview |
-| `--ibkr-yes` | | Auto-confirm orders (skip per-order prompt) |
-| `--dry-run` | | Disables execution even if `--ibkr-execute` is set |
-| `--use-governor` | | Enable the preservation-first portfolio governor |
-| `--governor-profile` | `preservation` | Governor profile name |
+| `--universe` | | Path to universe file |
+| `--max-workers` | `50` | Parallel worker cap |
+| `--max-holdings` | `8` | Maximum holdings per pod |
+| `--verbose` | | Show detailed output |
 
-### Legacy entry points
-
-| Command | Description |
-| --- | --- |
-| `python src/main.py` | LangGraph multi-agent workflow for ad-hoc analysis |
-| `python src/portfolio_manager.py` | Legacy rebalance CLI (same options as `hedge rebalance`) |
-| `poetry run backtester` | Original backtester with interactive prompts |
-
-### Web UI
+### Pod Management
 
 ```bash
-# Backend
-poetry run uvicorn app.backend.main:app --reload
-
-# Frontend (Vite + React)
-cd app/frontend && npm install && npm run dev
+hedge pods status                  # Show all pods with tier, metrics, lifecycle events
+hedge pods promote <pod_name>      # Manually promote to live
+hedge pods demote <pod_name>       # Manually demote to paper
 ```
 
-## Analyst Presets
+`hedge pods status` displays per pod: effective tier, days in tier, next evaluation date, latest lifecycle event, and performance metrics (value, return%, Sharpe, drawdown, win rate, trades).
+
+### Rebalance (single run)
+
+```bash
+hedge rebalance [OPTIONS]
+```
+
+Run a single analysis + execution cycle instead of the daemon loop. Useful for testing.
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--portfolio` | | Current holdings CSV |
+| `--universe` | | Universe file path |
+| `--pods` | | Pod selection (all or comma-separated) |
+| `--model` | `gpt-4o` | LLM model |
+| `--analysts` | `all` | Analyst preset or comma-separated list |
+| `--dry-run` | | Show recommendations without saving |
+| `--test` | | Quick validation (fundamentals only) |
+| `--export-transcript` | | Dump analyst reasoning to markdown |
+| `--use-governor` | | Enable portfolio governor |
+| `--portfolio-source` | `csv` | `csv` or `ibkr` |
+| `--ibkr-whatif` | | Preview orders without placing |
+| `--ibkr-execute` | | Submit orders after preview |
+| `--ibkr-yes` | | Auto-confirm (skip per-order prompt) |
+| `--tier` | | Override pod tier (paper/live) |
+
+### IBKR Tools
+
+```bash
+hedge ibkr check                   # Validate all 5 IBKR pipeline stages
+hedge ibkr validate                # Check contract overrides for staleness
+hedge ibkr validate --fix          # Auto-refresh invalid contracts
+hedge ibkr orders                  # Show live orders from the gateway
+```
+
+### Other Commands
+
+```bash
+hedge backtest                     # Historical backtesting with analyst pipeline
+hedge governor status              # Show governor state (regime, deployment ratio)
+hedge scorecard                    # Analyst prediction accuracy (hit rate, alpha)
+hedge cache list                   # Show cached tickers
+hedge cache clear                  # Clear cache (--tickers DORO,LUND.B for specific)
+```
+
+### Analyst Presets
 
 | Preset | Count | Members |
 | --- | --- | --- |
 | `favorites` | 5 | fundamentals, technical, jim_simons, news_sentiment, stanley_druckenmiller |
 | `core` | 4 | fundamentals, technical, sentiment, valuation |
 | `famous` | 13 | All 13 investor personas |
-| `all` | 17 | All investor personas + core analysts |
+| `all` | 17 | All personas + core analysts |
 | `basic` | 1 | fundamentals only (fast testing) |
 
-Custom: pass a comma-separated list, e.g. `--analysts warren_buffett,peter_lynch,fundamentals`.
-
-## Analyst Roster
-
-### Investor personas (13, LLM-based)
-
-| Agent | Style |
-| --- | --- |
-| Warren Buffett | The Oracle of Omaha -- quality compounders at fair prices |
-| Charlie Munger | The Rational Thinker -- mental models and margin of safety |
-| Stanley Druckenmiller | The Macro Investor -- top-down macro with bottom-up stock picks |
-| Peter Lynch | The 10-Bagger Hunter -- growth at a reasonable price |
-| Ben Graham | The Father of Value Investing -- deep value and net-nets |
-| Phil Fisher | The Scuttlebutt Investor -- qualitative growth analysis |
-| Bill Ackman | The Activist Investor -- concentrated positions in catalysts |
-| Cathie Wood | The Queen of Growth -- disruptive innovation and ARK-style bets |
-| Michael Burry | The Big Short Contrarian -- deep dives into overlooked value |
-| Mohnish Pabrai | The Dhandho Investor -- low risk, high uncertainty bets |
-| Rakesh Jhunjhunwala | The Big Bull of India -- emerging-market growth plays |
-| Aswath Damodaran | The Dean of Valuation -- DCF and intrinsic value models |
-| Jim Simons | The Quant King -- statistical arbitrage and mean reversion |
-
-### Core analysts (5, deterministic)
-
-| Agent | Focus |
-| --- | --- |
-| Fundamentals | Financial statement analysis -- margins, growth, returns |
-| Technical | Chart patterns -- moving averages, RSI, volume |
-| Sentiment | Market sentiment -- insider activity, report calendars |
-| Valuation | Intrinsic value -- DCF, comparables, owner earnings |
-| News Sentiment | Position-aware news analysis -- events since acquisition date for existing holdings, last 30 days for new candidates |
-
-## IBKR Integration
-
-### Gateway setup
+## Web Dashboard
 
 ```bash
-cd clientportal.gw && bin/run.sh root/conf.yaml
-# Authenticate at https://localhost:5001
+# Backend (FastAPI)
+poetry run uvicorn app.backend.main:app --reload
+
+# Frontend (Vite + React) -- separate terminal
+cd app/frontend && npm install && npm run dev
 ```
 
-### Preview and execution
+The pod dashboard shows all pods with status cards, lifecycle history, promote/demote actions, and portfolio proposals.
+
+### API Endpoints
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET` | `/pods` | List all pods with status and metrics |
+| `GET` | `/pods/config` | Lifecycle configuration |
+| `GET` | `/pods/{pod_id}/history` | Lifecycle event history |
+| `GET` | `/pods/{pod_id}/proposals` | Latest portfolio proposals |
+| `POST` | `/pods/{pod_id}/promote` | Manually promote pod |
+| `POST` | `/pods/{pod_id}/demote` | Manually demote pod |
+
+## Testing & Validation
+
+### Tier 1: Offline (no external services needed)
 
 ```bash
-# Preview only (no trades placed)
+# Run the full test suite
+poetry run pytest
+
+# Validate pod configuration loads correctly
+poetry run python -c "from src.config.pod_config import load_pods, load_lifecycle_config; pods = load_pods(); lc = load_lifecycle_config(); print(f'{len(pods)} pods loaded, lifecycle: sharpe>{lc.promotion_sharpe}, dd<{lc.promotion_drawdown_pct}%')"
+
+# Verify CLI commands parse
+poetry run hedge --help
+poetry run hedge serve --help
+poetry run hedge pods --help
+```
+
+### Tier 2: Paper Trading (needs Borsdata API key + LLM key)
+
+```bash
+# 1. Check pod status (will show empty metrics if no runs yet)
+poetry run hedge pods status
+
+# 2. Start daemon in dry-run to verify scheduling
+poetry run hedge serve --dry-run --verbose
+
+# 3. Run a single pod cycle (paper trading, one cheap analyst)
+poetry run hedge rebalance \
+  --pods fundamentals \
+  --universe portfolios/borsdata_universe.txt \
+  --model gpt-5-nano \
+  --tier paper \
+  --verbose
+
+# 4. Check that paper positions and proposals were recorded
+poetry run hedge pods status
+
+# 5. Run the daemon for one pod to verify the full two-phase cycle
+poetry run hedge serve --pods fundamentals --model gpt-5-nano --verbose
+# Wait for Phase 1 + Phase 2 to complete, then Ctrl-C
+
+# 6. Verify Decision DB has data
+sqlite3 data/decisions.db "SELECT pod_id, COUNT(*) FROM pod_proposals GROUP BY pod_id;"
+sqlite3 data/decisions.db "SELECT pod_id, total_value, cumulative_return_pct FROM paper_snapshots ORDER BY created_at DESC LIMIT 5;"
+```
+
+### Tier 3: IBKR Integration (when gateway is available)
+
+```bash
+# 1. Start the Client Portal Gateway
+cd clientportal.gw && bin/run.sh root/conf.yaml
+# Authenticate at https://localhost:5001
+
+# 2. Validate all 5 pipeline stages
+poetry run hedge ibkr check
+
+# 3. Validate contract overrides
+poetry run hedge ibkr validate
+
+# 4. Preview orders (what-if, no trades placed)
 poetry run hedge rebalance \
   --portfolio-source ibkr \
   --universe portfolios/borsdata_universe.txt \
+  --model gpt-5-nano \
   --analysts favorites \
   --use-governor \
   --ibkr-whatif
 
-# Execute with per-order confirmation
-poetry run hedge rebalance \
-  --portfolio-source ibkr --ibkr-execute
+# 5. Run daemon with IBKR (still paper tier -- no live trades)
+poetry run hedge serve \
+  --portfolio-source ibkr \
+  --model gpt-5-nano \
+  --use-governor \
+  --verbose
 
-# Execute without confirmation (use with caution)
-poetry run hedge rebalance \
-  --portfolio-source ibkr --ibkr-execute --ibkr-yes
+# 6. When a pod is promoted to live, orders go to IBKR
+#    Monitor with:
+poetry run hedge ibkr orders
 ```
 
-### Contract overrides
-
-When IBKR returns multiple contract matches for a ticker, execution skips that order for safety. Provide explicit overrides in `data/ibkr_contract_mappings.json`:
-
-```json
-{
-  "contracts": {
-    "LUG": { "conid": 123456, "exchange": "TSE", "currency": "CAD" },
-    "FDEV": { "conid": 234567, "exchange": "LSE", "currency": "GBP" }
-  }
-}
-```
-
-Validate overrides haven't gone stale:
-
-```bash
-poetry run hedge ibkr validate            # Check all overrides
-poetry run hedge ibkr validate --fix      # Auto-refresh invalid contracts
-poetry run hedge ibkr orders              # Show live orders
-```
-
-### Trading permissions
-
-If preview responses show `No trading permissions`, the preview loop aborts. Update your IBKR trading permissions for the relevant markets and re-run.
-
-## Architecture
-
-```
-Borsdata API --> Parallel Fetcher --> 3-Layer Cache --> 18 Analysts --> Portfolio Manager --> Portfolio Governor
-                                                                                                  |
-                                                                                         IBKR Client Portal
-                                                                                                  |
-                                                                                          Order Execution
-```
-
-**Cache layers**: In-memory LLM cache, SQLite KPI/signal cache (`data/prefetch_cache.db`), durable task queue (`data/analyst_tasks.db`).
-
-### Key source files
-
-| File | Purpose |
-| --- | --- |
-| `src/cli/hedge.py` | Click-based unified CLI |
-| `src/services/portfolio_runner.py` | Rebalance orchestration and analyst preset resolution |
-| `src/agents/enhanced_portfolio_manager.py` | Portfolio management with parallel LLM coordination |
-| `src/services/portfolio_governor.py` | Preservation-first governor, analyst weighting, and snapshot history |
-| `src/data/borsdata_client.py` | Core API client with rate limiting |
-| `src/data/parallel_api_wrapper.py` | Parallel data fetching with caching |
-| `src/data/borsdata_metrics_mapping.py` | 108 KPI mappings (Borsdata to financial metrics) |
-| `src/data/analyst_task_queue.py` | Durable analyst x ticker task tracking |
-| `src/data/prefetch_store.py` | SQLite KPI/metrics cache |
-| `src/integrations/ibkr_client.py` | IBKR Client Portal integration |
-| `src/integrations/ibkr_execution.py` | Order preview and execution |
-| `src/integrations/ibkr_contract_mapper.py` | ISIN-based contract resolution |
-
-## Testing
-
-```bash
-poetry run pytest                         # All 178 tests
-poetry run pytest tests/integrations/     # IBKR tests
-poetry run pytest tests/data/             # Data layer tests
-poetry run pytest tests/backtesting/      # Backtesting tests
-```
-
-### Smoke test (30 random tickers)
+### Quick Smoke Test (30 random tickers, ~2 min)
 
 ```bash
 tickers=$(python3 -c "
@@ -247,12 +330,43 @@ print(','.join(random.sample(universe, 30)))
 ")
 
 poetry run hedge rebalance \
-  --portfolio example_portfolio.csv \
   --universe-tickers "$tickers" \
   --model gpt-5-nano \
   --analysts fundamentals_analyst \
   --dry-run --test --max-workers 1 \
   --export-transcript
+```
+
+## Architecture
+
+```
+Borsdata API --> Parallel Fetcher --> 3-Layer Cache --> 18 Analyst Pods --> Pod Proposals
+                                                                               |
+                                                                    Decision DB (audit trail)
+                                                                               |
+                                                              Portfolio Governor (risk gating)
+                                                                               |
+                                                               Paper Engine / IBKR Execution
+                                                                               |
+                                                               Daemon Scheduler (APScheduler)
+                                                                               |
+                                                               Lifecycle Evaluator (promote/demote)
+```
+
+**Cache layers**: In-memory LLM cache, SQLite KPI/signal cache (`data/prefetch_cache.db`), durable task queue (`data/analyst_tasks.db`).
+
+## Legacy CLI
+
+The original `hedge rebalance` workflow (single-run, CSV portfolio, no pods) still works. See [README_LEGACY.md](README_LEGACY.md) for the full reference.
+
+```bash
+# Legacy single-run rebalance
+poetry run hedge rebalance \
+  --portfolio portfolio_20251220_actual.csv \
+  --universe portfolios/borsdata_universe.txt \
+  --model gpt-5-nano \
+  --analysts favorites \
+  --use-governor
 ```
 
 ## Project Structure
@@ -261,20 +375,21 @@ poetry run hedge rebalance \
 ai-hedge-fund/
   app/              Web UI (FastAPI backend + Vite/React frontend)
   clientportal.gw/  IBKR Client Portal Gateway
-  data/             Contract mappings, SQLite caches, task queue DB
-  docs/             Borsdata endpoint mappings, KPI schemas, migration notes
-  logs/             Session logs and project summary
+  config/           pods.yaml (pod definitions, lifecycle thresholds, schedules)
+  data/             decisions.db, contract mappings, SQLite caches
+  docs/             Brainstorms, plans, solutions, Borsdata docs
+  logs/             Session logs and PROJECT_SUMMARY.md
   portfolios/       Universe files and portfolio CSVs
-  scripts/          Utility scripts (universe builder, etc.)
   src/
     agents/         18 analyst agents + portfolio managers
-    cli/            Click-based hedge CLI
-    data/           Borsdata client, caching, KPI assembly
+    cli/            Click-based hedge CLI (hedge.py)
+    config/         Pod config loader (pod_config.py)
+    data/           Borsdata client, Decision DB store, caching
     integrations/   IBKR client, contract mapper, execution
     llm/            LLM provider abstraction and caching
-    services/       Rebalance orchestration
+    services/       Daemon, pod lifecycle, paper trading, portfolio runner
     tools/          Agent tool definitions
-  tests/            140 tests (data, integrations, backtesting)
+  tests/            pytest suite
 ```
 
 ## Disclaimer
