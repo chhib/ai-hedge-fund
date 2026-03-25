@@ -170,12 +170,13 @@ class TestPodDaemon:
 
         update_calls = mock_store_instance.update_daemon_run_status.call_args_list
         assert any(c[0][1] == "skipped" for c in update_calls)
-        # Check skip_reason was passed (5th positional arg)
+        # Check skip_reason was passed (as keyword arg to store method)
         skip_call = [c for c in update_calls if c[0][1] == "skipped"][0]
-        # Args: (daemon_run_id, status, error_message, retry_count, skip_reason)
-        all_args = skip_call[0]
-        assert len(all_args) >= 5
-        assert "not authenticated" in (all_args[4] or "")
+        skip_reason = skip_call[1].get("skip_reason", "") if skip_call[1] else ""
+        # If passed positionally, check args
+        if not skip_reason and len(skip_call[0]) >= 5:
+            skip_reason = skip_call[0][4] or ""
+        assert "not authenticated" in skip_reason
 
 
 class TestRetryLogic:

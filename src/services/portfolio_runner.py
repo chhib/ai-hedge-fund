@@ -920,11 +920,22 @@ def execute_proposals(
         except Exception:
             pass
 
+    # Fetch Phase 1 reference prices from Decision DB signals table
+    phase1_prices: Dict[str, float] = {}
+    for run_id in phase1_run_ids:
+        try:
+            signals = store.get_signals(run_id=run_id)
+            for sig in signals:
+                if sig.get("close_price") is not None:
+                    phase1_prices[sig["ticker"]] = sig["close_price"]
+        except Exception:
+            pass
+
     # Price drift validation
     drift_proposals = []
     for proposal in all_proposals:
         proposal_dicts = [
-            {"ticker": p.ticker, "target_weight": p.target_weight, "signal_score": p.signal_score}
+            {"ticker": p.ticker, "target_weight": p.target_weight, "ref_price": phase1_prices.get(p.ticker)}
             for p in proposal.picks
         ]
         valid, drift_results = filter_proposals_by_drift(proposal_dicts, current_prices, drift_threshold)

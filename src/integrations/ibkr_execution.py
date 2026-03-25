@@ -20,13 +20,6 @@ from src.integrations.ticker_mapper import map_borsdata_to_ibkr
 from src.utils.market_hours import EXCHANGE_SESSIONS, is_market_open, market_status_label
 
 
-# Backward-compatible aliases for internal use within this module
-def _is_market_open(exchange: str | None, now: datetime | None = None) -> bool:
-    return is_market_open(exchange, now)
-
-
-def _market_status_label(exchange: str | None) -> str:
-    return market_status_label(exchange)
 
 
 @dataclass(slots=True)
@@ -304,7 +297,7 @@ def execute_ibkr_rebalance_trades(
     deferred_sells: List[tuple[ResolvedOrder, Dict[str, Any]]] = []
     for pair in sell_pairs:
         exchange = pair[0].exchange or pair[0].listing_exchange
-        if _is_market_open(exchange):
+        if is_market_open(exchange):
             open_sells.append(pair)
         else:
             deferred_sells.append(pair)
@@ -313,17 +306,17 @@ def execute_ibkr_rebalance_trades(
     deferred_buys: List[tuple[ResolvedOrder, Dict[str, Any]]] = []
     for pair in buy_pairs:
         exchange = pair[0].exchange or pair[0].listing_exchange
-        if _is_market_open(exchange):
+        if is_market_open(exchange):
             open_buys.append(pair)
         else:
             deferred_buys.append(pair)
 
     # Report deferred orders
     for resolved, _ in deferred_sells:
-        status = _market_status_label(resolved.exchange or resolved.listing_exchange)
+        status = market_status_label(resolved.exchange or resolved.listing_exchange)
         report.skipped.append(OrderSkip(ticker=resolved.intent.ticker, action=resolved.intent.action, reason=f"Market closed ({status})"))
     for resolved, _ in deferred_buys:
-        status = _market_status_label(resolved.exchange or resolved.listing_exchange)
+        status = market_status_label(resolved.exchange or resolved.listing_exchange)
         report.skipped.append(OrderSkip(ticker=resolved.intent.ticker, action=resolved.intent.action, reason=f"Market closed ({status})"))
 
     # Warn if buys depend on cash from deferred sells

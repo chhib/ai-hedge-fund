@@ -10,8 +10,8 @@ from src.services.price_validator import (
 )
 
 
-def _proposal(ticker: str, signal_score: float = 100.0) -> dict:
-    return {"ticker": ticker, "signal_score": signal_score}
+def _proposal(ticker: str, ref_price: float = 100.0) -> dict:
+    return {"ticker": ticker, "ref_price": ref_price}
 
 
 class TestValidatePriceDrift:
@@ -51,11 +51,19 @@ class TestValidatePriceDrift:
         assert "Missing" in results[0].skip_reason
 
     def test_zero_reference_price_exceeds(self):
-        proposals = [{"ticker": "AAPL", "signal_score": 0.0}]
+        proposals = [{"ticker": "AAPL", "ref_price": 0.0}]
         prices = {"AAPL": 100.0}
         results = validate_price_drift(proposals, prices)
         assert results[0].exceeds_threshold is True
         assert "Zero" in results[0].skip_reason
+
+    def test_missing_ref_price_exceeds(self):
+        """signal_score should NOT be used as a reference price."""
+        proposals = [{"ticker": "AAPL", "signal_score": 0.85}]  # No ref_price
+        prices = {"AAPL": 100.0}
+        results = validate_price_drift(proposals, prices)
+        assert results[0].exceeds_threshold is True
+        assert "Missing" in results[0].skip_reason
 
     def test_custom_threshold(self):
         proposals = [_proposal("AAPL", 100.0)]

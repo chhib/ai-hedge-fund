@@ -56,11 +56,6 @@ def market_status_label(exchange: str | None) -> str:
     return f"{name} CLOSED"
 
 
-def any_market_open(exchanges: list[str], now: datetime | None = None) -> bool:
-    """Return True if at least one of the given exchanges is open."""
-    return any(is_market_open(ex, now) for ex in exchanges)
-
-
 # ── Schedule Presets ──
 # Each preset maps to (analysis_cron_kwargs, execution_cron_kwargs, timezone).
 # Cron kwargs are passed to APScheduler's CronTrigger.

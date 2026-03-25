@@ -13,7 +13,7 @@ import logging
 import signal
 import threading
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -153,17 +153,17 @@ class PodDaemon:
         exchanges = schedule.get("exchanges", [])
         if exchanges and not any(is_market_open(ex) for ex in exchanges):
             daemon_run_id = str(uuid.uuid4())
-            self._store_record_daemon_run(daemon_run_id, pod.name, "analysis", "skipped")
-            self._store_update_daemon_run(daemon_run_id, "skipped", skip_reason="Market closed")
+            self._store.record_daemon_run(daemon_run_id, pod.name, "analysis", "skipped")
+            self._store.update_daemon_run_status(daemon_run_id, "skipped", skip_reason="Market closed")
             logger.info("Phase 1 %s: skipped (market closed)", pod.name)
             return
 
         daemon_run_id = str(uuid.uuid4())
-        self._store_record_daemon_run(daemon_run_id, pod.name, "analysis", "running")
+        self._store.record_daemon_run(daemon_run_id, pod.name, "analysis", "running")
 
         if self.config.dry_run:
             logger.info("Phase 1 %s: DRY RUN (would run analysis)", pod.name)
-            self._store_update_daemon_run(daemon_run_id, "completed")
+            self._store.update_daemon_run_status(daemon_run_id, "completed")
             return
 
         try:
@@ -172,7 +172,7 @@ class PodDaemon:
             config = self._build_rebalance_config(pod, analysis_only=True)
             outcome = run_pods(config)
 
-            self._store_update_daemon_run(daemon_run_id, "completed")
+            self._store.update_daemon_run_status(daemon_run_id, "completed")
             logger.info("Phase 1 %s: completed (session=%s)", pod.name, outcome.session_id)
 
             # Schedule Phase 2
@@ -180,21 +180,32 @@ class PodDaemon:
 
         except Exception as e:
             logger.error("Phase 1 %s: failed (%s)", pod.name, e, exc_info=True)
-            self._store_update_daemon_run(daemon_run_id, "failed", error_message=str(e), retry_count=attempt)
+            self._store.update_daemon_run_status(daemon_run_id, "failed", error_message=str(e), retry_count=attempt)
             self._maybe_retry(pod, schedule, "phase1", attempt, e)
 
     def _schedule_phase2(self, pod: Pod, schedule: Dict[str, Any], phase1_daemon_run_id: str) -> None:
-        """Schedule a one-shot Phase 2 job for ~1hr after Phase 1."""
-        tz = schedule["timezone"]
+        """Schedule a one-shot Phase 2 job for today's execution time."""
+        from datetime import date, time as dt_time
+        from zoneinfo import ZoneInfo
+
+        tz_name = schedule["timezone"]
+        tz = ZoneInfo(tz_name)
         execution_kwargs = schedule["execution"]
 
-        # Use a date trigger for the next execution time based on the schedule
-        # For simplicity, use the execution cron to find the next fire time today
-        from datetime import timedelta
-        trigger = CronTrigger(timezone=tz, **execution_kwargs)
+        # Compute today's execution time as a one-shot DateTrigger
+        exec_hour = int(execution_kwargs.get("hour", 10))
+        exec_minute = int(execution_kwargs.get("minute", 0))
+        today = date.today()
+        run_date = datetime.combine(today, dt_time(exec_hour, exec_minute), tzinfo=tz)
 
-        run_id = str(uuid.uuid4())
-        job_id = f"{pod.name}_phase2_{run_id}"
+        # If execution time has already passed today, run in 5 minutes
+        now = datetime.now(tz)
+        if run_date <= now:
+            from datetime import timedelta
+            run_date = now + timedelta(minutes=5)
+
+        trigger = DateTrigger(run_date=run_date)
+        job_id = f"{pod.name}_phase2"  # Deterministic: replaces any prior Phase 2
 
         self.scheduler.add_job(
             self._run_phase2,
@@ -205,7 +216,7 @@ class PodDaemon:
             replace_existing=True,
         )
 
-        logger.info("Scheduled Phase 2 for %s", pod.name)
+        logger.info("Scheduled Phase 2 for %s at %s", pod.name, run_date.strftime("%H:%M %Z"))
 
     def _run_phase2(self, pod: Pod, schedule: Dict[str, Any], phase1_daemon_run_id: str, attempt: int = 0) -> None:
         """Execute Phase 2 (price-drift validation + execution) for a pod."""
@@ -217,25 +228,25 @@ class PodDaemon:
         exchanges = schedule.get("exchanges", [])
         if exchanges and not any(is_market_open(ex) for ex in exchanges):
             daemon_run_id = str(uuid.uuid4())
-            self._store_record_daemon_run(daemon_run_id, pod.name, "execution", "skipped", phase1_run_id=phase1_daemon_run_id)
-            self._store_update_daemon_run(daemon_run_id, "skipped", skip_reason="Market closed")
+            self._store.record_daemon_run(daemon_run_id, pod.name, "execution", "skipped", phase1_run_id=phase1_daemon_run_id)
+            self._store.update_daemon_run_status(daemon_run_id, "skipped", skip_reason="Market closed")
             logger.info("Phase 2 %s: skipped (market closed)", pod.name)
             return
 
         # For live pods, check gateway auth
         if pod.tier == "live" and not self.gateway_manager.is_authenticated():
             daemon_run_id = str(uuid.uuid4())
-            self._store_record_daemon_run(daemon_run_id, pod.name, "execution", "skipped", phase1_run_id=phase1_daemon_run_id)
-            self._store_update_daemon_run(daemon_run_id, "skipped", skip_reason="IBKR gateway not authenticated")
+            self._store.record_daemon_run(daemon_run_id, pod.name, "execution", "skipped", phase1_run_id=phase1_daemon_run_id)
+            self._store.update_daemon_run_status(daemon_run_id, "skipped", skip_reason="IBKR gateway not authenticated")
             logger.warning("Phase 2 %s: skipped (IBKR not authenticated)", pod.name)
             return
 
         daemon_run_id = str(uuid.uuid4())
-        self._store_record_daemon_run(daemon_run_id, pod.name, "execution", "running", phase1_run_id=phase1_daemon_run_id)
+        self._store.record_daemon_run(daemon_run_id, pod.name, "execution", "running", phase1_run_id=phase1_daemon_run_id)
 
         if self.config.dry_run:
             logger.info("Phase 2 %s: DRY RUN (would execute trades)", pod.name)
-            self._store_update_daemon_run(daemon_run_id, "completed")
+            self._store.update_daemon_run_status(daemon_run_id, "completed")
             return
 
         try:
@@ -260,12 +271,12 @@ class PodDaemon:
                 drift_threshold=self.config.drift_threshold,
             )
 
-            self._store_update_daemon_run(daemon_run_id, "completed")
+            self._store.update_daemon_run_status(daemon_run_id, "completed")
             logger.info("Phase 2 %s: completed", pod.name)
 
         except Exception as e:
             logger.error("Phase 2 %s: failed (%s)", pod.name, e, exc_info=True)
-            self._store_update_daemon_run(daemon_run_id, "failed", error_message=str(e), retry_count=attempt)
+            self._store.update_daemon_run_status(daemon_run_id, "failed", error_message=str(e), retry_count=attempt)
             self._maybe_retry(pod, schedule, "phase2", attempt, e, phase1_daemon_run_id=phase1_daemon_run_id)
 
     def _maybe_retry(
@@ -380,30 +391,3 @@ class PodDaemon:
         logger.info("IBKR gateway: %s", "authenticated" if self.gateway_manager.is_authenticated() else "not authenticated")
         logger.info("=" * 60)
 
-    # ── Decision DB helpers (passive observer) ──
-
-    def _store_record_daemon_run(
-        self,
-        daemon_run_id: str,
-        pod_id: str,
-        phase: str,
-        status: str,
-        phase1_run_id: str | None = None,
-    ) -> None:
-        try:
-            self._store.record_daemon_run(daemon_run_id, pod_id, phase, status, phase1_run_id)
-        except Exception:
-            logger.debug("Failed to record daemon run", exc_info=True)
-
-    def _store_update_daemon_run(
-        self,
-        daemon_run_id: str,
-        status: str,
-        error_message: str | None = None,
-        retry_count: int | None = None,
-        skip_reason: str | None = None,
-    ) -> None:
-        try:
-            self._store.update_daemon_run_status(daemon_run_id, status, error_message, retry_count, skip_reason)
-        except Exception:
-            logger.debug("Failed to update daemon run", exc_info=True)

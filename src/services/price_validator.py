@@ -41,9 +41,12 @@ def validate_price_drift(
     results = []
     for proposal in proposals:
         ticker = proposal.get("ticker", "")
-        proposal_price = proposal.get("target_weight", 0.0)  # weight, not price
-        # Use limit_price or latest_close from the proposal as the reference price
-        ref_price = proposal.get("limit_price") or proposal.get("latest_close") or proposal.get("signal_score")
+        # Reference price from Phase 1: the close price at analysis time
+        ref_price = proposal.get("ref_price")
+        if ref_price is None:
+            ref_price = proposal.get("latest_close")
+        if ref_price is None:
+            ref_price = proposal.get("limit_price")
 
         current = current_prices.get(ticker)
 
