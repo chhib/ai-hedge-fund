@@ -30,3 +30,16 @@ _This is the active session file. New sessions should be added here._
   - `poetry run flake8 src/config/pod_config.py src/data/decision_store.py src/services/paper_metrics.py src/services/pod_lifecycle.py src/services/portfolio_runner.py src/services/daemon.py src/cli/hedge.py tests/config/test_pod_config.py tests/data/test_decision_store.py tests/services/test_paper_metrics.py tests/services/test_pod_lifecycle.py tests/services/test_daemon.py tests/cli/test_hedge_pods.py`
   - `poetry run hedge pods --help`
   - `poetry run hedge pods status --help`
+
+## Session 123 (`Governor Pod Lifecycle` -- review hardening before merge)
+**Date**: 2026-03-25 | **Model**: GPT-5 Codex
+
+- **Review fix**: Bound Phase 2 execution to the exact Phase 1 pipeline artifact by persisting the concrete `pipeline_run_id` on `daemon_runs` and consuming that link in `src/services/daemon.py` instead of looking up the pod's latest run at execution time.
+- **Review fix**: Preserved the daemon's frozen-tier model across phases by propagating the runtime pod tier into `RebalanceConfig.tier_override`, so lifecycle promotions/demotions that happen between Phase 1 and Phase 2 cannot silently change a queued cycle from paper to live or vice versa.
+- **Correctness fix**: `src/services/daemon.py` now uses the schedule timezone's current date when computing the one-shot Phase 2 execution timestamp, avoiding host-local date skew.
+- **Observability fix**: `src/data/decision_store.py` now logs lifecycle-event persistence failures at warning level because lifecycle events now carry effective runtime state, not just passive audit metadata.
+- **Tests**: Extended `tests/services/test_daemon.py` and `tests/data/test_decision_store.py` to cover weekly lifecycle job registration, Phase 1 persistence of the linked pipeline run id, Phase 2 execution against that exact run id, frozen-tier execution config, and daemon-run storage of `pipeline_run_id`.
+- **Verification**:
+  - `poetry run pytest tests/services/test_daemon.py tests/data/test_decision_store.py`
+  - `poetry run flake8 src/data/decision_store.py src/services/daemon.py src/services/portfolio_runner.py tests/services/test_daemon.py tests/data/test_decision_store.py`
+  - `poetry run pytest`
