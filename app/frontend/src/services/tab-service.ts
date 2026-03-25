@@ -1,10 +1,11 @@
 import { Settings } from '@/components/settings/settings';
+import { PodsDashboard } from '@/components/pods/PodsDashboard';
 import { FlowTabContent } from '@/components/tabs/flow-tab-content';
 import { Flow } from '@/types/flow';
 import { ReactNode, createElement } from 'react';
 
 export interface TabData {
-  type: 'flow' | 'settings';
+  type: 'flow' | 'settings' | 'pods';
   title: string;
   flow?: Flow;
   metadata?: Record<string, unknown>;
@@ -21,6 +22,9 @@ export class TabService {
       
       case 'settings':
         return createElement(Settings);
+      
+      case 'pods':
+        return createElement(PodsDashboard);
       
       default:
         throw new Error(`Unsupported tab type: ${tabData.type}`);
@@ -44,6 +48,14 @@ export class TabService {
     };
   }
 
+  static createPodsTab(): TabData & { content: ReactNode } {
+    return {
+      type: 'pods',
+      title: 'Pods',
+      content: TabService.createTabContent({ type: 'pods', title: 'Pods' }),
+    };
+  }
+
   // Restore tab content for persisted tabs (used when loading from localStorage)
   static restoreTabContent(tabData: TabData): ReactNode {
     return TabService.createTabContent(tabData);
@@ -60,6 +72,9 @@ export class TabService {
       
       case 'settings':
         return TabService.createSettingsTab();
+      
+      case 'pods':
+        return TabService.createPodsTab();
       
       default:
         throw new Error(`Cannot restore unsupported tab type: ${savedTab.type}`);

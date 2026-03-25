@@ -5,6 +5,10 @@ import { ReactNode, useEffect } from 'react';
 import { FlowActions } from './flow-actions';
 import { FlowCreateDialog } from './flow-create-dialog';
 import { FlowList } from './flow-list';
+import { Button } from '@/components/ui/button';
+import { LayoutDashboard } from 'lucide-react';
+import { useTabsContext } from '@/contexts/tabs-context';
+import { TabService } from '@/services/tab-service';
 
 interface LeftSidebarProps {
   children?: ReactNode;
@@ -18,6 +22,8 @@ export function LeftSidebar({
   isCollapsed,
   onWidthChange,
 }: LeftSidebarProps) {
+  const { openTab } = useTabsContext();
+
   // Use our custom hooks
   const { width, isDragging, elementRef, startResize } = useResizable({
     defaultWidth: 280,
@@ -52,6 +58,11 @@ export function LeftSidebar({
     handleRefresh,
   } = useFlowManagementTabs();
 
+  const handleOpenPodsTab = () => {
+    const tabData = TabService.createPodsTab();
+    openTab(tabData);
+  };
+
   return (
     <div 
       ref={elementRef}
@@ -63,6 +74,19 @@ export function LeftSidebar({
         width: `${width}px`
       }}
     >
+      <div className="px-4 py-2 border-b">
+        <h3 className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">Trading</h3>
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          className="w-full justify-start text-xs h-8 hover:bg-accent"
+          onClick={handleOpenPodsTab}
+        >
+          <LayoutDashboard className="w-3.5 h-3.5 mr-2 text-blue-500" />
+          Pod Dashboard
+        </Button>
+      </div>
+
       <FlowActions
         onSave={handleSaveCurrentFlow}
         onCreate={handleCreateNewFlow}

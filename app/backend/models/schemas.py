@@ -295,3 +295,31 @@ class ApiKeySummaryResponse(BaseModel):
 class ApiKeyBulkUpdateRequest(BaseModel):
     """Request to update multiple API keys at once"""
     api_keys: List[ApiKeyCreateRequest]
+
+
+# Pod-related schemas
+class PodResponse(BaseModel):
+    name: str
+    analyst: str
+    enabled: bool
+    max_picks: int
+    tier: str
+    starting_capital: Optional[float] = None
+    schedule: str
+    effective_tier: str
+    days_in_tier: int
+    next_evaluation_date: str
+    latest_event: Optional[Dict[str, Any]] = None
+    metrics: Optional[Dict[str, Any]] = None
+
+
+class PodLifecycleEventResponse(BaseModel):
+    id: int
+    pod_id: str
+    event_type: str
+    old_tier: str
+    new_tier: str
+    reason: str
+    source: str
+    metrics_json: Optional[Dict[str, Any]] = None
+    created_at: str
