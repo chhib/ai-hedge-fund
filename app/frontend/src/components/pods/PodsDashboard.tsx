@@ -1,12 +1,11 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useTabsContext } from '@/contexts/tabs-context';
 import { podsApi } from '@/services/pods-api';
 import { LifecycleConfig, Pod, PodLifecycleEvent } from '@/types/pod';
-import { AlertCircle, RefreshCw, Settings, Info } from 'lucide-react';
+import { AlertCircle, RefreshCw, Settings, Info, Shield } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { LifecycleHistory } from './LifecycleHistory';
@@ -19,6 +18,7 @@ export function PodsDashboard() {
   const [historyPod, setHistoryPod] = useState<string | null>(null);
   const [historyEvents, setHistoryEvents] = useState<PodLifecycleEvent[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<{ podId: string; action: 'promote' | 'demote' } | null>(null);
 
   const fetchData = async () => {
     setLoading(true);
@@ -41,23 +41,27 @@ export function PodsDashboard() {
     fetchData();
   }, []);
 
-  const handlePromote = async (podId: string) => {
-    try {
-      const res = await podsApi.promotePod(podId);
-      toast.success(res.message);
-      fetchData();
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to promote pod');
-    }
+  const handlePromote = (podId: string) => {
+    setConfirmAction({ podId, action: 'promote' });
   };
 
-  const handleDemote = async (podId: string) => {
+  const handleDemote = (podId: string) => {
+    setConfirmAction({ podId, action: 'demote' });
+  };
+
+  const executeConfirmedAction = async () => {
+    if (!confirmAction) return;
+    const { podId, action } = confirmAction;
+    setConfirmAction(null);
     try {
-      const res = await podsApi.demotePod(podId);
+      const res = action === 'promote'
+        ? await podsApi.promotePod(podId)
+        : await podsApi.demotePod(podId);
       toast.success(res.message);
       fetchData();
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to demote pod');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : `Failed to ${action} pod`;
+      toast.error(message);
     }
   };
 
@@ -110,12 +114,12 @@ export function PodsDashboard() {
             </Button>
             {config && (
               <Dialog>
-                <Button variant="outline" size="sm" asChild>
-                  <span>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm">
                     <Settings className="w-4 h-4 mr-2" />
                     Policy
-                  </span>
-                </Button>
+                  </Button>
+                </DialogTrigger>
                 <DialogContent className="max-w-md">
                   <DialogHeader>
                     <DialogTitle>Lifecycle Policy</DialogTitle>
@@ -137,9 +141,14 @@ export function PodsDashboard() {
                       <div className="font-medium">{config.maintenance_sharpe}</div>
                       <div className="text-muted-foreground">Hard Stop Drawdown:</div>
                       <div className="font-medium text-red-500">{config.hard_stop_drawdown_pct}%</div>
+                      <div className="text-muted-foreground">Evaluation Schedule:</div>
+                      <div className="font-medium">{config.evaluation_schedule}</div>
                       <div className="text-muted-foreground">Next Evaluation:</div>
                       <div className="font-medium">{new Date(config.next_evaluation_date).toLocaleDateString()}</div>
                     </div>
+                    <p className="text-xs text-muted-foreground italic">
+                      Manual overrides are re-evaluated on the next scheduled cycle.
+                    </p>
                   </div>
                 </DialogContent>
               </Dialog>
@@ -183,7 +192,7 @@ export function PodsDashboard() {
               <AlertCircle className="h-3 w-3 text-muted-foreground" />
             </CardHeader>
             <CardContent className="py-2 px-4">
-              <div className="text-sm font-bold truncate">Weekly Monday</div>
+              <div className="text-sm font-bold truncate">{config?.evaluation_schedule ?? 'Unknown'}</div>
             </CardContent>
           </Card>
         </div>
@@ -194,13 +203,13 @@ export function PodsDashboard() {
             <TabsTrigger value="live">Live Tiers ({livePods.length})</TabsTrigger>
             <TabsTrigger value="paper">Paper Tiers ({paperPods.length})</TabsTrigger>
           </TabsList>
-          
+
           <TabsContent value="all" className="m-0">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {pods.map(pod => (
-                <PodCard 
-                  key={pod.name} 
-                  pod={pod} 
+                <PodCard
+                  key={pod.name}
+                  pod={pod}
                   onPromote={handlePromote}
                   onDemote={handleDemote}
                   onViewHistory={handleViewHistory}
@@ -208,13 +217,13 @@ export function PodsDashboard() {
               ))}
             </div>
           </TabsContent>
-          
+
           <TabsContent value="live" className="m-0">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {livePods.map(pod => (
-                <PodCard 
-                  key={pod.name} 
-                  pod={pod} 
+                <PodCard
+                  key={pod.name}
+                  pod={pod}
                   onPromote={handlePromote}
                   onDemote={handleDemote}
                   onViewHistory={handleViewHistory}
@@ -229,13 +238,13 @@ export function PodsDashboard() {
               )}
             </div>
           </TabsContent>
-          
+
           <TabsContent value="paper" className="m-0">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {paperPods.map(pod => (
-                <PodCard 
-                  key={pod.name} 
-                  pod={pod} 
+                <PodCard
+                  key={pod.name}
+                  pod={pod}
                   onPromote={handlePromote}
                   onDemote={handleDemote}
                   onViewHistory={handleViewHistory}
@@ -246,6 +255,7 @@ export function PodsDashboard() {
         </Tabs>
       </div>
 
+      {/* Lifecycle History Dialog */}
       <Dialog open={!!historyPod} onOpenChange={(open) => !open && setHistoryPod(null)}>
         <DialogContent className="max-w-4xl">
           <DialogHeader>
@@ -264,6 +274,35 @@ export function PodsDashboard() {
             ) : (
               <LifecycleHistory events={historyEvents} />
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Promote/Demote Confirmation Dialog */}
+      <Dialog open={!!confirmAction} onOpenChange={(open) => !open && setConfirmAction(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>
+              {confirmAction?.action === 'promote' ? 'Promote Pod to Live' : 'Demote Pod to Paper'}
+            </DialogTitle>
+            <DialogDescription>
+              {confirmAction?.action === 'promote'
+                ? `Promoting "${confirmAction.podId}" will move it to live trading with real capital. This override will be re-evaluated on the next scheduled evaluation cycle.`
+                : `Demoting "${confirmAction?.podId}" will move it back to paper trading. This override will be re-evaluated on the next scheduled evaluation cycle.`
+              }
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2 pt-4">
+            <Button variant="outline" size="sm" onClick={() => setConfirmAction(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant={confirmAction?.action === 'promote' ? 'default' : 'destructive'}
+              size="sm"
+              onClick={executeConfirmedAction}
+            >
+              {confirmAction?.action === 'promote' ? 'Confirm Promote' : 'Confirm Demote'}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

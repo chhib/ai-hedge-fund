@@ -1,7 +1,7 @@
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { PodLifecycleEvent } from '@/types/pod';
-import { cn } from '@/lib/utils';
+
 
 interface LifecycleHistoryProps {
   events: PodLifecycleEvent[];

@@ -37,7 +37,6 @@ export interface PodMetrics {
   observation_days?: number;
   total_trades?: number;
   win_rate?: number;
-  [key: string]: any;
 }
 
 export interface LifecycleConfig {

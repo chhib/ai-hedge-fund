@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { Pod } from '@/types/pod';
-import { ArrowDown, ArrowUp, Calendar, Clock, History, Play, Shield, StopCircle, TrendingUp } from 'lucide-react';
+import { Calendar, Clock, History, StopCircle, TrendingUp } from 'lucide-react';
 
 interface PodCardProps {
   pod: Pod;
@@ -42,7 +42,7 @@ export function PodCard({ pod, onPromote, onDemote, onViewHistory }: PodCardProp
               </span>
             </CardDescription>
           </div>
-          <Badge variant={isLive ? "default" : "secondary"} className={cn(
+          <Badge variant="secondary" className={cn(
             isLive ? "bg-green-600 hover:bg-green-700" : "bg-blue-600 hover:bg-blue-700",
             "text-white font-bold"
           )}>

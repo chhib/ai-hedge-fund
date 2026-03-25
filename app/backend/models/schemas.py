@@ -78,7 +78,7 @@ class BaseHedgeFundRequest(BaseModel):
         if self.agent_models:
             # Extract base agent key from unique node ID for matching
             base_agent_key = extract_base_agent_key(agent_id)
-            
+
             for config in self.agent_models:
                 # Check both unique node ID and base agent key for matches
                 config_base_key = extract_base_agent_key(config.agent_id)
@@ -311,6 +311,7 @@ class PodResponse(BaseModel):
     next_evaluation_date: str
     latest_event: Optional[Dict[str, Any]] = None
     metrics: Optional[Dict[str, Any]] = None
+    error: Optional[str] = None
 
 
 class PodLifecycleEventResponse(BaseModel):
@@ -322,4 +323,23 @@ class PodLifecycleEventResponse(BaseModel):
     reason: str
     source: str
     metrics_json: Optional[Dict[str, Any]] = None
+    created_at: str
+
+
+class LifecycleConfigResponse(BaseModel):
+    min_history_days: int
+    promotion_sharpe: float
+    promotion_return_pct: float
+    promotion_drawdown_pct: float
+    maintenance_sharpe: float
+    hard_stop_drawdown_pct: float
+    evaluation_schedule: str
+    next_evaluation_date: str
+
+
+class PodProposalResponse(BaseModel):
+    ticker: str
+    target_weight: Optional[float] = None
+    action: Optional[str] = None
+    run_id: str
     created_at: str
