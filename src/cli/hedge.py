@@ -53,6 +53,7 @@ def cli() -> None:
 @click.option("--ibkr-skip-swedish-stocks/--no-ibkr-skip-swedish-stocks", default=True, show_default=True, help="Skip Swedish stock buy orders in IBKR flows")
 @click.option("--use-governor", is_flag=True, help="Apply the preservation-first portfolio governor")
 @click.option("--governor-profile", default="preservation", show_default=True, help="Governor profile name")
+@click.option("--tier", type=click.Choice(["paper", "live"], case_sensitive=False), default=None, help="Override pod execution tier for this run")
 def rebalance(
     portfolio: Optional[Path],
     universe: Optional[Path],
@@ -86,6 +87,7 @@ def rebalance(
     ibkr_skip_swedish_stocks: bool,
     use_governor: bool,
     governor_profile: str,
+    tier: Optional[str],
 ) -> None:
     """Run the weekly long-only rebalance flow."""
 
@@ -126,6 +128,7 @@ def rebalance(
         ibkr_timeout=ibkr_timeout,
         use_governor=use_governor,
         governor_profile=governor_profile,
+        tier_override=tier,
     )
 
     try:
