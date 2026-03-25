@@ -475,3 +475,127 @@ def test_paper_write_passive_observer(tmp_path: Path) -> None:
     })
     # Verify it worked
     assert store.get_latest_paper_snapshot("pod1") is not None
+
+
+# ── Daemon Runs ──
+
+
+def test_daemon_runs_table_exists(store: DecisionStore) -> None:
+    with store._connect() as conn:
+        tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+    assert "daemon_runs" in tables
+
+
+def test_busy_timeout_set(store: DecisionStore) -> None:
+    with store._connect() as conn:
+        timeout = conn.execute("PRAGMA busy_timeout").fetchone()[0]
+    assert timeout == 5000
+
+
+def test_record_and_get_daemon_run(store: DecisionStore) -> None:
+    store.record_daemon_run("dr-001", "buffett", "analysis")
+    result = store.get_daemon_run("dr-001")
+    assert result is not None
+    assert result["pod_id"] == "buffett"
+    assert result["phase"] == "analysis"
+    assert result["status"] == "scheduled"
+    assert result["retry_count"] == 0
+
+
+def test_daemon_run_lifecycle(store: DecisionStore) -> None:
+    """Test full lifecycle: scheduled -> running -> completed."""
+    store.record_daemon_run("dr-002", "simons", "analysis")
+
+    store.update_daemon_run_status("dr-002", "running")
+    run = store.get_daemon_run("dr-002")
+    assert run["status"] == "running"
+    assert run["started_at"] is not None
+
+    store.update_daemon_run_status("dr-002", "completed")
+    run = store.get_daemon_run("dr-002")
+    assert run["status"] == "completed"
+    assert run["completed_at"] is not None
+
+
+def test_daemon_run_failed_with_error(store: DecisionStore) -> None:
+    store.record_daemon_run("dr-003", "buffett", "execution")
+    store.update_daemon_run_status("dr-003", "failed", error_message="LLM timeout", retry_count=2)
+    run = store.get_daemon_run("dr-003")
+    assert run["status"] == "failed"
+    assert run["error_message"] == "LLM timeout"
+    assert run["retry_count"] == 2
+    assert run["completed_at"] is not None
+
+
+def test_daemon_run_skipped(store: DecisionStore) -> None:
+    store.record_daemon_run("dr-004", "buffett", "analysis")
+    store.update_daemon_run_status("dr-004", "skipped", skip_reason="Market closed (SFB CLOSED)")
+    run = store.get_daemon_run("dr-004")
+    assert run["status"] == "skipped"
+    assert run["skip_reason"] == "Market closed (SFB CLOSED)"
+
+
+def test_daemon_run_phase2_references_phase1(store: DecisionStore) -> None:
+    store.record_daemon_run("dr-p1", "buffett", "analysis")
+    store.update_daemon_run_status("dr-p1", "completed")
+
+    store.record_daemon_run("dr-p2", "buffett", "execution", phase1_run_id="dr-p1")
+    run = store.get_daemon_run("dr-p2")
+    assert run["phase1_run_id"] == "dr-p1"
+
+
+def test_get_latest_daemon_run(store: DecisionStore) -> None:
+    store.record_daemon_run("dr-old", "buffett", "analysis")
+    store.record_daemon_run("dr-new", "buffett", "analysis")
+    latest = store.get_latest_daemon_run("buffett", phase="analysis")
+    assert latest is not None
+    assert latest["id"] == "dr-new"
+
+
+def test_get_latest_daemon_run_none(store: DecisionStore) -> None:
+    assert store.get_latest_daemon_run("nonexistent") is None
+
+
+def test_get_daemon_runs_filtered(store: DecisionStore) -> None:
+    store.record_daemon_run("dr-a1", "buffett", "analysis")
+    store.record_daemon_run("dr-a2", "simons", "analysis")
+    store.record_daemon_run("dr-e1", "buffett", "execution")
+
+    buffett_runs = store.get_daemon_runs(pod_id="buffett")
+    assert len(buffett_runs) == 2
+
+    analysis_runs = store.get_daemon_runs(phase="analysis")
+    assert len(analysis_runs) == 2
+
+    buffett_analysis = store.get_daemon_runs(pod_id="buffett", phase="analysis")
+    assert len(buffett_analysis) == 1
+
+
+def test_daemon_write_passive_observer(store: DecisionStore) -> None:
+    """Daemon writes should never raise, even with bad data."""
+    # update_daemon_run_status on nonexistent ID should not raise
+    store.update_daemon_run_status("nonexistent-id", "completed")
+    # record_daemon_run with None pod_id should not crash the caller
+    # (the DB constraint will fail but the try/except catches it)
+
+
+def test_daemon_runs_concurrent_writes(tmp_path: Path) -> None:
+    """Multi-threaded writes should not deadlock thanks to busy_timeout."""
+    store = DecisionStore(db_path=tmp_path / "concurrent.db")
+    errors = []
+
+    def write_daemon_run(i: int):
+        try:
+            store.record_daemon_run(f"dr-{i:03d}", f"pod-{i % 3}", "analysis")
+        except Exception as e:
+            errors.append(e)
+
+    threads = [threading.Thread(target=write_daemon_run, args=(i,)) for i in range(20)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert len(errors) == 0
+    runs = store.get_daemon_runs(limit=100)
+    assert len(runs) == 20

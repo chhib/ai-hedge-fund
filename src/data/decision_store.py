@@ -38,6 +38,7 @@ class DecisionStore:
     def _initialize(self) -> None:
         with self._connect() as conn:
             conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA busy_timeout=5000")
 
             conn.execute(
                 """
@@ -225,6 +226,28 @@ class DecisionStore:
             conn.execute("CREATE INDEX IF NOT EXISTS idx_paper_snapshots_pod_created ON paper_snapshots (pod_id, created_at)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_paper_snapshots_run_id ON paper_snapshots (run_id)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_runs_pod_id ON runs (pod_id)")
+
+            # Daemon scheduling metadata (operational, not audit trail -- allows UPDATE)
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS daemon_runs (
+                    id TEXT PRIMARY KEY,
+                    pod_id TEXT NOT NULL,
+                    phase TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'scheduled',
+                    retry_count INTEGER NOT NULL DEFAULT 0,
+                    skip_reason TEXT,
+                    phase1_run_id TEXT,
+                    error_message TEXT,
+                    started_at TEXT,
+                    completed_at TEXT,
+                    created_at TEXT NOT NULL
+                )
+                """
+            )
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_daemon_runs_pod_phase ON daemon_runs (pod_id, phase)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_daemon_runs_status ON daemon_runs (status)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_daemon_runs_created ON daemon_runs (created_at)")
 
     # ── Write methods (all INSERT-only, never UPSERT) ──
 
@@ -527,6 +550,115 @@ class DecisionStore:
                 )
         except Exception:
             logger.debug("Failed to record paper snapshot for pod %s", pod_id, exc_info=True)
+
+    # ── Daemon run methods (operational metadata, allows UPDATE) ──
+
+    def record_daemon_run(
+        self,
+        daemon_run_id: str,
+        pod_id: str,
+        phase: str,
+        status: str = "scheduled",
+        phase1_run_id: Optional[str] = None,
+    ) -> None:
+        """Record a new daemon run entry."""
+        try:
+            with self._connect() as conn:
+                conn.execute(
+                    """
+                    INSERT INTO daemon_runs (id, pod_id, phase, status, retry_count,
+                        phase1_run_id, created_at)
+                    VALUES (?, ?, ?, ?, 0, ?, ?)
+                    """,
+                    (daemon_run_id, pod_id, phase, status, phase1_run_id, datetime.now().isoformat()),
+                )
+        except Exception:
+            logger.debug("Failed to record daemon run %s", daemon_run_id, exc_info=True)
+
+    def update_daemon_run_status(
+        self,
+        daemon_run_id: str,
+        status: str,
+        error_message: Optional[str] = None,
+        retry_count: Optional[int] = None,
+        skip_reason: Optional[str] = None,
+    ) -> None:
+        """Update a daemon run's status and optional fields."""
+        try:
+            with self._connect() as conn:
+                sets = ["status = ?"]
+                params: list = [status]
+
+                if status == "running":
+                    sets.append("started_at = ?")
+                    params.append(datetime.now().isoformat())
+                elif status in ("completed", "failed", "skipped"):
+                    sets.append("completed_at = ?")
+                    params.append(datetime.now().isoformat())
+
+                if error_message is not None:
+                    sets.append("error_message = ?")
+                    params.append(error_message)
+                if retry_count is not None:
+                    sets.append("retry_count = ?")
+                    params.append(retry_count)
+                if skip_reason is not None:
+                    sets.append("skip_reason = ?")
+                    params.append(skip_reason)
+
+                params.append(daemon_run_id)
+                conn.execute(f"UPDATE daemon_runs SET {', '.join(sets)} WHERE id = ?", params)
+        except Exception:
+            logger.debug("Failed to update daemon run %s", daemon_run_id, exc_info=True)
+
+    def get_latest_daemon_run(self, pod_id: str, phase: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """Return the most recent daemon run for a pod, optionally filtered by phase."""
+        clauses = ["pod_id = ?"]
+        params: list = [pod_id]
+        if phase:
+            clauses.append("phase = ?")
+            params.append(phase)
+        where = " AND ".join(clauses)
+        with self._connect() as conn:
+            row = conn.execute(
+                f"SELECT * FROM daemon_runs WHERE {where} ORDER BY created_at DESC LIMIT 1",
+                params,
+            ).fetchone()
+        return dict(row) if row else None
+
+    def get_daemon_run(self, daemon_run_id: str) -> Optional[Dict[str, Any]]:
+        """Return a single daemon run by ID."""
+        with self._connect() as conn:
+            row = conn.execute("SELECT * FROM daemon_runs WHERE id = ?", (daemon_run_id,)).fetchone()
+        return dict(row) if row else None
+
+    def get_daemon_runs(
+        self,
+        pod_id: Optional[str] = None,
+        status: Optional[str] = None,
+        phase: Optional[str] = None,
+        limit: int = 50,
+    ) -> List[Dict[str, Any]]:
+        """Query daemon runs with optional filters."""
+        clauses, params = [], []
+        if pod_id:
+            clauses.append("pod_id = ?")
+            params.append(pod_id)
+        if status:
+            clauses.append("status = ?")
+            params.append(status)
+        if phase:
+            clauses.append("phase = ?")
+            params.append(phase)
+
+        where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+        params.append(limit)
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"SELECT * FROM daemon_runs{where} ORDER BY created_at DESC LIMIT ?",
+                params,
+            ).fetchall()
+        return [dict(r) for r in rows]
 
     # ── Read methods ──
 
