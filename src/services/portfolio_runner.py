@@ -319,6 +319,7 @@ class RebalanceConfig:
     use_governor: bool = False
     governor_profile: str = "preservation"
     tier_override: Optional[str] = None  # "paper" | "live" -- overrides per-pod tier for this run
+    analysis_only: bool = False  # Phase 1 daemon mode: return after proposals, skip execution
 
 
 @dataclass(slots=True)
@@ -570,6 +571,27 @@ def run_pods(config: RebalanceConfig) -> RebalanceOutcome:
             unknown_tickers=unknown,
         )
 
+    # Phase 1 early return: analysis complete, proposals saved to Decision DB
+    if config.analysis_only:
+        print("Analysis phase complete. Proposals saved to Decision DB.")
+        return RebalanceOutcome(
+            session_id=f"analysis-{pods[0].name}" if len(pods) == 1 else "analysis-multi",
+            results={
+                "recommendations": [],
+                "governor": None,
+                "pod_proposals": [
+                    {
+                        "pod_id": p.pod_id,
+                        "picks": [{"rank": pk.rank, "ticker": pk.ticker, "weight": pk.target_weight} for pk in p.picks],
+                        "reasoning": p.reasoning,
+                    }
+                    for p in all_proposals
+                ],
+            },
+            output_path=None,
+            unknown_tickers=unknown,
+        )
+
     # Split proposals by tier (paper vs live)
     from src.services.paper_engine import PaperExecutionEngine
     paper_proposals = []
@@ -800,6 +822,224 @@ def run_pods(config: RebalanceConfig) -> RebalanceOutcome:
         print("\n⚠️  Dry-run mode - no files saved")
 
     return RebalanceOutcome(session_id=merge_session_id, results=results, output_path=output_path, unknown_tickers=unknown)
+
+
+def execute_proposals(
+    phase1_run_ids: List[str],
+    config: RebalanceConfig,
+    drift_threshold: float = 0.05,
+) -> RebalanceOutcome:
+    """Phase 2: Load Phase 1 proposals, validate price drift, and execute.
+
+    Loads proposals from Decision DB for the given Phase 1 run IDs,
+    fetches current prices, applies drift validation, then executes
+    trades for paper and live pods.
+    """
+    from src.config.pod_config import Pod, resolve_pods
+    from src.data.decision_store import get_decision_store
+    from src.services.price_validator import filter_proposals_by_drift
+    from src.services.pipeline.pod_proposer import PodProposal, PodPick
+
+    store = get_decision_store()
+
+    # Load proposals from Decision DB
+    all_proposals: List[PodProposal] = []
+    pod_run_map: Dict[str, str] = {}  # pod_id -> run_id
+
+    for run_id in phase1_run_ids:
+        db_proposals = store.get_pod_proposals(run_id=run_id)
+        if not db_proposals:
+            continue
+
+        pod_id = db_proposals[0]["pod_id"]
+        pod_run_map[pod_id] = run_id
+
+        picks = [
+            PodPick(
+                rank=p["rank"],
+                ticker=p["ticker"],
+                target_weight=p["target_weight"],
+                signal_score=p.get("signal_score") or 0.0,
+            )
+            for p in db_proposals
+        ]
+        all_proposals.append(PodProposal(
+            pod_id=pod_id,
+            run_id=run_id,
+            picks=picks,
+            reasoning=db_proposals[0].get("reasoning"),
+        ))
+
+    if not all_proposals:
+        print("No Phase 1 proposals found. Skipping execution.")
+        return RebalanceOutcome(
+            session_id="no-phase1-proposals",
+            results={"recommendations": [], "governor": None},
+            output_path=None,
+            unknown_tickers=[],
+        )
+
+    # Load portfolio and universe
+    portfolio = _load_portfolio_from_source(config)
+    universe_list = load_universe(
+        str(config.universe_path) if config.universe_path else None,
+        config.universe_tickers,
+    )
+    if not universe_list:
+        raise ValueError("Universe is empty.")
+
+    ticker_markets, unknown = _build_ticker_market_map(universe_list)
+    _ensure_current_holdings_in_universe(portfolio, universe_list)
+
+    # Resolve pods
+    pods = resolve_pods(config.pods) if config.pods else []
+    pod_map = {p.name: p for p in pods}
+    model_config = {"name": config.model, "provider": config.model_provider}
+
+    # Create a manager for price context
+    manager = EnhancedPortfolioManager(
+        portfolio=portfolio,
+        universe=universe_list,
+        analysts=[],
+        model_config=model_config,
+        ticker_markets=ticker_markets,
+        home_currency=config.home_currency,
+        no_cache=config.no_cache,
+        verbose=config.verbose,
+        session_id=str(uuid.uuid4()),
+        use_governor=False,
+    )
+
+    # Fetch current prices for drift validation
+    current_prices: Dict[str, float] = {}
+    all_tickers = {p.ticker for proposal in all_proposals for p in proposal.picks}
+    for ticker in all_tickers:
+        try:
+            ctx = manager._get_price_context(ticker)
+            current_prices[ticker] = ctx.latest_close
+        except Exception:
+            pass
+
+    # Price drift validation
+    drift_proposals = []
+    for proposal in all_proposals:
+        proposal_dicts = [
+            {"ticker": p.ticker, "target_weight": p.target_weight, "signal_score": p.signal_score}
+            for p in proposal.picks
+        ]
+        valid, drift_results = filter_proposals_by_drift(proposal_dicts, current_prices, drift_threshold)
+
+        skipped = [r for r in drift_results if r.exceeds_threshold]
+        if skipped:
+            print(f"  {proposal.pod_id}: skipping {len(skipped)} tickers due to price drift")
+            for r in skipped:
+                print(f"    {r.ticker}: {r.skip_reason}")
+
+        # Rebuild proposal with only valid picks
+        valid_tickers = {p["ticker"] for p in valid}
+        filtered_picks = [p for p in proposal.picks if p.ticker in valid_tickers]
+        if filtered_picks:
+            drift_proposals.append(PodProposal(
+                pod_id=proposal.pod_id,
+                picks=filtered_picks,
+                reasoning=proposal.reasoning,
+            ))
+
+    if not drift_proposals:
+        print("All proposals filtered by price drift. No execution.")
+        return RebalanceOutcome(
+            session_id="drift-filtered",
+            results={"recommendations": [], "governor": None},
+            output_path=None,
+            unknown_tickers=unknown,
+        )
+
+    # Split by tier and execute (same logic as run_pods post-proposal section)
+    from src.services.paper_engine import PaperExecutionEngine, DEFAULT_STARTING_CAPITAL
+    from src.services.pipeline.trade_generator import generate_recommendations
+
+    paper_fills_summary: List[Dict[str, Any]] = []
+    for proposal in drift_proposals:
+        pod = pod_map.get(proposal.pod_id)
+        effective_tier = config.tier_override or (pod.tier if pod else "paper")
+
+        if effective_tier == "paper":
+            paper_run_id = str(uuid.uuid4())
+            starting_cap = (pod.starting_capital if pod else None) or DEFAULT_STARTING_CAPITAL
+            print(f"── Paper execution (Phase 2): {proposal.pod_id} ──")
+
+            paper_engine = PaperExecutionEngine(
+                pod_id=proposal.pod_id,
+                starting_capital=starting_cap,
+                home_currency=config.home_currency,
+            )
+            virtual_portfolio = paper_engine.load_virtual_portfolio()
+
+            # M2M with current prices
+            m2m_prices: Dict[str, float] = {}
+            for pos in virtual_portfolio.positions:
+                if pos.ticker in current_prices:
+                    m2m_prices[pos.ticker] = current_prices[pos.ticker]
+            if virtual_portfolio.positions:
+                paper_engine.mark_to_market(paper_run_id, virtual_portfolio, m2m_prices, record=False)
+
+            paper_target = {p.ticker: p.target_weight for p in proposal.picks}
+            total_w = sum(paper_target.values())
+            if total_w > 0:
+                paper_target = {t: w / total_w for t, w in paper_target.items()}
+
+            paper_manager = EnhancedPortfolioManager(
+                portfolio=virtual_portfolio,
+                universe=universe_list,
+                analysts=[],
+                model_config=model_config,
+                ticker_markets=ticker_markets,
+                home_currency=config.home_currency,
+                no_cache=config.no_cache,
+                verbose=config.verbose,
+                session_id=paper_run_id,
+                use_governor=False,
+            )
+            paper_manager.prefetched_data = manager.prefetched_data
+            paper_manager.exchange_rates = manager.exchange_rates
+
+            paper_recs, _ = generate_recommendations(
+                target_positions=paper_target,
+                min_trade_size=config.min_trade,
+                portfolio=virtual_portfolio,
+                exchange_rates=paper_manager.exchange_rates,
+                get_price_context=paper_manager._get_price_context,
+                get_ticker_currency=paper_manager._get_ticker_currency,
+                home_currency=config.home_currency,
+                verbose=config.verbose,
+            )
+
+            fills = paper_engine.execute_paper_trades(paper_run_id, paper_recs, virtual_portfolio)
+            filled = [f for f in fills if f["status"] == "filled"]
+            skipped_fills = [f for f in fills if f["status"] == "skipped"]
+            print(f"  Fills: {len(filled)} executed, {len(skipped_fills)} skipped")
+            paper_fills_summary.append({"pod": proposal.pod_id, "fills": fills})
+            print()
+
+    # Return result
+    return RebalanceOutcome(
+        session_id="phase2-execution",
+        results={
+            "recommendations": [],
+            "governor": None,
+            "pod_proposals": [
+                {
+                    "pod_id": p.pod_id,
+                    "picks": [{"rank": pk.rank, "ticker": pk.ticker, "weight": pk.target_weight} for pk in p.picks],
+                    "reasoning": p.reasoning,
+                }
+                for p in drift_proposals
+            ],
+            "paper_fills": paper_fills_summary,
+        },
+        output_path=None,
+        unknown_tickers=unknown,
+    )
 
 
 def _build_ticker_market_map(universe: List[str]) -> tuple[Dict[str, str], List[str]]:
