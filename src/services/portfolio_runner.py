@@ -584,11 +584,12 @@ def run_pods(config: RebalanceConfig) -> RebalanceOutcome:
             live_proposals.append(proposal)
 
     # Execute paper pods independently
+    from src.services.paper_engine import DEFAULT_STARTING_CAPITAL
     paper_fills_summary: List[Dict[str, Any]] = []
     for proposal in paper_proposals:
         pod = pod_map[proposal.pod_id]
-        pod_run_id = str(uuid.uuid4())
-        starting_cap = pod.starting_capital or 100_000.0
+        paper_run_id = str(uuid.uuid4())
+        starting_cap = pod.starting_capital or DEFAULT_STARTING_CAPITAL
         print(f"── Paper execution: {pod.name} ──")
 
         paper_engine = PaperExecutionEngine(
@@ -610,7 +611,8 @@ def run_pods(config: RebalanceConfig) -> RebalanceOutcome:
                 pass
 
         if virtual_portfolio.positions:
-            m2m_snapshot = paper_engine.mark_to_market(pod_run_id, virtual_portfolio, current_prices)
+            # record=False: trades follow immediately, final state recorded after execution
+            m2m_snapshot = paper_engine.mark_to_market(paper_run_id, virtual_portfolio, current_prices, record=False)
             print(f"  M2M: value={m2m_snapshot['total_value']:,.0f} return={m2m_snapshot['cumulative_return_pct']:.1f}%")
 
         # Generate recommendations using the virtual portfolio
@@ -629,7 +631,7 @@ def run_pods(config: RebalanceConfig) -> RebalanceOutcome:
             home_currency=config.home_currency,
             no_cache=config.no_cache,
             verbose=config.verbose,
-            session_id=pod_run_id,
+            session_id=paper_run_id,
             use_governor=False,
         )
         paper_manager.prefetched_data = manager.prefetched_data
@@ -648,12 +650,12 @@ def run_pods(config: RebalanceConfig) -> RebalanceOutcome:
 
         # Record recommendations to Decision DB
         try:
-            decision_store.record_trade_recommendations(pod_run_id, paper_recs)
+            decision_store.record_trade_recommendations(paper_run_id, paper_recs)
         except Exception:
             pass
 
         # Execute virtual fills
-        fills = paper_engine.execute_paper_trades(pod_run_id, paper_recs, virtual_portfolio)
+        fills = paper_engine.execute_paper_trades(paper_run_id, paper_recs, virtual_portfolio)
         filled = [f for f in fills if f["status"] == "filled"]
         skipped = [f for f in fills if f["status"] == "skipped"]
         print(f"  Fills: {len(filled)} executed, {len(skipped)} skipped")

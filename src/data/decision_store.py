@@ -224,6 +224,7 @@ class DecisionStore:
             conn.execute("CREATE INDEX IF NOT EXISTS idx_paper_positions_run_id ON paper_positions (run_id)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_paper_snapshots_pod_created ON paper_snapshots (pod_id, created_at)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_paper_snapshots_run_id ON paper_snapshots (run_id)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_runs_pod_id ON runs (pod_id)")
 
     # ── Write methods (all INSERT-only, never UPSERT) ──
 
@@ -536,17 +537,16 @@ class DecisionStore:
         from the latest run_id that wrote paper_positions for this pod.
         """
         with self._connect() as conn:
-            # Find the latest run_id for this pod
-            row = conn.execute(
-                "SELECT run_id FROM paper_positions WHERE pod_id = ? ORDER BY created_at DESC LIMIT 1",
-                (pod_id,),
-            ).fetchone()
-            if not row:
-                return []
-            latest_run_id = row["run_id"]
             rows = conn.execute(
-                "SELECT * FROM paper_positions WHERE pod_id = ? AND run_id = ? ORDER BY ticker",
-                (pod_id, latest_run_id),
+                """
+                SELECT * FROM paper_positions
+                WHERE pod_id = ? AND run_id = (
+                    SELECT run_id FROM paper_positions
+                    WHERE pod_id = ? ORDER BY created_at DESC LIMIT 1
+                )
+                ORDER BY ticker
+                """,
+                (pod_id, pod_id),
             ).fetchall()
         return [dict(r) for r in rows]
 

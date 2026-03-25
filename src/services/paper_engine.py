@@ -63,20 +63,20 @@ class PaperExecutionEngine:
             last_updated=datetime.now(),
         )
 
-    def mark_to_market(self, run_id: str, portfolio: Portfolio, current_prices: Dict[str, float]) -> Dict[str, Any]:
-        """Update open positions with current market prices and record a snapshot.
+    def mark_to_market(self, run_id: str, portfolio: Portfolio, current_prices: Dict[str, float], *, record: bool = True) -> Dict[str, Any]:
+        """Update open positions with current market prices.
+
+        When record=True (default), writes positions and snapshot to Decision DB.
+        Set record=False when trades will follow immediately (avoids double-write).
 
         Returns the snapshot dict with total_value, cash, positions_value, cumulative_return_pct.
         """
-        positions_value = 0.0
         updated_positions: List[Dict[str, Any]] = []
 
         for pos in portfolio.positions:
             price = current_prices.get(pos.ticker, pos.cost_basis)
             if pos.ticker not in current_prices:
                 logger.warning("No current price for %s, using cost basis %.2f as fallback", pos.ticker, pos.cost_basis)
-            value = pos.shares * price
-            positions_value += value
             updated_positions.append({
                 "ticker": pos.ticker,
                 "shares": pos.shares,
@@ -86,20 +86,11 @@ class PaperExecutionEngine:
             })
 
         cash = sum(portfolio.cash_holdings.values())
-        total_value = cash + positions_value
-        cumulative_return_pct = ((total_value - self.starting_capital) / self.starting_capital) * 100.0 if self.starting_capital > 0 else 0.0
+        snapshot = self._build_snapshot(cash, updated_positions)
 
-        snapshot = {
-            "total_value": total_value,
-            "cash": cash,
-            "positions_value": positions_value,
-            "cumulative_return_pct": cumulative_return_pct,
-            "starting_capital": self.starting_capital,
-        }
-
-        # Record to Decision DB (passive observer)
-        self._store.record_paper_positions(self.pod_id, run_id, updated_positions)
-        self._store.record_paper_snapshot(self.pod_id, run_id, snapshot)
+        if record:
+            self._store.record_paper_positions(self.pod_id, run_id, updated_positions)
+            self._store.record_paper_snapshot(self.pod_id, run_id, snapshot)
 
         return snapshot
 
@@ -224,6 +215,19 @@ class PaperExecutionEngine:
 
         return fills
 
+    def _build_snapshot(self, cash: float, positions: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Build a portfolio snapshot dict from cash and position data."""
+        positions_value = sum(p["shares"] * p.get("current_price", p.get("cost_basis", 0)) for p in positions)
+        total_value = cash + positions_value
+        cumulative_return_pct = ((total_value - self.starting_capital) / self.starting_capital) * 100.0 if self.starting_capital > 0 else 0.0
+        return {
+            "total_value": total_value,
+            "cash": cash,
+            "positions_value": positions_value,
+            "cumulative_return_pct": cumulative_return_pct,
+            "starting_capital": self.starting_capital,
+        }
+
     def _record_results(
         self,
         run_id: str,
@@ -251,25 +255,13 @@ class PaperExecutionEngine:
         except Exception:
             logger.debug("Failed to record paper execution outcomes", exc_info=True)
 
-        # Record positions
+        # Record positions + snapshot
         position_list = [
-            {**p, "current_price": p.get("cost_basis", 0)}
+            {**p, "current_price": p.get("current_price", p.get("cost_basis", 0))}
             for p in positions.values()
         ]
         self._store.record_paper_positions(self.pod_id, run_id, position_list)
-
-        # Record snapshot
-        positions_value = sum(p["shares"] * p.get("current_price", p.get("cost_basis", 0)) for p in position_list)
-        total_value = cash + positions_value
-        cumulative_return_pct = ((total_value - self.starting_capital) / self.starting_capital) * 100.0 if self.starting_capital > 0 else 0.0
-
-        self._store.record_paper_snapshot(self.pod_id, run_id, {
-            "total_value": total_value,
-            "cash": cash,
-            "positions_value": positions_value,
-            "cumulative_return_pct": cumulative_return_pct,
-            "starting_capital": self.starting_capital,
-        })
+        self._store.record_paper_snapshot(self.pod_id, run_id, self._build_snapshot(cash, position_list))
 
     @staticmethod
     def _make_fill(rec: Dict[str, Any], side: str, quantity: float, price: float) -> Dict[str, Any]:
