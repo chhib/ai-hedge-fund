@@ -16,14 +16,13 @@ from urllib.parse import urlparse
 
 import requests
 import urllib3
-
-# Suppress SSL warnings for self-signed certs
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
 from src.agents.enhanced_portfolio_manager import EnhancedPortfolioManager
 from src.data.borsdata_ticker_mapping import get_ticker_market
 from src.utils.output_formatter import display_results, format_as_portfolio_csv
 from src.utils.portfolio_loader import Portfolio, Position as PortfolioPosition, load_portfolio, load_universe
+
+# Suppress SSL warnings for self-signed certs
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # Path to IBKR Client Portal Gateway (relative to repo root)
 IBKR_GATEWAY_DIR = Path(__file__).parent.parent.parent / "clientportal.gw"
@@ -457,9 +456,10 @@ def run_pods(config: RebalanceConfig) -> RebalanceOutcome:
     from src.data.decision_store import get_decision_store
     from src.services.pipeline.pod_merger import merge_proposals
     from src.services.pipeline.pod_proposer import propose_portfolio
-    from src.services.pipeline.position_sizer import calculate_target_positions, select_top_positions
-    from src.services.pipeline.signal_aggregator import apply_long_only_constraint, apply_ticker_penalties
+    from src.services.pipeline.position_sizer import select_top_positions
+    from src.services.pipeline.signal_aggregator import apply_ticker_penalties
     from src.services.pipeline.trade_generator import calculate_updated_portfolio, generate_recommendations
+    from src.services.pod_lifecycle import resolve_effective_tier
 
     if not config.pods:
         raise ValueError("run_pods requires config.pods to be set (e.g., 'all')")
@@ -556,7 +556,7 @@ def run_pods(config: RebalanceConfig) -> RebalanceOutcome:
                 print(f"  Proposal: {', '.join(f'{p.ticker} {p.target_weight:.0%}' for p in proposal.picks)}")
                 all_proposals.append(proposal)
             else:
-                print(f"  Proposal: empty (no qualifying picks)")
+                print("  Proposal: empty (no qualifying picks)")
         except Exception as e:
             print(f"  Proposal failed: {e}")
 
@@ -592,97 +592,37 @@ def run_pods(config: RebalanceConfig) -> RebalanceOutcome:
             unknown_tickers=unknown,
         )
 
-    # Split proposals by tier (paper vs live)
-    from src.services.paper_engine import PaperExecutionEngine
+    # Resolve lifecycle-driven effective tiers for this run.
     paper_proposals = []
     live_proposals = []
     pod_map = {p.name: p for p in pods}
+    effective_tiers = {
+        pod.name: (config.tier_override or resolve_effective_tier(pod.name, pod.tier, store=decision_store))
+        for pod in pods
+    }
     for proposal in all_proposals:
-        pod = pod_map.get(proposal.pod_id)
-        effective_tier = config.tier_override or (pod.tier if pod else "paper")
+        effective_tier = effective_tiers.get(proposal.pod_id, "paper")
         if effective_tier == "paper":
             paper_proposals.append(proposal)
         else:
             live_proposals.append(proposal)
 
-    # Execute paper pods independently
-    from src.services.paper_engine import DEFAULT_STARTING_CAPITAL
+    # Shadow execution keeps pod-level lifecycle metrics alive for every pod.
     paper_fills_summary: List[Dict[str, Any]] = []
-    for proposal in paper_proposals:
+    for proposal in all_proposals:
         pod = pod_map[proposal.pod_id]
-        paper_run_id = str(uuid.uuid4())
-        starting_cap = pod.starting_capital or DEFAULT_STARTING_CAPITAL
-        print(f"── Paper execution: {pod.name} ──")
-
-        paper_engine = PaperExecutionEngine(
-            pod_id=pod.name,
-            starting_capital=starting_cap,
-            home_currency=config.home_currency,
-        )
-
-        # Load virtual portfolio and mark-to-market
-        virtual_portfolio = paper_engine.load_virtual_portfolio()
-
-        # Get current prices for M2M from prefetched data
-        current_prices: Dict[str, float] = {}
-        for pos in virtual_portfolio.positions:
-            try:
-                ctx = manager._get_price_context(pos.ticker)
-                current_prices[pos.ticker] = ctx.latest_close
-            except Exception:
-                pass
-
-        if virtual_portfolio.positions:
-            # record=False: trades follow immediately, final state recorded after execution
-            m2m_snapshot = paper_engine.mark_to_market(paper_run_id, virtual_portfolio, current_prices, record=False)
-            print(f"  M2M: value={m2m_snapshot['total_value']:,.0f} return={m2m_snapshot['cumulative_return_pct']:.1f}%")
-
-        # Generate recommendations using the virtual portfolio
-        paper_target = {p.ticker: p.target_weight for p in proposal.picks}
-        total_w = sum(paper_target.values())
-        if total_w > 0:
-            paper_target = {t: w / total_w for t, w in paper_target.items()}
-
-        # Create a manager for price context
-        paper_manager = EnhancedPortfolioManager(
-            portfolio=virtual_portfolio,
-            universe=universe_list,
-            analysts=[],
-            model_config=model_config,
+        fills = _execute_shadow_pod_proposal(
+            proposal=proposal,
+            pod=pod,
+            base_manager=manager,
+            config=config,
+            universe_list=universe_list,
             ticker_markets=ticker_markets,
-            home_currency=config.home_currency,
-            no_cache=config.no_cache,
-            verbose=config.verbose,
-            session_id=paper_run_id,
-            use_governor=False,
+            model_config=model_config,
+            decision_store=decision_store,
+            phase_label="Paper execution" if effective_tiers.get(pod.name) == "paper" else "Shadow execution",
         )
-        paper_manager.prefetched_data = manager.prefetched_data
-        paper_manager.exchange_rates = manager.exchange_rates
-
-        paper_recs, _ = generate_recommendations(
-            target_positions=paper_target,
-            min_trade_size=config.min_trade,
-            portfolio=virtual_portfolio,
-            exchange_rates=paper_manager.exchange_rates,
-            get_price_context=paper_manager._get_price_context,
-            get_ticker_currency=paper_manager._get_ticker_currency,
-            home_currency=config.home_currency,
-            verbose=config.verbose,
-        )
-
-        # Record recommendations to Decision DB
-        try:
-            decision_store.record_trade_recommendations(paper_run_id, paper_recs)
-        except Exception:
-            pass
-
-        # Execute virtual fills
-        fills = paper_engine.execute_paper_trades(paper_run_id, paper_recs, virtual_portfolio)
-        filled = [f for f in fills if f["status"] == "filled"]
-        skipped = [f for f in fills if f["status"] == "skipped"]
-        print(f"  Fills: {len(filled)} executed, {len(skipped)} skipped")
-        paper_fills_summary.append({"pod": pod.name, "fills": fills})
-        print()
+        paper_fills_summary.append({"pod": pod.name, "fills": fills, "effective_tier": effective_tiers.get(pod.name, "paper")})
 
     # If no live pods, return paper-only result
     if not live_proposals:
@@ -835,10 +775,11 @@ def execute_proposals(
     fetches current prices, applies drift validation, then executes
     trades for paper and live pods.
     """
-    from src.config.pod_config import Pod, resolve_pods
+    from src.config.pod_config import resolve_pods
     from src.data.decision_store import get_decision_store
     from src.services.price_validator import filter_proposals_by_drift
     from src.services.pipeline.pod_proposer import PodProposal, PodPick
+    from src.services.pod_lifecycle import resolve_effective_tier
 
     store = get_decision_store()
 
@@ -894,6 +835,10 @@ def execute_proposals(
     # Resolve pods
     pods = resolve_pods(config.pods) if config.pods else []
     pod_map = {p.name: p for p in pods}
+    effective_tiers = {
+        pod.name: (config.tier_override or resolve_effective_tier(pod.name, pod.tier, store=store))
+        for pod in pods
+    }
     model_config = {"name": config.model, "provider": config.model_provider}
 
     # Create a manager for price context
@@ -965,78 +910,53 @@ def execute_proposals(
             unknown_tickers=unknown,
         )
 
-    # Split by tier and execute (same logic as run_pods post-proposal section)
-    from src.services.paper_engine import PaperExecutionEngine, DEFAULT_STARTING_CAPITAL
-    from src.services.pipeline.trade_generator import generate_recommendations
-
     paper_fills_summary: List[Dict[str, Any]] = []
+    live_proposals: List[PodProposal] = []
     for proposal in drift_proposals:
         pod = pod_map.get(proposal.pod_id)
-        effective_tier = config.tier_override or (pod.tier if pod else "paper")
+        fills = _execute_shadow_pod_proposal(
+            proposal=proposal,
+            pod=pod,
+            base_manager=manager,
+            config=config,
+            universe_list=universe_list,
+            ticker_markets=ticker_markets,
+            model_config=model_config,
+            decision_store=store,
+            phase_label="Paper execution (Phase 2)" if effective_tiers.get(proposal.pod_id) == "paper" else "Shadow execution (Phase 2)",
+        )
+        paper_fills_summary.append({"pod": proposal.pod_id, "fills": fills, "effective_tier": effective_tiers.get(proposal.pod_id, "paper")})
+        if effective_tiers.get(proposal.pod_id) == "live":
+            live_proposals.append(proposal)
 
-        if effective_tier == "paper":
-            paper_run_id = str(uuid.uuid4())
-            starting_cap = (pod.starting_capital if pod else None) or DEFAULT_STARTING_CAPITAL
-            print(f"── Paper execution (Phase 2): {proposal.pod_id} ──")
+    merged_recommendations: List[Dict[str, Any]] = []
+    if live_proposals:
+        from src.services.pipeline.pod_merger import merge_proposals
+        from src.services.pipeline.trade_generator import generate_recommendations
 
-            paper_engine = PaperExecutionEngine(
-                pod_id=proposal.pod_id,
-                starting_capital=starting_cap,
-                home_currency=config.home_currency,
-            )
-            virtual_portfolio = paper_engine.load_virtual_portfolio()
+        merged_weights = merge_proposals(live_proposals, max_holdings=config.max_holdings)
+        selected = list(sorted(merged_weights, key=merged_weights.get, reverse=True)[: config.max_holdings])
+        target_positions = {ticker: merged_weights[ticker] for ticker in selected}
+        total_weight = sum(target_positions.values())
+        if total_weight > 0:
+            target_positions = {ticker: weight / total_weight for ticker, weight in target_positions.items()}
 
-            # M2M with current prices
-            m2m_prices: Dict[str, float] = {}
-            for pos in virtual_portfolio.positions:
-                if pos.ticker in current_prices:
-                    m2m_prices[pos.ticker] = current_prices[pos.ticker]
-            if virtual_portfolio.positions:
-                paper_engine.mark_to_market(paper_run_id, virtual_portfolio, m2m_prices, record=False)
-
-            paper_target = {p.ticker: p.target_weight for p in proposal.picks}
-            total_w = sum(paper_target.values())
-            if total_w > 0:
-                paper_target = {t: w / total_w for t, w in paper_target.items()}
-
-            paper_manager = EnhancedPortfolioManager(
-                portfolio=virtual_portfolio,
-                universe=universe_list,
-                analysts=[],
-                model_config=model_config,
-                ticker_markets=ticker_markets,
-                home_currency=config.home_currency,
-                no_cache=config.no_cache,
-                verbose=config.verbose,
-                session_id=paper_run_id,
-                use_governor=False,
-            )
-            paper_manager.prefetched_data = manager.prefetched_data
-            paper_manager.exchange_rates = manager.exchange_rates
-
-            paper_recs, _ = generate_recommendations(
-                target_positions=paper_target,
-                min_trade_size=config.min_trade,
-                portfolio=virtual_portfolio,
-                exchange_rates=paper_manager.exchange_rates,
-                get_price_context=paper_manager._get_price_context,
-                get_ticker_currency=paper_manager._get_ticker_currency,
-                home_currency=config.home_currency,
-                verbose=config.verbose,
-            )
-
-            fills = paper_engine.execute_paper_trades(paper_run_id, paper_recs, virtual_portfolio)
-            filled = [f for f in fills if f["status"] == "filled"]
-            skipped_fills = [f for f in fills if f["status"] == "skipped"]
-            print(f"  Fills: {len(filled)} executed, {len(skipped_fills)} skipped")
-            paper_fills_summary.append({"pod": proposal.pod_id, "fills": fills})
-            print()
+        merged_recommendations, _ = generate_recommendations(
+            target_positions=target_positions,
+            min_trade_size=config.min_trade,
+            portfolio=portfolio,
+            exchange_rates=manager.exchange_rates,
+            get_price_context=manager._get_price_context,
+            get_ticker_currency=manager._get_ticker_currency,
+            home_currency=config.home_currency,
+            verbose=config.verbose,
+        )
 
     # Return result
     return RebalanceOutcome(
         session_id="phase2-execution",
         results={
-            "recommendations": [],
+            "recommendations": merged_recommendations,
             "governor": None,
             "pod_proposals": [
                 {
@@ -1051,6 +971,90 @@ def execute_proposals(
         output_path=None,
         unknown_tickers=unknown,
     )
+
+
+def _execute_shadow_pod_proposal(
+    proposal,
+    pod,
+    base_manager: EnhancedPortfolioManager,
+    config: RebalanceConfig,
+    universe_list: List[str],
+    ticker_markets: Dict[str, str],
+    model_config: Dict[str, Any],
+    decision_store,
+    phase_label: str,
+) -> List[Dict[str, Any]]:
+    """Execute a pod proposal against its isolated shadow paper book."""
+    from src.services.paper_engine import DEFAULT_STARTING_CAPITAL, PaperExecutionEngine
+    from src.services.pipeline.trade_generator import generate_recommendations
+
+    shadow_run_id = str(uuid.uuid4())
+    pod_name = proposal.pod_id if pod is None else pod.name
+    starting_cap = (pod.starting_capital if pod else None) or DEFAULT_STARTING_CAPITAL
+    print(f"── {phase_label}: {pod_name} ──")
+
+    paper_engine = PaperExecutionEngine(
+        pod_id=pod_name,
+        starting_capital=starting_cap,
+        home_currency=config.home_currency,
+    )
+    paper_engine._store = decision_store
+    virtual_portfolio = paper_engine.load_virtual_portfolio()
+
+    current_prices: Dict[str, float] = {}
+    for pos in virtual_portfolio.positions:
+        try:
+            ctx = base_manager._get_price_context(pos.ticker)
+            current_prices[pos.ticker] = ctx.latest_close
+        except Exception:
+            pass
+
+    if virtual_portfolio.positions:
+        m2m_snapshot = paper_engine.mark_to_market(shadow_run_id, virtual_portfolio, current_prices, record=False)
+        print(f"  M2M: value={m2m_snapshot['total_value']:,.0f} return={m2m_snapshot['cumulative_return_pct']:.1f}%")
+
+    target_weights = {pick.ticker: pick.target_weight for pick in proposal.picks}
+    total_weight = sum(target_weights.values())
+    if total_weight > 0:
+        target_weights = {ticker: weight / total_weight for ticker, weight in target_weights.items()}
+
+    paper_manager = EnhancedPortfolioManager(
+        portfolio=virtual_portfolio,
+        universe=universe_list,
+        analysts=[],
+        model_config=model_config,
+        ticker_markets=ticker_markets,
+        home_currency=config.home_currency,
+        no_cache=config.no_cache,
+        verbose=config.verbose,
+        session_id=shadow_run_id,
+        use_governor=False,
+    )
+    paper_manager.prefetched_data = base_manager.prefetched_data
+    paper_manager.exchange_rates = base_manager.exchange_rates
+
+    paper_recs, _ = generate_recommendations(
+        target_positions=target_weights,
+        min_trade_size=config.min_trade,
+        portfolio=virtual_portfolio,
+        exchange_rates=paper_manager.exchange_rates,
+        get_price_context=paper_manager._get_price_context,
+        get_ticker_currency=paper_manager._get_ticker_currency,
+        home_currency=config.home_currency,
+        verbose=config.verbose,
+    )
+
+    try:
+        decision_store.record_trade_recommendations(shadow_run_id, paper_recs)
+    except Exception:
+        pass
+
+    fills = paper_engine.execute_paper_trades(shadow_run_id, paper_recs, virtual_portfolio)
+    filled = [fill for fill in fills if fill["status"] == "filled"]
+    skipped = [fill for fill in fills if fill["status"] == "skipped"]
+    print(f"  Fills: {len(filled)} executed, {len(skipped)} skipped")
+    print()
+    return fills
 
 
 def _build_ticker_market_map(universe: List[str]) -> tuple[Dict[str, str], List[str]]:

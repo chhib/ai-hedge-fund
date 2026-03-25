@@ -1,6 +1,6 @@
 # AI Hedge Fund -- Project Summary
 
-_Last updated: 2026-03-25 (Session 120)_
+_Last updated: 2026-03-25 (Session 122)_
 
 ## End Goal
 Transform from a single-strategy CLI tool into a **trading pod shop**: config-driven analyst groups (pods) with independent lifecycles, a promotion ladder (backtest -> paper -> live), an always-on daemon with scheduling, and a web dashboard -- all built on the Decision DB as the queryable source of truth for every decision the system makes.
@@ -24,7 +24,8 @@ The AI hedge fund system is fully operational with both CLI and web interfaces:
 - **Decision DB shipped** (Session 117): append-only SQLite ledger capturing full pipeline chain (signals -> aggregation -> governor -> trades -> execution) in `data/decisions.db`. New `pod_proposals` table added for pod portfolio proposals.
 - **Paper Trading shipped** (Session 119): PaperExecutionEngine with per-pod virtual portfolios, mark-to-market, Decision DB persistence, `hedge pods status` performance dashboard (Sharpe, drawdown, win rate). PR #9.
 - **Daemon Mode shipped** (Session 120): `hedge serve` -- standalone foreground daemon with APScheduler, two-phase daily cycle (analysis pre-open, execution post-open with price-drift validation), per-pod cron scheduling with presets, IBKR gateway lifecycle management, escalating backoff retries, graceful shutdown. PR #10.
-- **Next up**: Governor Pod Lifecycle (#6) or Web UI Pod Dashboard (#7)
+- **Governor Pod Lifecycle shipped** (Session 122): automated promotion/demotion, append-only lifecycle events, daemon weekly evaluation + drawdown stop, CLI `hedge pods promote|demote`, and lifecycle-aware `hedge pods status`. Promoted live pods now keep a shadow paper equity curve so pod-level demotion remains measurable despite merged live execution.
+- **Next up**: Web UI Pod Dashboard (#7)
 - Adaptive portfolio governor merged to `main`: preservation-first analyst weighting, deployment throttling, and trade gating
 - `hedge governor status` command added for live/readable governor state inspection
 - `hedge rebalance --use-governor` and `hedge backtest --use-governor` now support closed-loop capital control
@@ -41,7 +42,7 @@ The AI hedge fund system is fully operational with both CLI and web interfaces:
 - Next: try manual destination entry for `U22372536` in Client Portal and capture the eligibility result; if rejected, escalate to IBKR support for a manual internal journal/position transfer request
 
 ## Active Session File
-**`logs/sessions/session_111.md`** - Sessions 111-120
+**`logs/sessions/session_121.md`** - Sessions 121-130
 
 ## Decision Log (Key Decisions)
 
@@ -89,7 +90,9 @@ Sessions are organized into files of 10 sessions each:
 - `logs/sessions/session_071.md` - Sessions 71-80 (IBKR hardening)
 - `logs/sessions/session_081.md` - Sessions 81-90
 - `logs/sessions/session_091.md` - Sessions 91-100
-- `logs/sessions/session_101.md` - Sessions 101-110 (current)
+- `logs/sessions/session_101.md` - Sessions 101-110
+- `logs/sessions/session_111.md` - Sessions 111-120
+- `logs/sessions/session_121.md` - Sessions 121-130 (current)
 
 ## Quick Reference
 

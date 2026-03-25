@@ -5,7 +5,7 @@ import yaml
 from pathlib import Path
 from unittest.mock import patch
 
-from src.config.pod_config import Pod, load_pods, resolve_pods, VALID_TIERS
+from src.config.pod_config import LifecycleConfig, VALID_TIERS, load_lifecycle_config, load_pods, resolve_pods
 
 
 MOCK_ANALYST_CONFIG = {
@@ -143,3 +143,43 @@ def test_real_pods_yaml_loads():
     for pod in pods:
         assert pod.tier in VALID_TIERS
         assert pod.schedule  # non-empty
+
+
+class TestLifecycleConfig:
+
+    def test_missing_lifecycle_section_uses_defaults(self, tmp_pods_yaml):
+        path = tmp_pods_yaml({"pods": [{"name": "buffett", "analyst": "warren_buffett"}]})
+        config = load_lifecycle_config(path)
+        assert config == LifecycleConfig()
+
+    def test_explicit_lifecycle_section_loads(self, tmp_pods_yaml):
+        path = tmp_pods_yaml({
+            "lifecycle": {
+                "min_history_days": 45,
+                "promotion_sharpe": 1.0,
+                "maintenance_sharpe": 0.2,
+                "hard_stop_drawdown_pct": 8.0,
+            },
+            "pods": [{"name": "buffett", "analyst": "warren_buffett"}],
+        })
+        config = load_lifecycle_config(path)
+        assert config.min_history_days == 45
+        assert config.promotion_sharpe == 1.0
+        assert config.maintenance_sharpe == 0.2
+        assert config.hard_stop_drawdown_pct == 8.0
+
+    def test_invalid_min_history_raises(self, tmp_pods_yaml):
+        path = tmp_pods_yaml({
+            "lifecycle": {"min_history_days": 0},
+            "pods": [{"name": "buffett", "analyst": "warren_buffett"}],
+        })
+        with pytest.raises(ValueError, match="min_history_days"):
+            load_lifecycle_config(path)
+
+    def test_invalid_schedule_raises(self, tmp_pods_yaml):
+        path = tmp_pods_yaml({
+            "lifecycle": {"evaluation_schedule": "daily"},
+            "pods": [{"name": "buffett", "analyst": "warren_buffett"}],
+        })
+        with pytest.raises(ValueError, match="evaluation_schedule"):
+            load_lifecycle_config(path)

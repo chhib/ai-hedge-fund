@@ -16,7 +16,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from apscheduler.events import EVENT_JOB_ERROR, EVENT_JOB_EXECUTED
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -24,10 +24,14 @@ from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
-from src.config.pod_config import Pod, resolve_pods
+from src.config.pod_config import Pod, load_lifecycle_config, resolve_pods
 from src.data.decision_store import get_decision_store
 from src.services.gateway_manager import GatewayManager
+from src.services.pod_lifecycle import evaluate_pod_lifecycle, resolve_effective_tier
 from src.utils.market_hours import is_market_open, resolve_schedule
+
+if TYPE_CHECKING:
+    from src.services.portfolio_runner import RebalanceConfig
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +41,7 @@ MAX_RETRIES = len(RETRY_DELAYS)
 
 # Gateway health check interval in seconds
 GATEWAY_HEALTH_INTERVAL = 60
+LIFECYCLE_EVALUATION_HOUR = 6
 
 
 @dataclass
@@ -78,6 +83,7 @@ class PodDaemon:
         )
         self._pods: List[Pod] = []
         self._store = get_decision_store()
+        self._lifecycle_config = load_lifecycle_config()
 
     def start(self) -> None:
         """Start the daemon: resolve pods, schedule jobs, enter main loop."""
@@ -106,6 +112,15 @@ class PodDaemon:
             trigger=IntervalTrigger(seconds=GATEWAY_HEALTH_INTERVAL),
             id="gateway_health_check",
             name="IBKR gateway health check",
+        )
+
+        # Schedule weekly lifecycle evaluation
+        self.scheduler.add_job(
+            self._run_weekly_lifecycle_evaluation,
+            trigger=CronTrigger(day_of_week="mon", hour=LIFECYCLE_EVALUATION_HOUR, minute=0, timezone="Europe/Stockholm"),
+            id="weekly_lifecycle_evaluation",
+            name="Weekly lifecycle evaluation",
+            replace_existing=True,
         )
 
         # Listen for job events
@@ -167,16 +182,17 @@ class PodDaemon:
             return
 
         try:
-            from src.services.portfolio_runner import RebalanceConfig, run_pods
+            from src.services.portfolio_runner import run_pods
 
-            config = self._build_rebalance_config(pod, analysis_only=True)
+            runtime_pod = self._resolve_runtime_pod(pod)
+            config = self._build_rebalance_config(runtime_pod, analysis_only=True)
             outcome = run_pods(config)
 
             self._store.update_daemon_run_status(daemon_run_id, "completed")
             logger.info("Phase 1 %s: completed (session=%s)", pod.name, outcome.session_id)
 
             # Schedule Phase 2
-            self._schedule_phase2(pod, schedule, daemon_run_id)
+            self._schedule_phase2(runtime_pod, schedule, daemon_run_id)
 
         except Exception as e:
             logger.error("Phase 1 %s: failed (%s)", pod.name, e, exc_info=True)
@@ -265,11 +281,14 @@ class PodDaemon:
                 raise RuntimeError(f"No pipeline runs found for pod {pod.name}")
 
             config = self._build_rebalance_config(pod)
-            outcome = execute_proposals(
+            execute_proposals(
                 phase1_run_ids=phase1_run_ids,
                 config=config,
                 drift_threshold=self.config.drift_threshold,
             )
+
+            if pod.tier == "live":
+                self._apply_drawdown_guard(pod, daemon_run_id)
 
             self._store.update_daemon_run_status(daemon_run_id, "completed")
             logger.info("Phase 2 %s: completed", pod.name)
@@ -355,6 +374,61 @@ class PodDaemon:
             analysis_only=analysis_only,
         )
 
+    def _resolve_runtime_pod(self, pod: Pod) -> Pod:
+        """Resolve and freeze the effective tier for a cycle."""
+        effective_tier = resolve_effective_tier(pod.name, pod.tier, store=self._store)
+        return Pod(
+            name=pod.name,
+            analyst=pod.analyst,
+            enabled=pod.enabled,
+            max_picks=pod.max_picks,
+            tier=effective_tier,
+            starting_capital=pod.starting_capital,
+            schedule=pod.schedule,
+        )
+
+    def _run_weekly_lifecycle_evaluation(self) -> None:
+        """Promote/demote pods based on lifecycle policy."""
+        for pod in self._pods:
+            evaluation = evaluate_pod_lifecycle(pod.name, resolve_effective_tier(pod.name, pod.tier, store=self._store), self._lifecycle_config, store=self._store)
+            current_tier = resolve_effective_tier(pod.name, pod.tier, store=self._store)
+
+            if current_tier == "paper" and evaluation.eligible_for_promotion:
+                self._store.record_pod_lifecycle_event(
+                    pod_id=pod.name,
+                    event_type="promotion",
+                    old_tier="paper",
+                    new_tier="live",
+                    reason=evaluation.promotion_reason,
+                    source="weekly_evaluation",
+                    metrics=evaluation.metrics,
+                )
+            elif current_tier == "live" and not evaluation.passes_maintenance:
+                self._store.record_pod_lifecycle_event(
+                    pod_id=pod.name,
+                    event_type="weekly_maintenance",
+                    old_tier="live",
+                    new_tier="paper",
+                    reason=evaluation.maintenance_reason,
+                    source="weekly_evaluation",
+                    metrics=evaluation.metrics,
+                )
+
+    def _apply_drawdown_guard(self, pod: Pod, daemon_run_id: str) -> None:
+        """Demote live pods that breach the hard-stop drawdown threshold."""
+        evaluation = evaluate_pod_lifecycle(pod.name, "live", self._lifecycle_config, store=self._store)
+        if evaluation.should_drawdown_stop:
+            self._store.record_pod_lifecycle_event(
+                pod_id=pod.name,
+                event_type="drawdown_stop",
+                old_tier="live",
+                new_tier="paper",
+                reason=evaluation.drawdown_reason,
+                source="drawdown_guard",
+                metrics=evaluation.metrics,
+                daemon_run_id=daemon_run_id,
+            )
+
     def _install_signal_handlers(self) -> None:
         """Install SIGINT/SIGTERM handlers for graceful shutdown.
 
@@ -390,4 +464,3 @@ class PodDaemon:
         logger.info("Dry run: %s", self.config.dry_run)
         logger.info("IBKR gateway: %s", "authenticated" if self.gateway_manager.is_authenticated() else "not authenticated")
         logger.info("=" * 60)
-

@@ -157,9 +157,12 @@ def rebalance(
             confirm = None
             if ibkr_execute:
                 if ibkr_yes:
-                    confirm = lambda _: True
+                    def _confirm(_: str) -> bool:
+                        return True
                 else:
-                    confirm = lambda msg: click.confirm(msg, default=False)
+                    def _confirm(msg: str) -> bool:
+                        return click.confirm(msg, default=False)
+                confirm = _confirm
 
             report = execute_ibkr_rebalance_trades(
                 outcome.results.get("recommendations", []),
@@ -262,75 +265,112 @@ def serve(
     daemon.start()
 
 
-@cli.command("pods")
+@cli.group("pods", invoke_without_command=True)
+@click.pass_context
+def pods_group(ctx) -> None:
+    """Pod lifecycle and status tools."""
+    if ctx.invoked_subcommand is None:
+        ctx.invoke(pods_status)
+
+
+@pods_group.command("status")
 def pods_status() -> None:
-    """Show pod status: name, analyst, tier, latest proposal, and paper P&L metrics."""
-    from src.config.pod_config import load_pods
+    """Show pod status: lifecycle tier, latest proposal, and shadow performance metrics."""
+    from src.config.pod_config import load_lifecycle_config, load_pods
     from src.data.decision_store import get_decision_store
     from src.services.paper_metrics import compute_paper_performance
+    from src.services.pod_lifecycle import get_lifecycle_status
 
     all_pods = load_pods()
+    lifecycle_config = load_lifecycle_config()
     store = get_decision_store()
 
-    # Overview table
-    click.echo(f"\n{'Pod':<22} {'Analyst':<22} {'Tier':<7} {'On':<4} {'Latest':<12} {'Picks'}")
-    click.echo("─" * 95)
+    click.echo(f"\n{'Pod':<22} {'Analyst':<22} {'Tier':<7} {'Days':>4} {'Next Eval':<12} {'Latest Event':<24} {'Picks'}")
+    click.echo("─" * 130)
 
     for pod in all_pods:
         proposals = store.get_pod_proposals(pod_id=pod.name)
         if proposals:
             latest_run = proposals[-1]["run_id"]
             latest_picks = [p for p in proposals if p["run_id"] == latest_run]
-            latest_date = latest_picks[0]["created_at"][:10] if latest_picks else "—"
             picks_str = ", ".join(f'{p["ticker"]} {p["target_weight"]:.0%}' for p in latest_picks)
         else:
-            latest_date = "—"
             picks_str = "—"
 
-        enabled_str = "Y" if pod.enabled else "N"
-        click.echo(f"{pod.name:<22} {pod.analyst:<22} {pod.tier:<7} {enabled_str:<4} {latest_date:<12} {picks_str}")
+        lifecycle = get_lifecycle_status(pod.name, pod.tier, lifecycle_config, store=store)
+        latest_event = lifecycle.latest_event
+        event_str = "—"
+        if latest_event:
+            event_str = f"{latest_event['event_type']} {latest_event['created_at'][:10]}"
 
-    # Paper performance section
-    paper_pods = [p for p in all_pods if p.tier == "paper"]
-    if paper_pods:
-        click.echo(f"\n{'Paper Pod Performance':─<95}")
-        click.echo(f"{'Pod':<22} {'Value':>10} {'Cash':>10} {'Return':>8} {'Sharpe':>8} {'Max DD':>8} {'Win %':>7} {'Avg P&L':>9} {'Trades':>7}")
-        click.echo("─" * 95)
+        click.echo(
+            f"{pod.name:<22} {pod.analyst:<22} {lifecycle.effective_tier:<7} "
+            f"{lifecycle.days_in_tier:>4} {str(lifecycle.next_evaluation_date):<12} {event_str:<24} {picks_str}"
+        )
 
-        for pod in paper_pods:
-            perf = compute_paper_performance(pod.name)
-            value_str = f"{perf['total_value']:,.0f}" if perf["total_value"] is not None else "—"
-            cash_str = f"{perf['cash']:,.0f}" if perf["cash"] is not None else "—"
-            ret_str = f"{perf['cumulative_return_pct']:.1f}%" if perf["cumulative_return_pct"] is not None else "—"
+    click.echo(f"\n{'Pod Performance':─<130}")
+    click.echo(
+        f"{'Pod':<22} {'Tier':<7} {'Value':>10} {'Cash':>10} {'Return':>8} {'Sharpe':>8} "
+        f"{'Max DD':>8} {'Cur DD':>8} {'Win %':>7} {'Avg P&L':>9} {'Trades':>7}"
+    )
+    click.echo("─" * 130)
 
-            if perf["sharpe_ratio"] is not None:
-                sharpe_str = f"{perf['sharpe_ratio']:.2f}"
-            elif perf["num_snapshots"] < 2:
-                sharpe_str = "N/D"
-            else:
-                sharpe_str = "—"
-
-            if perf["max_drawdown"] is not None:
-                dd_str = f"{perf['max_drawdown']:.1f}%"
-            elif perf["num_snapshots"] < 2:
-                dd_str = "N/D"
-            else:
-                dd_str = "—"
-
-            if perf["win_rate"] is not None:
-                win_str = f"{perf['win_rate']:.0%}"
-            else:
-                win_str = "N/A"
-
-            if perf["avg_trade_pnl"] is not None:
-                pnl_str = f"{perf['avg_trade_pnl']:,.0f}"
-            else:
-                pnl_str = "N/A"
-
-            trades_str = str(perf["num_trades"]) if perf["num_trades"] else "0"
-            click.echo(f"{pod.name:<22} {value_str:>10} {cash_str:>10} {ret_str:>8} {sharpe_str:>8} {dd_str:>8} {win_str:>7} {pnl_str:>9} {trades_str:>7}")
+    for pod in all_pods:
+        lifecycle = get_lifecycle_status(pod.name, pod.tier, lifecycle_config, store=store)
+        perf = compute_paper_performance(pod.name, store=store)
+        value_str = f"{perf['total_value']:,.0f}" if perf["total_value"] is not None else "—"
+        cash_str = f"{perf['cash']:,.0f}" if perf["cash"] is not None else "—"
+        ret_str = f"{perf['cumulative_return_pct']:.1f}%" if perf["cumulative_return_pct"] is not None else "—"
+        sharpe_str = f"{perf['sharpe_ratio']:.2f}" if perf["sharpe_ratio"] is not None else ("N/D" if perf["num_snapshots"] < 2 else "—")
+        dd_str = f"{perf['max_drawdown']:.1f}%" if perf["max_drawdown"] is not None else ("N/D" if perf["num_snapshots"] < 2 else "—")
+        current_dd_str = f"{perf['current_drawdown_pct']:.1f}%" if perf["current_drawdown_pct"] is not None else "—"
+        win_str = f"{perf['win_rate']:.0%}" if perf["win_rate"] is not None else "N/A"
+        pnl_str = f"{perf['avg_trade_pnl']:,.0f}" if perf["avg_trade_pnl"] is not None else "N/A"
+        trades_str = str(perf["num_trades"]) if perf["num_trades"] else "0"
+        click.echo(
+            f"{pod.name:<22} {lifecycle.effective_tier:<7} {value_str:>10} {cash_str:>10} {ret_str:>8} "
+            f"{sharpe_str:>8} {dd_str:>8} {current_dd_str:>8} {win_str:>7} {pnl_str:>9} {trades_str:>7}"
+        )
 
     click.echo()
+
+
+@pods_group.command("promote")
+@click.argument("pod_name")
+def pods_promote(pod_name: str) -> None:
+    """Manually promote a pod to live."""
+    _record_manual_pod_transition(pod_name, "live", "manual_promotion")
+
+
+@pods_group.command("demote")
+@click.argument("pod_name")
+def pods_demote(pod_name: str) -> None:
+    """Manually demote a pod to paper."""
+    _record_manual_pod_transition(pod_name, "paper", "manual_demotion")
+
+
+def _record_manual_pod_transition(pod_name: str, new_tier: str, event_type: str) -> None:
+    from src.config.pod_config import load_pods
+    from src.data.decision_store import get_decision_store
+    from src.services.pod_lifecycle import resolve_effective_tier
+
+    pods = {pod.name: pod for pod in load_pods()}
+    pod = pods.get(pod_name)
+    if pod is None:
+        click.secho(f"Unknown pod '{pod_name}'.", fg="red")
+        raise click.Abort()
+
+    store = get_decision_store()
+    old_tier = resolve_effective_tier(pod.name, pod.tier, store=store)
+    store.record_pod_lifecycle_event(
+        pod_id=pod.name,
+        event_type=event_type,
+        old_tier=old_tier,
+        new_tier=new_tier,
+        reason="Manual CLI override",
+        source="manual",
+    )
+    click.echo(f"{pod.name}: {old_tier} -> {new_tier}")
 
 
 @cli.command()
@@ -435,8 +475,6 @@ def scorecard(horizon: int, analyst: Optional[str], verbose: bool) -> None:
 
 def _render_verbose_scorecard(result, horizon: int) -> None:
     """Print per-date breakdown for verbose mode."""
-    from src.analytics.scorecard import load_all_signals, build_price_index, forward_return
-
     click.echo("PER-DATE BREAKDOWN")
     click.echo("-" * 40)
 

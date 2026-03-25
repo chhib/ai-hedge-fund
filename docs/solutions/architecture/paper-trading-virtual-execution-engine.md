@@ -60,7 +60,7 @@ Six implementation units delivered across three phases:
 | Per-pod isolation (not merged virtual portfolio) | Mirrors real pod shop where each pod manages its own book. A fund-level view can be derived later. |
 | Decision DB as single store | Consistent with "single source of truth" philosophy. `execution_type='paper'` discriminator keeps paper/live data distinguishable. |
 | Win rate = realized only | Only closed (sold) trades count. Unrealized P&L shown separately. N/A when no trades closed. |
-| Tier switch freezes paper portfolio | Promoting paper -> live does not inherit virtual positions. Clean separation prevents phantom P&L from influencing live capital. |
+| Tier switch keeps shadow paper book after promotion | Governor Pod Lifecycle automation needs a continuous per-pod equity curve even after a pod is promoted to live. Promoted pods still participate in merged live execution, but their isolated shadow book continues so drawdown and Sharpe-based demotion remain measurable. |
 | `record=False` on M2M | Avoids double-write when trades follow. Without this, each pod run writes 2 sets of positions and 2 snapshots. |
 
 ## Prevention Strategies
@@ -76,6 +76,8 @@ Six implementation units delivered across three phases:
 5. **Append-only growth budget**: 18 pods x 365 days x ~5 positions = ~33k position rows/year. With the double-write fix, this is manageable for years. If the system scales to 50+ pods or sub-daily runs, implement a pruning/archival strategy.
 
 6. **Manager state transplant**: The paper path creates `EnhancedPortfolioManager` and transplants `prefetched_data` and `exchange_rates`. If new internal state is added to the manager, the transplant in `portfolio_runner.py` must be updated. A future `PriceService` extraction would eliminate this fragile coupling.
+
+7. **Shadow-book continuity is intentional**: Do not reintroduce the old "freeze paper portfolio on promotion" assumption. Lifecycle automation depends on a continuous pod-level shadow history after promotion because live execution is merged at the fund level and cannot support pod-specific drawdown demotion on its own.
 
 ## Developer Checklist
 
