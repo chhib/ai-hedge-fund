@@ -184,6 +184,84 @@ def rebalance(
         _export_transcript(outcome.session_id)
 
 
+@cli.command()
+@click.option("--pods", default="all", show_default=True, help="Pod selection: 'all' or comma-separated pod names")
+@click.option("--dry-run", is_flag=True, help="Log scheduled actions without executing pod runs")
+@click.option("--drift-threshold", default=0.05, show_default=True, type=float, help="Price drift threshold for Phase 2 revalidation (decimal, e.g., 0.05 = 5%%)")
+@click.option("--model", default="gpt-4o", show_default=True, help="LLM model name")
+@click.option("--model-provider", help="Optional model provider override")
+@click.option("--portfolio", type=click.Path(path_type=Path, exists=True), help="Path to the current portfolio CSV")
+@click.option("--universe", type=click.Path(path_type=Path, exists=True), help="Path to a universe list")
+@click.option("--universe-tickers", type=str, help="Comma-separated tickers if no universe file")
+@click.option("--portfolio-source", type=click.Choice(["csv", "ibkr"], case_sensitive=False), default="csv", show_default=True, help="Source of the current holdings")
+@click.option("--ibkr-port", default=int(os.environ.get("IBKR_PORT", "5001")), show_default=True, type=int, help="IBKR Client Portal port")
+@click.option("--ibkr-account", help="Optional IBKR account override")
+@click.option("--ibkr-host", default=os.environ.get("IBKR_HOST", "https://localhost"), show_default=True, help="Client Portal host")
+@click.option("--home-currency", default="SEK", show_default=True, help="Home currency")
+@click.option("--max-workers", default=50, show_default=True, type=int, help="Parallel worker cap")
+@click.option("--max-holdings", default=8, show_default=True, type=int, help="Maximum holdings")
+@click.option("--use-governor", is_flag=True, help="Apply the preservation-first portfolio governor")
+@click.option("--verbose", is_flag=True, help="Show detailed output")
+def serve(
+    pods: str,
+    dry_run: bool,
+    drift_threshold: float,
+    model: str,
+    model_provider: Optional[str],
+    portfolio: Optional[Path],
+    universe: Optional[Path],
+    universe_tickers: Optional[str],
+    portfolio_source: str,
+    ibkr_port: int,
+    ibkr_account: Optional[str],
+    ibkr_host: str,
+    home_currency: str,
+    max_workers: int,
+    max_holdings: int,
+    use_governor: bool,
+    verbose: bool,
+) -> None:
+    """Start the daemon scheduler for autonomous pod execution.
+
+    Runs a long-lived foreground process that schedules pod analysis and
+    execution on market-appropriate cron schedules. Press Ctrl-C to stop.
+
+    Two-phase daily cycle per pod:
+      Phase 1 (Analysis): Run signals + generate proposals before market open
+      Phase 2 (Execution): Price-drift check + execute trades ~1hr after open
+    """
+    import logging
+
+    # Configure structured logging
+    log_format = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+    logging.basicConfig(level=logging.INFO, format=log_format, datefmt="%Y-%m-%d %H:%M:%S")
+
+    from src.services.daemon import DaemonConfig, PodDaemon
+
+    config = DaemonConfig(
+        pods=pods,
+        model=model,
+        model_provider=model_provider,
+        dry_run=dry_run,
+        drift_threshold=drift_threshold,
+        home_currency=home_currency,
+        portfolio_source=portfolio_source,
+        portfolio_path=portfolio,
+        universe_path=universe,
+        universe_tickers=universe_tickers,
+        ibkr_port=ibkr_port,
+        ibkr_account=ibkr_account,
+        ibkr_host=ibkr_host,
+        max_workers=max_workers,
+        max_holdings=max_holdings,
+        use_governor=use_governor,
+        verbose=verbose,
+    )
+
+    daemon = PodDaemon(config)
+    daemon.start()
+
+
 @cli.command("pods")
 def pods_status() -> None:
     """Show pod status: name, analyst, tier, latest proposal, and paper P&L metrics."""

@@ -102,9 +102,44 @@ class TestPodTierConfig:
         assert tiers["fundamentals"] == "paper"
 
 
+@patch("src.utils.analysts.ANALYST_CONFIG", MOCK_ANALYST_CONFIG)
+class TestPodScheduleConfig:
+
+    def test_default_schedule_nordic_morning(self, tmp_pods_yaml):
+        path = tmp_pods_yaml({
+            "pods": [{"name": "buffett", "analyst": "warren_buffett"}],
+        })
+        pods = load_pods(path)
+        assert pods[0].schedule == "nordic-morning"
+
+    def test_explicit_schedule(self, tmp_pods_yaml):
+        path = tmp_pods_yaml({
+            "pods": [{"name": "buffett", "analyst": "warren_buffett", "schedule": "us-morning"}],
+        })
+        pods = load_pods(path)
+        assert pods[0].schedule == "us-morning"
+
+    def test_defaults_section_schedule(self, tmp_pods_yaml):
+        path = tmp_pods_yaml({
+            "defaults": {"schedule": "weekly-nordic"},
+            "pods": [{"name": "buffett", "analyst": "warren_buffett"}],
+        })
+        pods = load_pods(path)
+        assert pods[0].schedule == "weekly-nordic"
+
+    def test_pod_overrides_default_schedule(self, tmp_pods_yaml):
+        path = tmp_pods_yaml({
+            "defaults": {"schedule": "nordic-morning"},
+            "pods": [{"name": "buffett", "analyst": "warren_buffett", "schedule": "0 8 * * 1-5"}],
+        })
+        pods = load_pods(path)
+        assert pods[0].schedule == "0 8 * * 1-5"
+
+
 def test_real_pods_yaml_loads():
     """Verify the actual config/pods.yaml loads without error (uses real ANALYST_CONFIG)."""
     pods = load_pods()
     assert len(pods) > 0
     for pod in pods:
         assert pod.tier in VALID_TIERS
+        assert pod.schedule  # non-empty
