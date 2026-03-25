@@ -43,3 +43,12 @@ _This is the active session file. New sessions should be added here._
   - `poetry run pytest tests/services/test_daemon.py tests/data/test_decision_store.py`
   - `poetry run flake8 src/data/decision_store.py src/services/daemon.py src/services/portfolio_runner.py tests/services/test_daemon.py tests/data/test_decision_store.py`
   - `poetry run pytest`
+
+## Session 124 (`Web UI Pod Dashboard` -- implementation, review, and hardening)
+**Date**: 2026-03-25 | **Model**: Claude Opus 4.6
+
+- **Feature**: Gemini CLI (prior session) implemented the Web UI Pod Dashboard with FastAPI endpoints and React components. This session picked up the uncommitted work, created PR #12, ran a full 8-agent `/ce:review`, and fixed all P1 + P2 findings.
+- **P1 fixes**: Missing `Shield` import (build error), broken Policy dialog (no `DialogTrigger`), async endpoints blocking event loop (changed to `def`), event type mismatch with CLI (`manual_promotion`/`manual_demotion`).
+- **P2 fixes**: Extracted `app/backend/services/pod_service.py` service layer, added confirmation dialog for promote/demote, per-pod error isolation in list endpoint, generic error messages (no exception leakage), `Path` regex validation on `pod_id`, removed unused imports, removed `[key: string]: any` from PodMetrics, fixed `catch(error: any)`, added `GET /pods/{pod_id}/proposals` endpoint, guarded against non-JSON error responses, `encodeURIComponent` on URL paths, `LifecycleConfigResponse` + `PodProposalResponse` Pydantic models, used `config.evaluation_schedule` instead of hardcoded "Weekly Monday", added `TabType 'pods'`, override temporality note in dialogs.
+- **Tests**: Added 19 tests in `tests/backend/test_pods_routes.py` covering all 6 endpoints, per-pod error isolation, input validation, path traversal rejection, tier no-ops, 404s, and event type correctness.
+- **Verification**: `poetry run pytest tests/backend/test_pods_routes.py` -- 19/19 passing. `poetry run flake8` clean. TypeScript `tsc --noEmit` clean for pod files (pre-existing errors in unrelated files).

@@ -2,7 +2,7 @@ import { Flow } from '@/types/flow';
 import { createContext, ReactNode, useCallback, useContext, useEffect, useState } from 'react';
 
 // Define tab types
-export type TabType = 'flow' | 'settings';
+export type TabType = 'flow' | 'settings' | 'pods';
 
 export interface Tab {
   id: string;

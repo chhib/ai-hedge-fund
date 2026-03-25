@@ -1,6 +1,6 @@
 # AI Hedge Fund -- Project Summary
 
-_Last updated: 2026-03-25 (Session 123)_
+_Last updated: 2026-03-25 (Session 124)_
 
 ## End Goal
 Transform from a single-strategy CLI tool into a **trading pod shop**: config-driven analyst groups (pods) with independent lifecycles, a promotion ladder (backtest -> paper -> live), an always-on daemon with scheduling, and a web dashboard -- all built on the Decision DB as the queryable source of truth for every decision the system makes.
@@ -25,7 +25,7 @@ The AI hedge fund system is fully operational with both CLI and web interfaces:
 - **Paper Trading shipped** (Session 119): PaperExecutionEngine with per-pod virtual portfolios, mark-to-market, Decision DB persistence, `hedge pods status` performance dashboard (Sharpe, drawdown, win rate). PR #9.
 - **Daemon Mode shipped** (Session 120): `hedge serve` -- standalone foreground daemon with APScheduler, two-phase daily cycle (analysis pre-open, execution post-open with price-drift validation), per-pod cron scheduling with presets, IBKR gateway lifecycle management, escalating backoff retries, graceful shutdown. PR #10.
 - **Governor Pod Lifecycle shipped** (Sessions 122-123): automated promotion/demotion, append-only lifecycle events, daemon weekly evaluation + drawdown stop, CLI `hedge pods promote|demote`, and lifecycle-aware `hedge pods status`. Follow-up hardening bound Phase 2 to the exact scheduled Phase 1 pipeline run and froze pod tier across the cycle so queued execution cannot drift after later lifecycle events. Promoted live pods now keep a shadow paper equity curve so pod-level demotion remains measurable despite merged live execution.
-- **Next up**: Web UI Pod Dashboard (#7)
+- **Web UI Pod Dashboard shipped** (Session 124): Full-stack pod management dashboard with FastAPI backend (6 endpoints: list, config, history, promote, demote, proposals) and React frontend (PodsDashboard, PodCard, LifecycleHistory). Service layer extracted, 8-agent code review applied, 19 API tests. PR #12.
 - Adaptive portfolio governor merged to `main`: preservation-first analyst weighting, deployment throttling, and trade gating
 - `hedge governor status` command added for live/readable governor state inspection
 - `hedge rebalance --use-governor` and `hedge backtest --use-governor` now support closed-loop capital control
