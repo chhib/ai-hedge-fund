@@ -1,7 +1,7 @@
 ---
 title: "feat: Daemon Mode -- Always-On Pod Scheduler with Two-Phase Execution"
 type: feat
-status: active
+status: completed
 date: 2026-03-25
 origin: docs/brainstorms/2026-03-25-daemon-mode-requirements.md
 ---
@@ -142,7 +142,7 @@ hedge serve
 
 ## Implementation Units
 
-- [ ] **Unit 1: Market Hours Extraction + Pod Schedule Config**
+- [x] **Unit 1: Market Hours Extraction + Pod Schedule Config**
 
   **Goal:** Move market-hours logic to a shared module and add schedule support to pods.
 
@@ -183,7 +183,7 @@ hedge serve
   - New market-hours tests cover timezone edge cases (Nordic vs US)
   - Pod config tests load schedule field correctly
 
-- [ ] **Unit 2: Decision DB Daemon State**
+- [x] **Unit 2: Decision DB Daemon State**
 
   **Goal:** Add `daemon_runs` table and busy_timeout for multi-process safety.
 
@@ -218,7 +218,7 @@ hedge serve
   - All existing Decision DB tests still pass
   - New daemon_runs lifecycle tests cover all status transitions
 
-- [ ] **Unit 3: Two-Phase Pipeline Split**
+- [x] **Unit 3: Two-Phase Pipeline Split**
 
   **Goal:** Enable `run_pods()` to return after analysis (Phase 1) and add a Phase 2 execution function that revalidates with price-drift check.
 
@@ -264,7 +264,7 @@ hedge serve
   - Price validator handles edge cases (zero price, missing data)
   - Phase 1 proposals persist in Decision DB and Phase 2 reads them correctly
 
-- [ ] **Unit 4: IBKR Gateway Lifecycle Manager**
+- [x] **Unit 4: IBKR Gateway Lifecycle Manager**
 
   **Goal:** Non-throwing gateway management that starts, monitors, and restarts the gateway, pausing live execution when unauthenticated.
 
@@ -301,7 +301,7 @@ hedge serve
   - Gateway manager never throws exceptions
   - Status correctly reflects gateway state through lifecycle transitions
 
-- [ ] **Unit 5: Daemon Core -- Scheduler, Signal Handling, Retry Logic**
+- [x] **Unit 5: Daemon Core -- Scheduler, Signal Handling, Retry Logic**
 
   **Goal:** The main daemon process: APScheduler BackgroundScheduler with per-pod cron jobs, SIGINT/SIGTERM handling, and escalating backoff retry wrapper.
 
@@ -350,7 +350,7 @@ hedge serve
   - Retry escalation follows 5/15/30min pattern
   - Decision DB records all phase transitions
 
-- [ ] **Unit 6: CLI `hedge serve` Command**
+- [x] **Unit 6: CLI `hedge serve` Command**
 
   **Goal:** Add the `hedge serve` Click command that wires configuration to the daemon.
 
