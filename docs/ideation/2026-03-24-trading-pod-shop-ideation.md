@@ -36,7 +36,7 @@ focus: Transform from 5 favorite analysts to a trading pod shop with decision DB
 **Downsides:** Migration risk with 4 existing DBs. DB size growth at scale. Schema evolution strategy needed early.
 **Confidence:** 90%
 **Complexity:** Medium
-**Status:** Explored
+**Status:** Shipped (PR #6, Session 117)
 
 ### 2. Pod Abstraction -- Config-Driven Analyst Groups with Independent Lifecycle
 **Description:** Introduce a Pod dataclass (name, analyst_names, universe_filter, governor_profile, position_limits, capital_allocation, execution_tier, schedule) replacing the hardcoded _resolve_analyst_list() if/elif chain. Pods defined in YAML config files. Each pod gets own rebalance run, decision journal entries, and scorecard history.
@@ -44,7 +44,7 @@ focus: Transform from 5 favorite analysts to a trading pod shop with decision DB
 **Downsides:** Rethinking governor aggregation across pods. Significant EPM refactoring. Coordination between pods sharing same IBKR account.
 **Confidence:** 85%
 **Complexity:** High
-**Status:** Unexplored
+**Status:** Shipped (PRs #7+#8, Session 118)
 
 ### 3. Decompose the 67KB EnhancedPortfolioManager into Pipeline Stages
 **Description:** Extract enhanced_portfolio_manager.py (1,554 lines) into composable modules: SignalCollector, SignalAggregator, PositionSizer, TradeGenerator. Original class becomes thin orchestrator.
@@ -52,7 +52,7 @@ focus: Transform from 5 favorite analysts to a trading pod shop with decision DB
 **Downsides:** Pure refactoring with no user-visible change. Risk of regression during extraction.
 **Confidence:** 85%
 **Complexity:** Medium
-**Status:** Unexplored
+**Status:** Shipped (PR #7, Session 118)
 
 ### 4. Paper Trading Tier -- Virtual Execution with Forward P&L Tracking
 **Description:** PaperTradingEngine that consumes same order list as ibkr_execution.py but records virtual fills using live Borsdata close prices. Track virtual positions, cash, and daily mark-to-market P&L per pod. Promotion to live requires configurable thresholds.
@@ -60,7 +60,7 @@ focus: Transform from 5 favorite analysts to a trading pod shop with decision DB
 **Downsides:** No real bid/ask spreads or slippage. Needs daily mark-to-market job. Simpler than real P&L (no dividends, FX).
 **Confidence:** 80%
 **Complexity:** High
-**Status:** Unexplored
+**Status:** Shipped (PR #9, Session 119)
 
 ### 5. Daemon Mode -- APScheduler + FastAPI in One Process
 **Description:** `hedge serve` command starting long-running process with APScheduler (per-pod cron schedules) + existing FastAPI backend. Market-hours awareness via EXCHANGE_SESSIONS. Health/status/trigger endpoints. CLI triggers via HTTP.
