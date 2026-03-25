@@ -21,6 +21,7 @@ class Pod:
     max_picks: int = 3
     tier: str = "paper"
     starting_capital: float | None = None
+    schedule: str = "nordic-morning"
 
 
 def load_pods(config_path: Optional[Path] = None) -> List[Pod]:
@@ -44,6 +45,7 @@ def load_pods(config_path: Optional[Path] = None) -> List[Pod]:
     default_max_picks = defaults.get("max_picks", 3)
     default_tier = defaults.get("tier", "paper")
     default_starting_capital = defaults.get("starting_capital", None)
+    default_schedule = defaults.get("schedule", "nordic-morning")
 
     pods: List[Pod] = []
     seen_names: set[str] = set()
@@ -73,6 +75,7 @@ def load_pods(config_path: Optional[Path] = None) -> List[Pod]:
             max_picks=entry.get("max_picks", default_max_picks),
             tier=tier,
             starting_capital=entry.get("starting_capital", default_starting_capital),
+            schedule=entry.get("schedule", default_schedule),
         ))
 
     return pods
