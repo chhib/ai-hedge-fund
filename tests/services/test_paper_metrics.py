@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -23,7 +22,6 @@ def patch_store(store, monkeypatch):
 
 def _record_snapshots(store, pod_id, values, start=None):
     """Helper to record a series of portfolio snapshots."""
-    base = start or datetime(2026, 3, 1, 10, 0, 0)
     for i, val in enumerate(values):
         run_id = f"run-{pod_id}-{i:03d}"
         store.record_paper_snapshot(pod_id, run_id, {
@@ -57,6 +55,9 @@ class TestComputePaperPerformance:
         assert perf["num_snapshots"] == 5
         assert perf["sharpe_ratio"] is not None
         assert perf["max_drawdown"] is not None
+        assert perf["observation_days"] >= 1
+        assert perf["high_water_mark"] == 103000
+        assert perf["current_drawdown_pct"] == pytest.approx(((103000 - 102500) / 103000) * 100)
 
     def test_win_rate_with_closed_trades(self, store):
         # Record a run so execution_outcomes can join

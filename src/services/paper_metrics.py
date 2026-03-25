@@ -11,14 +11,14 @@ from src.data.decision_store import get_decision_store
 logger = logging.getLogger(__name__)
 
 
-def compute_paper_performance(pod_id: str) -> Dict[str, Any]:
+def compute_paper_performance(pod_id: str, store=None) -> Dict[str, Any]:
     """Compute full performance metrics for a paper pod.
 
     Returns dict with: total_value, cash, positions_value, cumulative_return_pct,
     sharpe_ratio, sortino_ratio, max_drawdown, win_rate, avg_trade_pnl, num_trades,
     num_snapshots.
     """
-    store = get_decision_store()
+    store = store or get_decision_store()
     snapshot = store.get_latest_paper_snapshot(pod_id)
     positions = store.get_latest_paper_positions(pod_id)
     history = store.get_paper_snapshot_history(pod_id)
@@ -30,9 +30,12 @@ def compute_paper_performance(pod_id: str) -> Dict[str, Any]:
         "cumulative_return_pct": None,
         "num_positions": 0,
         "num_snapshots": len(history),
+        "observation_days": 0,
         "sharpe_ratio": None,
         "sortino_ratio": None,
         "max_drawdown": None,
+        "current_drawdown_pct": None,
+        "high_water_mark": None,
         "win_rate": None,
         "avg_trade_pnl": None,
         "num_trades": 0,
@@ -45,6 +48,19 @@ def compute_paper_performance(pod_id: str) -> Dict[str, Any]:
         result["cumulative_return_pct"] = snapshot["cumulative_return_pct"]
 
     result["num_positions"] = len(positions)
+    if history:
+        start_date = _coerce_snapshot_date(history[0].get("created_at"))
+        end_date = _coerce_snapshot_date(history[-1].get("created_at"))
+        if start_date and end_date:
+            result["observation_days"] = max((end_date - start_date).days + 1, 1)
+
+        values_only = [snap["total_value"] for snap in history if snap.get("total_value") is not None]
+        if values_only:
+            high_water = max(values_only)
+            current_value = values_only[-1]
+            result["high_water_mark"] = high_water
+            if high_water > 0:
+                result["current_drawdown_pct"] = max(((high_water - current_value) / high_water) * 100.0, 0.0)
 
     # Portfolio value time series -> Sharpe, Sortino, Max Drawdown
     if len(history) >= 2:
@@ -114,3 +130,10 @@ def compute_paper_performance(pod_id: str) -> Dict[str, Any]:
             result["avg_trade_pnl"] = total_pnl / total_closed
 
     return result
+
+
+def _coerce_snapshot_date(raw: Any) -> Optional[datetime.date]:
+    try:
+        return datetime.fromisoformat(raw).date()
+    except (TypeError, ValueError, AttributeError):
+        return None

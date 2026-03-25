@@ -9,6 +9,15 @@ defaults:
   starting_capital: 100000
   schedule: nordic-morning
 
+lifecycle:
+  min_history_days: 30
+  promotion_sharpe: 0.5
+  promotion_return_pct: 0.0
+  promotion_drawdown_pct: 10.0
+  maintenance_sharpe: 0.0
+  hard_stop_drawdown_pct: 10.0
+  evaluation_schedule: weekly-monday
+
 pods:
   # Famous investors (13)
   - name: warren_buffett

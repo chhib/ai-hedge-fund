@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import sqlite3
 import threading
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -34,7 +33,18 @@ def test_wal_mode_enabled(store: DecisionStore) -> None:
 
 
 def test_all_tables_created(store: DecisionStore) -> None:
-    expected = {"runs", "signals", "aggregations", "governor_decisions", "trade_recommendations", "execution_outcomes", "pod_proposals", "paper_positions", "paper_snapshots"}
+    expected = {
+        "runs",
+        "signals",
+        "aggregations",
+        "governor_decisions",
+        "trade_recommendations",
+        "execution_outcomes",
+        "pod_proposals",
+        "paper_positions",
+        "paper_snapshots",
+        "pod_lifecycle_events",
+    }
     with store._connect() as conn:
         rows = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").fetchall()
     tables = {r[0] for r in rows}
@@ -83,6 +93,44 @@ def test_get_runs_filtered_by_date(store: DecisionStore) -> None:
     runs = store.get_runs(date_from="2026-03-22", date_to="2026-03-26")
     assert len(runs) == 1
     assert runs[0]["run_id"] == "r2"
+
+
+def test_record_and_query_pod_lifecycle_events(store: DecisionStore) -> None:
+    store.record_pod_lifecycle_event(
+        pod_id="buffett",
+        event_type="promotion",
+        old_tier="paper",
+        new_tier="live",
+        reason="Promotion gates passed",
+        source="weekly_evaluation",
+        metrics={"sharpe_ratio": 0.8, "max_drawdown_pct": 4.2},
+        run_id="run-123",
+    )
+
+    latest = store.get_latest_pod_lifecycle_event("buffett")
+    assert latest is not None
+    assert latest["event_type"] == "promotion"
+    assert latest["new_tier"] == "live"
+    assert latest["run_id"] == "run-123"
+    assert json.loads(latest["metrics_json"]) == {"max_drawdown_pct": 4.2, "sharpe_ratio": 0.8}
+
+
+def test_latest_lifecycle_event_wins(store: DecisionStore) -> None:
+    store.record_pod_lifecycle_event("buffett", "promotion", "paper", "live", "Passed", "weekly_evaluation")
+    store.record_pod_lifecycle_event("buffett", "manual_demotion", "live", "paper", "Override", "manual")
+
+    latest = store.get_latest_pod_lifecycle_event("buffett")
+    assert latest is not None
+    assert latest["event_type"] == "manual_demotion"
+    assert latest["new_tier"] == "paper"
+
+
+def test_get_pod_lifecycle_events_chronological(store: DecisionStore) -> None:
+    store.record_pod_lifecycle_event("buffett", "promotion", "paper", "live", "Passed", "weekly_evaluation")
+    store.record_pod_lifecycle_event("buffett", "drawdown_stop", "live", "paper", "Stopped", "drawdown_guard")
+
+    events = store.get_pod_lifecycle_events("buffett")
+    assert [event["event_type"] for event in events] == ["promotion", "drawdown_stop"]
 
 
 # ── Write / Read: signals ──
@@ -465,9 +513,6 @@ def test_paper_snapshot_history_empty(store: DecisionStore) -> None:
 def test_paper_write_passive_observer(tmp_path: Path) -> None:
     """Paper writes don't raise even with a broken DB path."""
     store = DecisionStore(db_path=tmp_path / "test.db")
-    # Close the DB by making it read-only at OS level
-    import os
-    db_file = tmp_path / "test.db"
     # First write should work
     store.record_paper_snapshot("pod1", "run1", {
         "total_value": 100000, "cash": 100000, "positions_value": 0,
@@ -500,6 +545,7 @@ def test_record_and_get_daemon_run(store: DecisionStore) -> None:
     assert result["phase"] == "analysis"
     assert result["status"] == "scheduled"
     assert result["retry_count"] == 0
+    assert result["pipeline_run_id"] is None
 
 
 def test_daemon_run_lifecycle(store: DecisionStore) -> None:
@@ -537,11 +583,14 @@ def test_daemon_run_skipped(store: DecisionStore) -> None:
 
 def test_daemon_run_phase2_references_phase1(store: DecisionStore) -> None:
     store.record_daemon_run("dr-p1", "buffett", "analysis")
-    store.update_daemon_run_status("dr-p1", "completed")
+    store.update_daemon_run_status("dr-p1", "completed", pipeline_run_id="pipeline-123")
 
     store.record_daemon_run("dr-p2", "buffett", "execution", phase1_run_id="dr-p1")
     run = store.get_daemon_run("dr-p2")
     assert run["phase1_run_id"] == "dr-p1"
+
+    phase1_run = store.get_daemon_run("dr-p1")
+    assert phase1_run["pipeline_run_id"] == "pipeline-123"
 
 
 def test_get_latest_daemon_run(store: DecisionStore) -> None:

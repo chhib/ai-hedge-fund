@@ -211,6 +211,24 @@ class DecisionStore:
                 """
             )
 
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS pod_lifecycle_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    pod_id TEXT NOT NULL,
+                    event_type TEXT NOT NULL,
+                    old_tier TEXT,
+                    new_tier TEXT NOT NULL,
+                    reason TEXT,
+                    source TEXT NOT NULL,
+                    metrics_json TEXT,
+                    run_id TEXT,
+                    daemon_run_id TEXT,
+                    created_at TEXT NOT NULL
+                )
+                """
+            )
+
             # Indexes
             conn.execute("CREATE INDEX IF NOT EXISTS idx_signals_run_id ON signals (run_id)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_signals_ticker_date ON signals (ticker, analysis_date)")
@@ -227,6 +245,7 @@ class DecisionStore:
             conn.execute("CREATE INDEX IF NOT EXISTS idx_paper_snapshots_pod_created ON paper_snapshots (pod_id, created_at)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_paper_snapshots_run_id ON paper_snapshots (run_id)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_runs_pod_id ON runs (pod_id)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_pod_lifecycle_events_pod_created ON pod_lifecycle_events (pod_id, created_at)")
 
             # Daemon scheduling metadata (operational, not audit trail -- allows UPDATE)
             conn.execute(
@@ -239,6 +258,7 @@ class DecisionStore:
                     retry_count INTEGER NOT NULL DEFAULT 0,
                     skip_reason TEXT,
                     phase1_run_id TEXT,
+                    pipeline_run_id TEXT,
                     error_message TEXT,
                     started_at TEXT,
                     completed_at TEXT,
@@ -246,6 +266,12 @@ class DecisionStore:
                 )
                 """
             )
+            daemon_run_columns = {
+                row[1]
+                for row in conn.execute("PRAGMA table_info(daemon_runs)").fetchall()
+            }
+            if "pipeline_run_id" not in daemon_run_columns:
+                conn.execute("ALTER TABLE daemon_runs ADD COLUMN pipeline_run_id TEXT")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_daemon_runs_pod_phase ON daemon_runs (pod_id, phase)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_daemon_runs_status ON daemon_runs (status)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_daemon_runs_created ON daemon_runs (created_at)")
@@ -552,6 +578,45 @@ class DecisionStore:
         except Exception:
             logger.debug("Failed to record paper snapshot for pod %s", pod_id, exc_info=True)
 
+    def record_pod_lifecycle_event(
+        self,
+        pod_id: str,
+        event_type: str,
+        old_tier: Optional[str],
+        new_tier: str,
+        reason: Optional[str],
+        source: str,
+        metrics: Optional[Dict[str, Any]] = None,
+        run_id: Optional[str] = None,
+        daemon_run_id: Optional[str] = None,
+    ) -> None:
+        """Record an append-only pod lifecycle event."""
+        try:
+            with self._connect() as conn:
+                conn.execute(
+                    """
+                    INSERT INTO pod_lifecycle_events (
+                        pod_id, event_type, old_tier, new_tier, reason, source,
+                        metrics_json, run_id, daemon_run_id, created_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        pod_id,
+                        event_type,
+                        old_tier,
+                        new_tier,
+                        reason,
+                        source,
+                        json.dumps(metrics, sort_keys=True) if metrics else None,
+                        run_id,
+                        daemon_run_id,
+                        datetime.now().isoformat(),
+                    ),
+                )
+        except Exception:
+            logger.warning("Failed to record pod lifecycle event for pod %s", pod_id, exc_info=True)
+
     # ── Daemon run methods (operational metadata, allows UPDATE) ──
 
     def record_daemon_run(
@@ -561,6 +626,7 @@ class DecisionStore:
         phase: str,
         status: str = "scheduled",
         phase1_run_id: Optional[str] = None,
+        pipeline_run_id: Optional[str] = None,
     ) -> None:
         """Record a new daemon run entry."""
         try:
@@ -568,10 +634,10 @@ class DecisionStore:
                 conn.execute(
                     """
                     INSERT INTO daemon_runs (id, pod_id, phase, status, retry_count,
-                        phase1_run_id, created_at)
-                    VALUES (?, ?, ?, ?, 0, ?, ?)
+                        phase1_run_id, pipeline_run_id, created_at)
+                    VALUES (?, ?, ?, ?, 0, ?, ?, ?)
                     """,
-                    (daemon_run_id, pod_id, phase, status, phase1_run_id, datetime.now().isoformat()),
+                    (daemon_run_id, pod_id, phase, status, phase1_run_id, pipeline_run_id, datetime.now().isoformat()),
                 )
         except Exception:
             logger.debug("Failed to record daemon run %s", daemon_run_id, exc_info=True)
@@ -583,6 +649,7 @@ class DecisionStore:
         error_message: Optional[str] = None,
         retry_count: Optional[int] = None,
         skip_reason: Optional[str] = None,
+        pipeline_run_id: Optional[str] = None,
     ) -> None:
         """Update a daemon run's status and optional fields."""
         try:
@@ -606,6 +673,9 @@ class DecisionStore:
                 if skip_reason is not None:
                     sets.append("skip_reason = ?")
                     params.append(skip_reason)
+                if pipeline_run_id is not None:
+                    sets.append("pipeline_run_id = ?")
+                    params.append(pipeline_run_id)
 
                 params.append(daemon_run_id)
                 conn.execute(f"UPDATE daemon_runs SET {', '.join(sets)} WHERE id = ?", params)
@@ -756,6 +826,36 @@ class DecisionStore:
         with self._connect() as conn:
             rows = conn.execute(
                 f"SELECT * FROM pod_proposals{where} ORDER BY pod_id, created_at, rank",
+                params,
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_latest_pod_lifecycle_event(self, pod_id: str) -> Optional[Dict[str, Any]]:
+        """Return the newest lifecycle event for a pod, or None."""
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT * FROM pod_lifecycle_events
+                WHERE pod_id = ?
+                ORDER BY created_at DESC, id DESC
+                LIMIT 1
+                """,
+                (pod_id,),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def get_pod_lifecycle_events(self, pod_id: Optional[str] = None, limit: int = 100) -> List[Dict[str, Any]]:
+        """Query lifecycle events ordered chronologically."""
+        clauses = []
+        params: List[Any] = []
+        if pod_id:
+            clauses.append("pod_id = ?")
+            params.append(pod_id)
+        where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+        params.append(limit)
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"SELECT * FROM pod_lifecycle_events{where} ORDER BY created_at ASC, id ASC LIMIT ?",
                 params,
             ).fetchall()
         return [dict(r) for r in rows]
