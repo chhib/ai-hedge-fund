@@ -53,6 +53,7 @@ def cli() -> None:
 @click.option("--ibkr-skip-swedish-stocks/--no-ibkr-skip-swedish-stocks", default=True, show_default=True, help="Skip Swedish stock buy orders in IBKR flows")
 @click.option("--use-governor", is_flag=True, help="Apply the preservation-first portfolio governor")
 @click.option("--governor-profile", default="preservation", show_default=True, help="Governor profile name")
+@click.option("--tier", type=click.Choice(["paper", "live"], case_sensitive=False), default=None, help="Override pod execution tier for this run")
 def rebalance(
     portfolio: Optional[Path],
     universe: Optional[Path],
@@ -86,6 +87,7 @@ def rebalance(
     ibkr_skip_swedish_stocks: bool,
     use_governor: bool,
     governor_profile: str,
+    tier: Optional[str],
 ) -> None:
     """Run the weekly long-only rebalance flow."""
 
@@ -126,6 +128,7 @@ def rebalance(
         ibkr_timeout=ibkr_timeout,
         use_governor=use_governor,
         governor_profile=governor_profile,
+        tier_override=tier,
     )
 
     try:
@@ -183,20 +186,21 @@ def rebalance(
 
 @cli.command("pods")
 def pods_status() -> None:
-    """Show pod status: name, analyst, enabled, latest proposal, paper P&L."""
+    """Show pod status: name, analyst, tier, latest proposal, and paper P&L metrics."""
     from src.config.pod_config import load_pods
     from src.data.decision_store import get_decision_store
+    from src.services.paper_metrics import compute_paper_performance
 
     all_pods = load_pods()
     store = get_decision_store()
 
-    click.echo(f"\n{'Pod':<25} {'Analyst':<25} {'Enabled':<9} {'Latest Proposal':<20} {'Picks'}")
-    click.echo("─" * 100)
+    # Overview table
+    click.echo(f"\n{'Pod':<22} {'Analyst':<22} {'Tier':<7} {'On':<4} {'Latest':<12} {'Picks'}")
+    click.echo("─" * 95)
 
     for pod in all_pods:
         proposals = store.get_pod_proposals(pod_id=pod.name)
         if proposals:
-            # Get latest proposal (grouped by run_id)
             latest_run = proposals[-1]["run_id"]
             latest_picks = [p for p in proposals if p["run_id"] == latest_run]
             latest_date = latest_picks[0]["created_at"][:10] if latest_picks else "—"
@@ -205,8 +209,48 @@ def pods_status() -> None:
             latest_date = "—"
             picks_str = "—"
 
-        enabled_str = "✓" if pod.enabled else "✗"
-        click.echo(f"{pod.name:<25} {pod.analyst:<25} {enabled_str:<9} {latest_date:<20} {picks_str}")
+        enabled_str = "Y" if pod.enabled else "N"
+        click.echo(f"{pod.name:<22} {pod.analyst:<22} {pod.tier:<7} {enabled_str:<4} {latest_date:<12} {picks_str}")
+
+    # Paper performance section
+    paper_pods = [p for p in all_pods if p.tier == "paper"]
+    if paper_pods:
+        click.echo(f"\n{'Paper Pod Performance':─<95}")
+        click.echo(f"{'Pod':<22} {'Value':>10} {'Cash':>10} {'Return':>8} {'Sharpe':>8} {'Max DD':>8} {'Win %':>7} {'Avg P&L':>9} {'Trades':>7}")
+        click.echo("─" * 95)
+
+        for pod in paper_pods:
+            perf = compute_paper_performance(pod.name)
+            value_str = f"{perf['total_value']:,.0f}" if perf["total_value"] is not None else "—"
+            cash_str = f"{perf['cash']:,.0f}" if perf["cash"] is not None else "—"
+            ret_str = f"{perf['cumulative_return_pct']:.1f}%" if perf["cumulative_return_pct"] is not None else "—"
+
+            if perf["sharpe_ratio"] is not None:
+                sharpe_str = f"{perf['sharpe_ratio']:.2f}"
+            elif perf["num_snapshots"] < 2:
+                sharpe_str = "N/D"
+            else:
+                sharpe_str = "—"
+
+            if perf["max_drawdown"] is not None:
+                dd_str = f"{perf['max_drawdown']:.1f}%"
+            elif perf["num_snapshots"] < 2:
+                dd_str = "N/D"
+            else:
+                dd_str = "—"
+
+            if perf["win_rate"] is not None:
+                win_str = f"{perf['win_rate']:.0%}"
+            else:
+                win_str = "N/A"
+
+            if perf["avg_trade_pnl"] is not None:
+                pnl_str = f"{perf['avg_trade_pnl']:,.0f}"
+            else:
+                pnl_str = "N/A"
+
+            trades_str = str(perf["num_trades"]) if perf["num_trades"] else "0"
+            click.echo(f"{pod.name:<22} {value_str:>10} {cash_str:>10} {ret_str:>8} {sharpe_str:>8} {dd_str:>8} {win_str:>7} {pnl_str:>9} {trades_str:>7}")
 
     click.echo()
 

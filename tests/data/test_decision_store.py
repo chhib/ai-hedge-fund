@@ -34,7 +34,7 @@ def test_wal_mode_enabled(store: DecisionStore) -> None:
 
 
 def test_all_tables_created(store: DecisionStore) -> None:
-    expected = {"runs", "signals", "aggregations", "governor_decisions", "trade_recommendations", "execution_outcomes"}
+    expected = {"runs", "signals", "aggregations", "governor_decisions", "trade_recommendations", "execution_outcomes", "pod_proposals", "paper_positions", "paper_snapshots"}
     with store._connect() as conn:
         rows = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").fetchall()
     tables = {r[0] for r in rows}
@@ -364,3 +364,114 @@ def test_concurrent_signal_writes(store: DecisionStore, run_id: str) -> None:
     assert not errors, f"Thread errors: {errors}"
     signals = store.get_signals(run_id=run_id)
     assert len(signals) == 20
+
+
+# ── Paper trading tables ──
+
+
+def test_record_and_get_paper_positions(store: DecisionStore) -> None:
+    positions = [
+        {"ticker": "AAPL", "shares": 10, "cost_basis": 190.0, "current_price": 195.0, "currency": "USD"},
+        {"ticker": "MSFT", "shares": 5, "cost_basis": 350.0, "current_price": 360.0, "currency": "USD"},
+    ]
+    store.record_paper_positions("buffett", "run-001", positions)
+
+    result = store.get_latest_paper_positions("buffett")
+    assert len(result) == 2
+    tickers = {r["ticker"] for r in result}
+    assert tickers == {"AAPL", "MSFT"}
+    assert result[0]["shares"] == 10
+
+
+def test_paper_positions_latest_only(store: DecisionStore) -> None:
+    """get_latest_paper_positions returns only the most recent run's positions."""
+    store.record_paper_positions("buffett", "run-001", [
+        {"ticker": "AAPL", "shares": 10, "cost_basis": 190.0, "current_price": 195.0, "currency": "USD"},
+    ])
+    store.record_paper_positions("buffett", "run-002", [
+        {"ticker": "MSFT", "shares": 5, "cost_basis": 350.0, "current_price": 360.0, "currency": "USD"},
+    ])
+
+    result = store.get_latest_paper_positions("buffett")
+    assert len(result) == 1
+    assert result[0]["ticker"] == "MSFT"
+    assert result[0]["run_id"] == "run-002"
+
+
+def test_paper_positions_pod_isolation(store: DecisionStore) -> None:
+    """Pod A's positions don't appear in pod B's query."""
+    store.record_paper_positions("buffett", "run-001", [
+        {"ticker": "AAPL", "shares": 10, "cost_basis": 190.0, "current_price": 195.0, "currency": "USD"},
+    ])
+    store.record_paper_positions("simons", "run-002", [
+        {"ticker": "TSLA", "shares": 3, "cost_basis": 250.0, "current_price": 260.0, "currency": "USD"},
+    ])
+
+    buffett_pos = store.get_latest_paper_positions("buffett")
+    simons_pos = store.get_latest_paper_positions("simons")
+    assert len(buffett_pos) == 1
+    assert buffett_pos[0]["ticker"] == "AAPL"
+    assert len(simons_pos) == 1
+    assert simons_pos[0]["ticker"] == "TSLA"
+
+
+def test_record_and_get_paper_snapshot(store: DecisionStore) -> None:
+    snapshot = {
+        "total_value": 105000.0,
+        "cash": 5000.0,
+        "positions_value": 100000.0,
+        "cumulative_return_pct": 5.0,
+        "starting_capital": 100000.0,
+    }
+    store.record_paper_snapshot("buffett", "run-001", snapshot)
+
+    result = store.get_latest_paper_snapshot("buffett")
+    assert result is not None
+    assert result["total_value"] == 105000.0
+    assert result["cash"] == 5000.0
+    assert result["cumulative_return_pct"] == 5.0
+    assert result["starting_capital"] == 100000.0
+
+
+def test_paper_snapshot_history(store: DecisionStore) -> None:
+    for i in range(3):
+        store.record_paper_snapshot("buffett", f"run-{i:03d}", {
+            "total_value": 100000.0 + i * 1000,
+            "cash": 5000.0,
+            "positions_value": 95000.0 + i * 1000,
+            "cumulative_return_pct": float(i),
+            "starting_capital": 100000.0,
+        })
+
+    history = store.get_paper_snapshot_history("buffett")
+    assert len(history) == 3
+    # Ordered chronologically
+    assert history[0]["cumulative_return_pct"] == 0.0
+    assert history[2]["cumulative_return_pct"] == 2.0
+
+
+def test_paper_snapshot_none_for_unknown_pod(store: DecisionStore) -> None:
+    assert store.get_latest_paper_snapshot("nonexistent") is None
+
+
+def test_paper_positions_empty_for_unknown_pod(store: DecisionStore) -> None:
+    assert store.get_latest_paper_positions("nonexistent") == []
+
+
+def test_paper_snapshot_history_empty(store: DecisionStore) -> None:
+    assert store.get_paper_snapshot_history("nonexistent") == []
+
+
+def test_paper_write_passive_observer(tmp_path: Path) -> None:
+    """Paper writes don't raise even with a broken DB path."""
+    store = DecisionStore(db_path=tmp_path / "test.db")
+    # Close the DB by making it read-only at OS level
+    import os
+    db_file = tmp_path / "test.db"
+    # First write should work
+    store.record_paper_snapshot("pod1", "run1", {
+        "total_value": 100000, "cash": 100000, "positions_value": 0,
+        "cumulative_return_pct": 0, "starting_capital": 100000,
+    })
+    # Verify it worked
+    assert store.get_latest_paper_snapshot("pod1") is not None

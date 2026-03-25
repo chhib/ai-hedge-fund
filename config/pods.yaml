@@ -5,6 +5,8 @@
 defaults:
   max_picks: 3
   enabled: true
+  tier: paper
+  starting_capital: 100000
 
 pods:
   # Famous investors (13)

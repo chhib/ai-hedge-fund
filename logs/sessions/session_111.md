@@ -89,3 +89,21 @@ _This is the active session file. New sessions should be added here._
 - **Tests**: 209/210 passing (same pre-existing IBKR failure). End-to-end dry-run verified.
 - **PRs**: #7 (EPM decomposition), #8 (pod abstraction)
 - **Docs**: `docs/brainstorms/2026-03-24-pod-abstraction-requirements.md`, `docs/plans/2026-03-24-005-feat-pod-abstraction-config-driven-analyst-pods-plan.md`
+
+## Session 119 (Paper Trading -- virtual execution with forward P&L tracking)
+**Date**: 2026-03-25 | **Model**: Claude Opus 4.6 (1M context)
+
+- **Ideation**: Picked up #4 (Paper Trading) from the Trading Pod Shop ideation. Brainstormed requirements via ce:brainstorm, planned via ce:plan, implemented via ce:work -- all in one session.
+- **Feature**: `PaperExecutionEngine` in `src/services/paper_engine.py` -- standalone module consuming trade recommendations, long-only guard mirroring IBKR validation, virtual fills at limit_price, per-pod cash + position tracking.
+- **Feature**: Mark-to-market on every run -- updates open position values with current Borsdata prices before processing new trades. `record=False` flag to avoid double-write when trades follow.
+- **Feature**: Decision DB extended with `paper_positions` and `paper_snapshots` tables (append-only, indexed on pod_id+created_at). Index added on `runs.pod_id` for efficient JOINs.
+- **Feature**: Pod tier config -- `tier: paper|live` and `starting_capital` fields in Pod dataclass and pods.yaml (default: paper, 100k SEK).
+- **Feature**: Pipeline fork in `run_pods()` -- splits pods by tier after proposals. Paper pods execute independently through PaperExecutionEngine; live pods merge + IBKR as before.
+- **Feature**: CLI `--tier paper|live` override flag on `hedge rebalance`.
+- **Feature**: `hedge pods status` now shows tier column + full paper performance dashboard (Sharpe, Sortino, max drawdown, win rate, avg trade P&L) via new `paper_metrics.py` module reusing backtester's `PerformanceMetricsCalculator`.
+- **Decision**: Fill price = last known price at run time (limit_price from recommendations). Per-pod isolation over merged virtual portfolio. Win rate = realized only (closed trades).
+- **Review**: Multi-agent review (pattern + performance). Fixed: snapshot duplication extracted to `_build_snapshot()`, single-query for latest positions, `runs.pod_id` index added, `record=False` on M2M to avoid double-write, magic number replaced with `DEFAULT_STARTING_CAPITAL`.
+- **Tests**: 66 passing (43 new). Covers cold start, warm state, long-only guard, insufficient cash, sell clamping, M2M fallback, portfolio isolation, Sharpe/drawdown, win rate.
+- **PR**: #9 (feat/paper-trading)
+- **Docs**: `docs/brainstorms/2026-03-24-paper-trading-requirements.md`, `docs/plans/2026-03-25-001-feat-paper-trading-virtual-execution-plan.md`
+- **Next**: #5 Daemon Mode or #6 Governor Pod Lifecycle from the ideation

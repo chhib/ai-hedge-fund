@@ -10,12 +10,17 @@ import yaml
 DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent.parent.parent / "config" / "pods.yaml"
 
 
+VALID_TIERS = {"paper", "live"}
+
+
 @dataclass(slots=True)
 class Pod:
     name: str
     analyst: str
     enabled: bool = True
     max_picks: int = 3
+    tier: str = "paper"
+    starting_capital: float | None = None
 
 
 def load_pods(config_path: Optional[Path] = None) -> List[Pod]:
@@ -37,6 +42,8 @@ def load_pods(config_path: Optional[Path] = None) -> List[Pod]:
     defaults = raw.get("defaults", {})
     default_enabled = defaults.get("enabled", True)
     default_max_picks = defaults.get("max_picks", 3)
+    default_tier = defaults.get("tier", "paper")
+    default_starting_capital = defaults.get("starting_capital", None)
 
     pods: List[Pod] = []
     seen_names: set[str] = set()
@@ -55,11 +62,17 @@ def load_pods(config_path: Optional[Path] = None) -> List[Pod]:
         if analyst not in ANALYST_CONFIG:
             raise ValueError(f"Pod '{name}' references unknown analyst '{analyst}'. Available: {sorted(ANALYST_CONFIG.keys())}")
 
+        tier = entry.get("tier", default_tier)
+        if tier not in VALID_TIERS:
+            raise ValueError(f"Pod '{name}' has invalid tier '{tier}'. Must be one of: {sorted(VALID_TIERS)}")
+
         pods.append(Pod(
             name=name,
             analyst=analyst,
             enabled=entry.get("enabled", default_enabled),
             max_picks=entry.get("max_picks", default_max_picks),
+            tier=tier,
+            starting_capital=entry.get("starting_capital", default_starting_capital),
         ))
 
     return pods
