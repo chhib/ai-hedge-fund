@@ -177,6 +177,38 @@ class DecisionStore:
                 """
             )
 
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS paper_positions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    pod_id TEXT NOT NULL,
+                    run_id TEXT NOT NULL,
+                    ticker TEXT NOT NULL,
+                    shares REAL NOT NULL,
+                    cost_basis REAL NOT NULL,
+                    current_price REAL NOT NULL,
+                    currency TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                )
+                """
+            )
+
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS paper_snapshots (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    pod_id TEXT NOT NULL,
+                    run_id TEXT NOT NULL,
+                    total_value REAL NOT NULL,
+                    cash REAL NOT NULL,
+                    positions_value REAL NOT NULL,
+                    cumulative_return_pct REAL NOT NULL,
+                    starting_capital REAL NOT NULL,
+                    created_at TEXT NOT NULL
+                )
+                """
+            )
+
             # Indexes
             conn.execute("CREATE INDEX IF NOT EXISTS idx_signals_run_id ON signals (run_id)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_signals_ticker_date ON signals (ticker, analysis_date)")
@@ -188,6 +220,10 @@ class DecisionStore:
             conn.execute("CREATE INDEX IF NOT EXISTS idx_execution_outcomes_rec_id ON execution_outcomes (recommendation_id)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_pod_proposals_pod_created ON pod_proposals (pod_id, created_at)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_pod_proposals_run_id ON pod_proposals (run_id)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_paper_positions_pod_created ON paper_positions (pod_id, created_at)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_paper_positions_run_id ON paper_positions (run_id)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_paper_snapshots_pod_created ON paper_snapshots (pod_id, created_at)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_paper_snapshots_run_id ON paper_snapshots (run_id)")
 
     # ── Write methods (all INSERT-only, never UPSERT) ──
 
@@ -438,7 +474,128 @@ class DecisionStore:
                     ),
                 )
 
+    def record_paper_positions(self, pod_id: str, run_id: str, positions: List[Dict[str, Any]]) -> None:
+        """Record virtual portfolio positions for a paper pod (one row per position)."""
+        now = datetime.now().isoformat()
+        try:
+            with self._connect() as conn:
+                conn.executemany(
+                    """
+                    INSERT INTO paper_positions (pod_id, run_id, ticker, shares,
+                        cost_basis, current_price, currency, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    [
+                        (
+                            pod_id,
+                            run_id,
+                            pos["ticker"],
+                            pos["shares"],
+                            pos["cost_basis"],
+                            pos["current_price"],
+                            pos.get("currency", "SEK"),
+                            now,
+                        )
+                        for pos in positions
+                    ],
+                )
+        except Exception:
+            logger.debug("Failed to record paper positions for pod %s", pod_id, exc_info=True)
+
+    def record_paper_snapshot(self, pod_id: str, run_id: str, snapshot: Dict[str, Any]) -> None:
+        """Record a portfolio value snapshot for a paper pod."""
+        try:
+            with self._connect() as conn:
+                conn.execute(
+                    """
+                    INSERT INTO paper_snapshots (pod_id, run_id, total_value, cash,
+                        positions_value, cumulative_return_pct, starting_capital,
+                        created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        pod_id,
+                        run_id,
+                        snapshot["total_value"],
+                        snapshot["cash"],
+                        snapshot["positions_value"],
+                        snapshot["cumulative_return_pct"],
+                        snapshot["starting_capital"],
+                        datetime.now().isoformat(),
+                    ),
+                )
+        except Exception:
+            logger.debug("Failed to record paper snapshot for pod %s", pod_id, exc_info=True)
+
     # ── Read methods ──
+
+    def get_latest_paper_positions(self, pod_id: str) -> List[Dict[str, Any]]:
+        """Return the most recent set of virtual positions for a pod.
+
+        Positions from the same run_id form a snapshot. Returns all positions
+        from the latest run_id that wrote paper_positions for this pod.
+        """
+        with self._connect() as conn:
+            # Find the latest run_id for this pod
+            row = conn.execute(
+                "SELECT run_id FROM paper_positions WHERE pod_id = ? ORDER BY created_at DESC LIMIT 1",
+                (pod_id,),
+            ).fetchone()
+            if not row:
+                return []
+            latest_run_id = row["run_id"]
+            rows = conn.execute(
+                "SELECT * FROM paper_positions WHERE pod_id = ? AND run_id = ? ORDER BY ticker",
+                (pod_id, latest_run_id),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_latest_paper_snapshot(self, pod_id: str) -> Optional[Dict[str, Any]]:
+        """Return the most recent portfolio snapshot for a pod, or None."""
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM paper_snapshots WHERE pod_id = ? ORDER BY created_at DESC LIMIT 1",
+                (pod_id,),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def get_paper_snapshot_history(
+        self,
+        pod_id: str,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """Return portfolio snapshots for a pod over time, ordered chronologically."""
+        clauses = ["pod_id = ?"]
+        params: List[Any] = [pod_id]
+        if date_from:
+            clauses.append("created_at >= ?")
+            params.append(date_from)
+        if date_to:
+            clauses.append("created_at <= ?")
+            params.append(date_to)
+
+        where = " WHERE " + " AND ".join(clauses)
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"SELECT * FROM paper_snapshots{where} ORDER BY created_at ASC",
+                params,
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_paper_execution_outcomes(self, pod_id: str) -> List[Dict[str, Any]]:
+        """Return paper execution outcomes for a pod by joining through runs."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT eo.* FROM execution_outcomes eo
+                JOIN runs r ON eo.run_id = r.run_id
+                WHERE r.pod_id = ? AND eo.execution_type = 'paper'
+                ORDER BY eo.created_at ASC
+                """,
+                (pod_id,),
+            ).fetchall()
+        return [dict(r) for r in rows]
 
     def get_pod_proposals(
         self,
