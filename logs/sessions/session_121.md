@@ -61,3 +61,10 @@ _This is the active session file. New sessions should be added here._
 - **Docs**: Preserved original README as `README_LEGACY.md` with backwards compatibility section linking to it.
 - **Brainstorm**: Created `docs/brainstorms/2026-03-25-ops-readme-rewrite-requirements.md` with 7 requirements for the documentation rewrite.
 - **Verification**: `hedge pods status` and pod config validation command both confirmed working.
+
+## Session 126 (`Documentation Drift Prevention` -- compound learning + agent instructions)
+**Date**: 2026-03-26 | **Model**: Claude Opus 4.6
+
+- **Compound**: Created `docs/solutions/integration-issues/readme-drift-six-features-undocumented.md` via 5-agent `/ce:compound` workflow documenting the README drift problem and prevention strategies.
+- **Prevention**: Added README staleness check (step 5) to "Start Here" and README update requirement (step 4) to "When wrapping up" in all three agent instruction files: `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`.
+- **Housekeeping**: Fixed stale session file references in all three files (were pointing at `session_081.md`/`session_091.md`, now `session_121.md`).
